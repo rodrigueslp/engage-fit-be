@@ -1,0 +1,40 @@
+# Binaries
+/bin/
+/dist/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test & coverage
+*.test
+*.out
+coverage/
+coverage.out
+coverage.html
+*.prof
+*.pprof
+
+# Environment (keep .env.example)
+.env
+.env.*
+!.env.example
+
+# Go workspace
+/vendor/
+
+# IDE & editors
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs & temp
+*.log
+/tmp/
