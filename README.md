@@ -2,6 +2,22 @@
 
 Backend Go do EngageFit seguindo Arquitetura Hexagonal.
 
+Este repositorio concentra o codigo da API e tambem a infraestrutura local do projeto (Docker, Makefile, scripts de demo e dados de teste). A pasta `.ai/` documenta o planejamento do produto completo — backend e frontend — para manter o contexto unificado enquanto os deploys continuam separados.
+
+## Estrutura do repositorio
+
+```txt
+cmd/api                         # entrypoint HTTP
+internal/                       # dominio, casos de uso, adapters
+migrations/                     # migrations SQL
+scripts/                        # seed demo local
+test-data/                      # fixtures de importacao e WhatsApp
+.ai/                            # planejamento do produto (backend + frontend)
+Makefile                        # atalhos locais (postgres, migrations, demo)
+docker-compose.yml              # Postgres local
+docker-compose.evolution.yml    # Evolution API local (legado/dev)
+```
+
 ## Stack
 
 - Go
@@ -38,7 +54,7 @@ go run ./cmd/api
 
 ## Banco local
 
-Na raiz do projeto:
+No diretorio do backend:
 
 ```bash
 docker-compose up -d postgres
@@ -48,7 +64,7 @@ make migrate-up
 As migrations ficam em:
 
 ```txt
-backend/migrations
+migrations/
 ```
 
 ## Validacao
@@ -92,7 +108,7 @@ curl http://localhost:8080/api/v1/auth/me \
 
 ## Massa demo
 
-Com backend e Postgres rodando, na raiz do projeto:
+Com backend e Postgres rodando, no diretorio do backend:
 
 ```bash
 make demo-seed
@@ -240,7 +256,7 @@ API key: boxengage-local-key
 Ativar WhatsApp: marcado
 ```
 
-Para receber mensagens reais apenas no seu celular em desenvolvimento, configure `backend/.env`:
+Para receber mensagens reais apenas no seu celular em desenvolvimento, configure `.env`:
 
 ```env
 WHATSAPP_ALLOW_REAL_SEND=true
