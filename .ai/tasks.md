@@ -104,7 +104,7 @@
 - [x] Criar templates com variaveis de campanha
 - [x] Criar seed demo para desenvolvimento
 - [x] Criar modo mock de WhatsApp para desenvolvimento
-- [x] Criar tela de configuracao da Evolution API
+- [x] Criar tela de configuracao do provedor WhatsApp
 - [x] Suportar XLSX real Wellhub com preambulo
 - [x] Suportar XLSX real TotalPass tokens com preambulo
 - [x] Ajustar seed demo para usar planilhas reais quando disponiveis
@@ -192,7 +192,7 @@
 ## WhatsApp
 
 - [x] Entidade WhatsappSettings
-- [x] Configuracao Evolution API
+- [x] Configuracao do provedor WhatsApp
 - [x] Templates
 - [x] Campanhas de mensagem
 - [x] MessageRecipient para auditoria

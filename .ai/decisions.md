@@ -55,7 +55,7 @@ O objetivo principal e aumentar frequencia atraves de campanhas e comunicacao at
 
 Integracao definida:
 
-- Evolution API
+- Twilio WhatsApp
 
 ---
 
@@ -96,7 +96,7 @@ Nao havera RBAC complexo no MVP.
 
 ## ADR-009: Configuracao WhatsApp
 
-Adicionar entidade `WhatsappSettings` para configuracao da Evolution API por box.
+Adicionar entidade `WhatsappSettings` para configuracao do provedor WhatsApp por box.
 
 Essa entidade deve armazenar:
 

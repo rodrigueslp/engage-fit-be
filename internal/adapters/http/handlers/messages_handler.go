@@ -156,6 +156,7 @@ func (h MessagesHandler) ListCampaigns(c *gin.Context) {
 		item := dto.MessageCampaignResponse{
 			ID:         string(campaign.ID),
 			Name:       campaign.Name,
+			CampaignID: string(campaign.CampaignID),
 			Audience:   string(campaign.Audience),
 			TemplateID: string(campaign.TemplateID),
 		}
@@ -182,6 +183,7 @@ func (h MessagesHandler) CreateCampaign(c *gin.Context) {
 
 	campaign := domain.MessageCampaign{
 		BoxID:      boxID,
+		CampaignID: domain.ID(request.CampaignID),
 		Name:       request.Name,
 		Audience:   domain.MessageAudience(request.Audience),
 		TemplateID: domain.ID(request.TemplateID),
@@ -229,6 +231,28 @@ func (h MessagesHandler) SendCampaign(c *gin.Context) {
 	})
 }
 
+func (h MessagesHandler) PreviewCampaign(c *gin.Context) {
+	boxID, err := middleware.BoxID(c)
+	if err != nil {
+		respondUnauthorized(c)
+		return
+	}
+
+	output, err := h.sendCampaign.Preview(c.Request.Context(), boxID, domain.ID(c.Param("id")))
+	if err != nil {
+		respondError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, dto.MessageCampaignPreviewResponse{
+		Total:       output.Total,
+		Body:        output.Body,
+		StudentID:   string(output.StudentID),
+		StudentName: output.StudentName,
+		Phone:       output.Phone,
+	})
+}
+
 func (h MessagesHandler) ListRecipients(c *gin.Context) {
 	result, err := h.listRecipients.Execute(c.Request.Context(), domain.ID(c.Param("id")))
 	if err != nil {
@@ -268,6 +292,7 @@ func messageCampaignResponse(campaign domain.MessageCampaign) dto.MessageCampaig
 	response := dto.MessageCampaignResponse{
 		ID:         string(campaign.ID),
 		Name:       campaign.Name,
+		CampaignID: string(campaign.CampaignID),
 		Audience:   string(campaign.Audience),
 		TemplateID: string(campaign.TemplateID),
 	}

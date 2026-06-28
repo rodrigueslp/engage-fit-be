@@ -2,6 +2,7 @@ package messages
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -125,6 +126,14 @@ type SendMessageCampaignOutput struct {
 	Failed int
 }
 
+type MessageCampaignPreviewOutput struct {
+	Total       int
+	Body        string
+	StudentID   domain.ID
+	StudentName string
+	Phone       string
+}
+
 type SendMessageCampaignUseCase struct {
 	messages  repositories.MessageRepository
 	boxes     repositories.BoxRepository
@@ -153,8 +162,11 @@ func (uc SendMessageCampaignUseCase) Execute(ctx context.Context, boxID, campaig
 	if err != nil {
 		return nil, err
 	}
+	if requiresTwilioContentTemplate(*whatsappSettings) && strings.TrimSpace(template.ContentSID) == "" {
+		return nil, fmt.Errorf("twilio whatsapp requires an approved Content SID (HX...) on the template; freeform messages only work within 24h after the recipient replies (Twilio error 63016)")
+	}
 
-	audience, err := uc.resolveAudience(ctx, boxID, messageCampaign.Audience)
+	audience, err := uc.resolveAudience(ctx, boxID, *messageCampaign)
 	if err != nil {
 		return nil, err
 	}
@@ -180,7 +192,7 @@ func (uc SendMessageCampaignUseCase) Execute(ctx context.Context, boxID, campaig
 	output := &SendMessageCampaignOutput{Total: len(recipients)}
 	for _, recipient := range recipients {
 		student := audienceByID(audience, recipient.StudentID)
-		templateValues := uc.templateValues(ctx, boxID, student)
+		templateValues := uc.templateValues(ctx, boxID, student, messageCampaign.CampaignID)
 		body := renderTemplate(template.Content, templateValues)
 		err := uc.gateway.Send(ctx, *whatsappSettings, services.WhatsappMessage{
 			Phone:            recipient.Phone,
@@ -214,16 +226,52 @@ func (uc SendMessageCampaignUseCase) Execute(ctx context.Context, boxID, campaig
 	return output, nil
 }
 
-func (uc SendMessageCampaignUseCase) resolveAudience(ctx context.Context, boxID domain.ID, audience domain.MessageAudience) ([]domain.Student, error) {
-	switch audience {
+func (uc SendMessageCampaignUseCase) Preview(ctx context.Context, boxID, campaignID domain.ID) (*MessageCampaignPreviewOutput, error) {
+	messageCampaign, err := uc.messages.FindCampaignByID(ctx, boxID, campaignID)
+	if err != nil {
+		return nil, err
+	}
+	template, err := uc.messages.FindTemplateByID(ctx, boxID, messageCampaign.TemplateID)
+	if err != nil {
+		return nil, err
+	}
+	audience, err := uc.resolveAudience(ctx, boxID, *messageCampaign)
+	if err != nil {
+		return nil, err
+	}
+	output := &MessageCampaignPreviewOutput{Total: len(audience)}
+	if len(audience) == 0 {
+		return output, nil
+	}
+
+	student := firstPreviewStudent(audience)
+	templateValues := uc.templateValues(ctx, boxID, student, messageCampaign.CampaignID)
+	output.Body = renderTemplate(template.Content, templateValues)
+	output.StudentID = student.ID
+	output.StudentName = student.Name
+	output.Phone = student.Phone
+	return output, nil
+}
+
+func firstPreviewStudent(students []domain.Student) domain.Student {
+	for _, student := range students {
+		if strings.TrimSpace(student.Phone) != "" {
+			return student
+		}
+	}
+	return students[0]
+}
+
+func (uc SendMessageCampaignUseCase) resolveAudience(ctx context.Context, boxID domain.ID, messageCampaign domain.MessageCampaign) ([]domain.Student, error) {
+	switch messageCampaign.Audience {
 	case domain.MessageAudienceAll:
 		return uc.students.List(ctx, boxID, repositories.StudentFilters{})
 	case domain.MessageAudienceInactive:
 		return uc.inactiveStudents(ctx, boxID)
 	case domain.MessageAudienceAlmostThere:
-		return uc.almostThereStudents(ctx, boxID)
+		return uc.almostThereStudents(ctx, boxID, messageCampaign.CampaignID)
 	case domain.MessageAudienceNearGoal, domain.MessageAudienceAchieved:
-		return uc.progressAudience(ctx, boxID, audience)
+		return uc.progressAudience(ctx, boxID, messageCampaign.CampaignID, messageCampaign.Audience)
 	default:
 		return []domain.Student{}, nil
 	}
@@ -271,13 +319,13 @@ func canReceiveRiskMessage(student domain.Student, now time.Time, cooldownDays i
 	return now.Sub(*student.RiskLastMessageAt) >= time.Duration(cooldownDays)*24*time.Hour
 }
 
-func (uc SendMessageCampaignUseCase) progressAudience(ctx context.Context, boxID domain.ID, audience domain.MessageAudience) ([]domain.Student, error) {
-	activeCampaigns, err := uc.campaigns.ListActive(ctx, boxID)
+func (uc SendMessageCampaignUseCase) progressAudience(ctx context.Context, boxID, campaignID domain.ID, audience domain.MessageAudience) ([]domain.Student, error) {
+	campaigns, err := uc.campaignScope(ctx, boxID, campaignID)
 	if err != nil {
 		return nil, err
 	}
 	unique := map[domain.ID]domain.Student{}
-	for _, campaign := range activeCampaigns {
+	for _, campaign := range campaigns {
 		filters := repositories.StudentFilters{CampaignID: &campaign.ID}
 		if audience == domain.MessageAudienceNearGoal {
 			value := true
@@ -302,14 +350,14 @@ func (uc SendMessageCampaignUseCase) progressAudience(ctx context.Context, boxID
 	return result, nil
 }
 
-func (uc SendMessageCampaignUseCase) almostThereStudents(ctx context.Context, boxID domain.ID) ([]domain.Student, error) {
-	activeCampaigns, err := uc.campaigns.ListActive(ctx, boxID)
+func (uc SendMessageCampaignUseCase) almostThereStudents(ctx context.Context, boxID, campaignID domain.ID) ([]domain.Student, error) {
+	campaigns, err := uc.campaignScope(ctx, boxID, campaignID)
 	if err != nil {
 		return nil, err
 	}
 
 	unique := map[domain.ID]domain.Student{}
-	for _, campaign := range activeCampaigns {
+	for _, campaign := range campaigns {
 		daysLeft := campaignDaysLeft(campaign, time.Now())
 		if daysLeft <= 0 {
 			continue
@@ -337,6 +385,17 @@ func (uc SendMessageCampaignUseCase) almostThereStudents(ctx context.Context, bo
 		result = append(result, student)
 	}
 	return result, nil
+}
+
+func (uc SendMessageCampaignUseCase) campaignScope(ctx context.Context, boxID, campaignID domain.ID) ([]domain.Campaign, error) {
+	if campaignID != "" {
+		campaign, err := uc.campaigns.FindByID(ctx, boxID, campaignID)
+		if err != nil {
+			return nil, err
+		}
+		return []domain.Campaign{*campaign}, nil
+	}
+	return uc.campaigns.ListActive(ctx, boxID)
 }
 
 func isAlmostThere(progress domain.CampaignProgress, daysLeft int) bool {
@@ -382,8 +441,8 @@ type templateContext struct {
 	remainingCheckins int
 }
 
-func (uc SendMessageCampaignUseCase) templateValues(ctx context.Context, boxID domain.ID, student domain.Student) map[string]string {
-	templateContext := uc.templateContext(ctx, boxID, student)
+func (uc SendMessageCampaignUseCase) templateValues(ctx context.Context, boxID domain.ID, student domain.Student, campaignID domain.ID) map[string]string {
+	templateContext := uc.templateContext(ctx, boxID, student, campaignID)
 	return map[string]string{
 		"name":               student.Name,
 		"nome":               student.Name,
@@ -424,17 +483,17 @@ func twilioContentVariables(values map[string]string) map[string]string {
 	}
 }
 
-func (uc SendMessageCampaignUseCase) templateContext(ctx context.Context, boxID domain.ID, student domain.Student) templateContext {
+func (uc SendMessageCampaignUseCase) templateContext(ctx context.Context, boxID domain.ID, student domain.Student, campaignID domain.ID) templateContext {
 	context := templateContext{}
 	if box, err := uc.boxes.FindByID(ctx, boxID); err == nil {
 		context.boxName = box.Name
 	}
 
-	activeCampaigns, err := uc.campaigns.ListActive(ctx, boxID)
+	campaigns, err := uc.campaignScope(ctx, boxID, campaignID)
 	if err != nil {
 		return context
 	}
-	for _, campaign := range activeCampaigns {
+	for _, campaign := range campaigns {
 		progressList, err := uc.campaigns.ListProgress(ctx, campaign.ID)
 		if err != nil {
 			continue
@@ -457,4 +516,12 @@ func (uc SendMessageCampaignUseCase) templateContext(ctx context.Context, boxID 
 		}
 	}
 	return context
+}
+
+func requiresTwilioContentTemplate(settings domain.WhatsappSettings) bool {
+	if strings.HasPrefix(strings.ToLower(settings.BaseURL), "mock://") {
+		return false
+	}
+	provider := strings.TrimSpace(strings.ToLower(settings.Provider))
+	return provider == "" || provider == "twilio"
 }

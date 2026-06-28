@@ -11,7 +11,6 @@ import (
 
 	"boxengage/backend/internal/adapters/http/dto"
 	"boxengage/backend/internal/adapters/http/middleware"
-	whatsappadapter "boxengage/backend/internal/adapters/whatsapp"
 	"boxengage/backend/internal/app/whatsapp"
 	"boxengage/backend/internal/domain"
 )
@@ -141,8 +140,8 @@ func whatsappSettingsResponse(settings domain.WhatsappSettings) dto.WhatsappSett
 
 func normalizeWhatsappProvider(provider string) string {
 	provider = strings.TrimSpace(strings.ToLower(provider))
-	if provider == "" {
-		return whatsappadapter.ProviderEvolution
+	if provider == "" || provider == "evolution" {
+		return "twilio"
 	}
 	return provider
 }

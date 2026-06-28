@@ -56,7 +56,7 @@ Importar relatorios da Wellhub e TotalPass e transformar os dados em:
 - Controle de brindes
 - Relatorios
 - Templates de mensagem
-- Disparos de WhatsApp via Evolution API
+- Disparos de WhatsApp via Twilio WhatsApp
 - Auditoria dos disparos
 
 ---

@@ -103,7 +103,7 @@ WhatsApp faz parte do MVP.
 
 Funcionalidades:
 
-- Configurar Evolution API
+- Configurar Twilio WhatsApp
 - Criar templates
 - Disparo individual
 - Disparo em massa

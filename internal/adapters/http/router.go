@@ -169,6 +169,7 @@ func NewRouter(deps RouterDependencies) *gin.Engine {
 	protected.GET("/message-campaigns", messagesHandler.ListCampaigns)
 	protected.POST("/message-campaigns", messagesHandler.CreateCampaign)
 	protected.GET("/message-campaigns/:id", messagesHandler.GetCampaign)
+	protected.GET("/message-campaigns/:id/preview", messagesHandler.PreviewCampaign)
 	protected.POST("/message-campaigns/:id/send", messagesHandler.SendCampaign)
 	protected.GET("/message-campaigns/:id/recipients", messagesHandler.ListRecipients)
 

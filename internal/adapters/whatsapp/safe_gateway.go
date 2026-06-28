@@ -71,3 +71,7 @@ func normalizePhone(phone string) string {
 	replacer := strings.NewReplacer("+", "", " ", "", "-", "", "(", "", ")", "")
 	return replacer.Replace(phone)
 }
+
+func isMock(settings domain.WhatsappSettings) bool {
+	return strings.HasPrefix(strings.ToLower(settings.BaseURL), "mock://")
+}

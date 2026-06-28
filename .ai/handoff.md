@@ -1,6 +1,6 @@
 # EngageFit - Handoff de Contexto
 
-Atualizado em: 2026-06-26
+Atualizado em: 2026-06-28
 
 ## Papel do projeto
 
@@ -66,7 +66,7 @@ Frontend:
 
 ### Backend
 
-Diretorio: `backend`
+Diretorio: `engage-fit-be`
 
 Implementado:
 
@@ -108,7 +108,6 @@ Implementado:
 - WhatsApp com provider configuravel:
   - `twilio` para Twilio WhatsApp, caminho comercial recomendado.
   - `meta_cloud` para Meta Cloud API oficial.
-  - `evolution` mantido como legado/local.
   - migration: `migrations/017_add_whatsapp_provider.sql`
   - `instance_name` passa a representar `Phone number ID` quando provider for `meta_cloud`.
   - `instance_name` passa a representar `whatsapp:+...` ou `Messaging Service SID` quando provider for `twilio`.
@@ -154,11 +153,26 @@ Implementado:
   - `eligible-students` usa `campaign_progresses` com joins em `campaigns`, `students` e `rewards`.
   - `pending-rewards` usa `reward_deliveries` pendentes enriquecidas com campanha/aluno/brinde.
   - `monthly-frequency` agrupa check-ins por aluno no periodo mensal.
+- Campanhas de mensagem vinculadas a campanha de meta:
+  - `message_campaigns.campaign_id` referencia `campaigns.id`.
+  - migration: `migrations/022_add_message_campaign_campaign_id.sql`.
+  - audiencias `almost_there`, `near_goal` e `achieved` usam a campanha vinculada, nao todas as campanhas ativas.
+  - template context (variaveis `campaign_name`, `reward_name`, check-ins) usa a campanha vinculada.
+- Preview de mensagem antes do envio:
+  - `GET /api/v1/message-campaigns/:id/preview` retorna `body`, `total`, aluno exemplo e telefone.
+  - usa a mesma renderizacao do envio real (`renderTemplate` + `templateValues`).
+- Evolution API removida do produto:
+  - providers suportados: `twilio` (padrao) e `meta_cloud`.
+  - migration: `migrations/023_remove_evolution_provider.sql` normaliza configs antigas `evolution` para `twilio`.
+  - removidos `evolution_client.go`, `docker-compose.evolution.yml` e targets `make evolution-*`.
+- Automacao diaria operacional:
+  - script `scripts/daily-automation.mjs` e target `make daily-automation`.
+  - importa arquivo opcional (`DAILY_CHECKINS_FILE`), recalcula campanhas ativas, envia campanhas de mensagem vinculadas (`DAILY_SEND_MESSAGES=true`).
 
 Validacao atual:
 
 ```bash
-cd backend
+cd engage-fit-be
 go test ./...
 ```
 
@@ -166,7 +180,7 @@ Passando.
 
 ### Frontend
 
-Diretorio: `frontend`
+Diretorio: `engage-fit-fe`
 
 Implementado:
 
@@ -188,6 +202,10 @@ Implementado:
   - indicadores de brinde por campanha: total, disponiveis, pendentes e entregues.
   - painel com progresso, faltantes, proximos e atingidos
   - botao recalcular
+  - editar campanha (nome, descricao, datas)
+  - editar metas Wellhub/TotalPass
+  - editar brinde (nome, descricao, quantidade)
+  - encerrar e reativar campanha
 - Brindes:
   - tela dedicada no menu lateral.
   - busca por campanha, aluno, telefone e brinde.
@@ -208,8 +226,9 @@ Implementado:
   - icones diferenciados: `Campanhas` usa `Target`, `Brindes` usa `Gift`.
 - WhatsApp:
   - templates
-  - campanhas de mensagem
+  - campanhas de mensagem vinculadas a uma campanha de meta (`campaign_id`)
   - variaveis de template
+  - preview renderizado da mensagem antes do envio (aluno exemplo + total de destinatarios)
   - botao enviar/reenviar campanha
   - retorno visual de `sent/total/failed` apos envio
   - auditoria do ultimo envio por destinatario, incluindo `error_message` da Twilio
@@ -220,7 +239,6 @@ Implementado:
   - formulario de provedor WhatsApp
   - Twilio WhatsApp como opcao comercial recomendada
   - Meta Cloud API mantida como opcao avancada/futura
-  - Evolution API mantida como opcao legado/desenvolvimento
   - Base URL
   - Phone number ID / Instancia
   - Access token / API key
@@ -233,13 +251,14 @@ Implementado:
 Validacao atual:
 
 ```bash
-cd frontend
+cd engage-fit-fe
+npm ci
 node node_modules/typescript/lib/tsc.js -b && node node_modules/vite/bin/vite.js build
 ```
 
 Passando.
 
-Observacao: nesta maquina, `npm run build` falhou por wrapper local quebrado em `node_modules/.bin/tsc` (`Cannot find module '../lib/tsc.js`). A validacao direta por TypeScript + Vite passou.
+Observacao: `engage-fit-fe/.npmrc` aponta ao registry publico (`registry.npmjs.org`). O `package-lock.json` foi corrigido para nao usar o registry privado Fury Cloud.
 
 ## Comandos principais
 
@@ -253,14 +272,22 @@ make migrate-up
 Rodar backend:
 
 ```bash
-cd backend
-go run cmd/api/main.go
+cd engage-fit-be
+make backend-run
+```
+
+`make backend-run` exporta `DATABASE_URL` automaticamente. Alternativa manual:
+
+```bash
+cp .env.example .env
+go run ./cmd/api
 ```
 
 Rodar frontend:
 
 ```bash
-cd frontend
+cd engage-fit-fe
+npm install
 npm run dev
 ```
 
@@ -298,7 +325,7 @@ O seed demo atual foi ajustado para teste controlado de WhatsApp:
   - Bruno Teste: `7/10`, fica fora de `almost_there` por estar abaixo de 80%.
   - Carla Teste: `10/10`, entra em `achieved` (`Meta atingida`).
   - Marina Risco: `3/10`, entra em `inactive` (`Aluno em risco`) por estar ha mais de 7 dias sem check-in.
-- Cria templates e campanhas de mensagem para:
+- Cria templates e campanhas de mensagem vinculadas a campanha do mes para:
   - `almost_there` (`Disparo teste - falta pouco`)
   - `achieved` (`Disparo teste - meta atingida`)
   - `inactive` (`Disparo teste - aluno em risco`)
@@ -339,7 +366,7 @@ Fluxo de teste:
 
 ## WhatsApp comercial
 
-Direcao atual: para MVP comercial, substituir o caminho principal de QR Code/Evolution API por Twilio WhatsApp.
+Direcao atual: Twilio WhatsApp e o caminho principal para o MVP comercial.
 
 Implementado nesta etapa:
 
@@ -349,7 +376,7 @@ Implementado nesta etapa:
 - Provider `meta_cloud` tambem existe como opcao avancada/futura.
 - Cliente `MetaCloudClient` em `backend/internal/adapters/whatsapp/meta_cloud_client.go`.
 - Gateway roteador por provider em `backend/internal/adapters/whatsapp/provider_gateway.go`.
-- Frontend de configuracoes permite escolher `Twilio WhatsApp`, `Meta Cloud API` ou `Evolution API`.
+- Frontend de configuracoes permite escolher `Twilio WhatsApp` ou `Meta Cloud API`.
 - Frontend de WhatsApp permite enviar/reenviar campanhas de mensagem.
 - README documenta configuracao comercial.
 
@@ -381,117 +408,26 @@ node node_modules/typescript/lib/tsc.js -b && node node_modules/vite/bin/vite.js
 
 Ambos passaram.
 
-## Evolution API local
-
-Foi criado:
-
-- `docker-compose.evolution.yml`
-- targets:
-  - `make evolution-up`
-  - `make evolution-down`
-  - `make evolution-logs`
-  - `make evolution-ps`
-
-Config local:
-
-```txt
-Evolution API: http://localhost:8081
-API key: boxengage-local-key
-Instancia tentada: crossfit-alados
-```
-
-Subir:
+Automacao diaria:
 
 ```bash
-make evolution-up
+cd engage-fit-be
+DAILY_CHECKINS_SOURCE=totalpass \
+DAILY_CHECKINS_FILE=test-data/totalpass-checkins-hit-goal.csv \
+DAILY_SEND_MESSAGES=true \
+make daily-automation
 ```
-
-Logs:
-
-```bash
-make evolution-logs
-```
-
-Criar instancia tentado:
-
-```bash
-curl -X POST http://localhost:8081/instance/create \
-  -H "Content-Type: application/json" \
-  -H "apikey: boxengage-local-key" \
-  -d '{
-    "instanceName": "crossfit-alados",
-    "qrcode": true,
-    "integration": "WHATSAPP-BAILEYS"
-  }'
-```
-
-Resposta recebida:
-
-```json
-{
-  "instance": {
-    "instanceName": "crossfit-alados",
-    "integration": "WHATSAPP-BAILEYS",
-    "status": "connecting"
-  },
-  "qrcode": {
-    "count": 0
-  }
-}
-```
-
-`connectionState` retorna:
-
-```json
-{
-  "instance": {
-    "instanceName": "crossfit-alados",
-    "state": "connecting"
-  }
-}
-```
-
-Problema atual:
-
-- A Evolution sobe corretamente.
-- Migrations da Evolution aplicam com sucesso.
-- Instancia e criada.
-- Mas QR Code nao e gerado: sempre retorna `{ "count": 0 }`.
-- Tentativa de `/instance/connect/crossfit-alados` tambem retorna `{ "count": 0 }`.
-- Tentativa sugerida de pareamento por numero ainda nao resolveu.
-
-Hipoteses para o proximo chat:
-
-- A imagem/config atual da Evolution API v2.2.3 pode exigir outra variavel/env para QR/pairing.
-- Pode ser necessario usar outro endpoint de QR/pairing da versao exata.
-- Pode ser melhor subir uma versao diferente da Evolution ou usar painel/manager oficial.
-- Pode ser preciso limpar volumes:
-
-```bash
-docker-compose -f docker-compose.evolution.yml down -v
-make evolution-up
-```
-
-Mas isso ainda nao resolveu no chat anterior.
 
 ## Pendencias funcionais
 
 Prioridade alta:
 
-1. Resolver conexao real da Evolution API local.
-2. Adicionar na UI de WhatsApp:
-   - preview da mensagem renderizada
-3. Associar `MessageCampaign` a uma campanha de meta especifica, em vez de resolver por todas as campanhas ativas.
-4. Melhorar gestao de campanhas:
-   - editar campanha/metas/brindes pela UI.
-   - encerrar/reativar campanha pela UI.
-   - lidar melhor com multiplas campanhas ativas ao mesmo tempo.
-5. Implementar e-mail personalizado.
-6. Implementar automacao diaria:
-   - importar check-ins do dia anterior
-   - recalcular campanhas
-   - enviar WhatsApp/e-mail
-   - auditar resultados
+1. Implementar e-mail personalizado.
+2. Evoluir automacao diaria:
+   - agendar via cron/CI em ambiente real
+   - definir fonte automatica dos check-ins do dia anterior
+   - auditar resultados em tabela/UI, nao apenas console
+3. Lidar melhor com multiplas campanhas ativas simultaneas na operacao (UX e seed demo).
 
 Prioridade media:
 
@@ -521,45 +457,35 @@ Docs:
 
 Backend:
 
-- `backend/cmd/api/main.go`
-- `backend/internal/app/imports/import_checkins_usecase.go`
-- `backend/internal/adapters/parsers/parser.go`
-- `backend/internal/adapters/persistence/postgres/repositories/checkin_repository.go`
-- `backend/internal/app/messages/message_usecases.go`
-- `backend/internal/app/reports/report_usecases.go`
-- `backend/internal/adapters/whatsapp/evolution_client.go`
-- `backend/internal/adapters/whatsapp/twilio_client.go`
-- `backend/internal/adapters/whatsapp/provider_gateway.go`
-- `backend/internal/adapters/whatsapp/safe_gateway.go`
-- `backend/internal/config/config.go`
-- `backend/internal/adapters/http/handlers/reports_handler.go`
-- `backend/internal/adapters/persistence/postgres/repositories/campaign_repository.go`
-- `backend/internal/adapters/persistence/postgres/repositories/reward_repository.go`
-- `migrations/016_add_unique_checkins.sql`
+- `engage-fit-be/cmd/api/main.go`
+- `engage-fit-be/internal/app/imports/import_checkins_usecase.go`
+- `engage-fit-be/internal/app/messages/message_usecases.go`
+- `engage-fit-be/internal/adapters/whatsapp/twilio_client.go`
+- `engage-fit-be/internal/adapters/whatsapp/provider_gateway.go`
+- `engage-fit-be/internal/adapters/whatsapp/safe_gateway.go`
+- `engage-fit-be/migrations/022_add_message_campaign_campaign_id.sql`
+- `engage-fit-be/migrations/023_remove_evolution_provider.sql`
 
 Frontend:
 
-- `frontend/src/pages/campaigns/CampaignsPage.tsx`
-- `frontend/src/pages/rewards/RewardsPage.tsx`
-- `frontend/src/pages/reports/ReportsPage.tsx`
-- `frontend/src/pages/imports/ImportsPage.tsx`
-- `frontend/src/pages/whatsapp/WhatsappPage.tsx`
-- `frontend/src/pages/settings/SettingsPage.tsx`
-- `frontend/src/features/api/endpoints.ts`
+- `engage-fit-fe/src/pages/campaigns/CampaignsPage.tsx`
+- `engage-fit-fe/src/pages/whatsapp/WhatsappPage.tsx`
+- `engage-fit-fe/src/pages/settings/SettingsPage.tsx`
+- `engage-fit-fe/src/features/api/endpoints.ts`
+- `engage-fit-fe/.npmrc`
 
 Infra/dev:
 
-- `Makefile`
-- `docker-compose.yml`
-- `docker-compose.evolution.yml`
-- `scripts/demo-seed.mjs`
-- `test-data/README.md`
-- `test-data/totalpass-checkins-hit-goal.csv`
+- `engage-fit-be/Makefile` (`docker compose`, `make backend-run` com `DATABASE_URL`, `make daily-automation`)
+- `engage-fit-be/docker-compose.yml`
+- `engage-fit-be/scripts/demo-seed.mjs`
+- `engage-fit-be/scripts/daily-automation.mjs`
+- `engage-fit-be/test-data/totalpass-checkins-hit-goal.csv`
 
 ## Orientacao para iniciar novo chat
 
 Mensagem sugerida:
 
 ```txt
-Leia `.ai/handoff.md` e continue a partir dele. O estado atual do EngageFit esta documentado ali. O seed controlado cria a audiencia dinamica `almost_there` (`Falta pouco`) com Luiz 9/10, Deborah 8/10, Bruno 7/10 e Carla 10/10, todos usando o telefone do Luiz (`5511963834712`). Importar `test-data/totalpass-checkins-hit-goal.csv` ou `test-data/totalpass-checkins-23-06-2026.xlsx` como TotalPass leva Luiz, Deborah e Bruno a 10/10 para testar `Meta atingida`. Controle de brindes ja tem tela dedicada com baixa manual e relatorios essenciais ja existem com filtros e CSV. O proximo foco sugerido e melhorar a UI de WhatsApp com preview de mensagem e associar `MessageCampaign` a uma campanha de meta especifica.
+Leia `.ai/handoff.md` e continue a partir dele. WhatsApp ja tem preview renderizado, campanhas de mensagem vinculadas a `campaign_id`, edicao de campanhas/metas/brindes na UI, Evolution API removida (Twilio + Meta Cloud), e automacao diaria via `make daily-automation`. Proximo foco sugerido: e-mail personalizado e evoluir a automacao diaria para agendamento real com auditoria persistida.
 ```

@@ -268,7 +268,7 @@ Status: concluida parcialmente
 
 Objetivo:
 
-- Configurar Evolution API
+- Configurar Twilio WhatsApp
 - Templates
 - Campanhas de mensagem
 - Segmentacao
@@ -295,13 +295,13 @@ Entregas:
   - `{{name}}`
   - `{{nome}}`
   - `{{email}}`
-- Evolution API client via HTTP
+- Twilio WhatsApp client via HTTP
 - Backend compilando com `go test ./...`
 
 Pendente por ambiente:
 
-- Validar endpoints contra Evolution API real
-- Confirmar formato exato esperado pela instancia Evolution API usada
+- Validar endpoints contra Twilio WhatsApp real
+- Confirmar formato exato esperado pelos templates aprovados na Twilio
 - Validar disparos com numeros reais/teste
 
 ---
@@ -449,7 +449,7 @@ Status: concluida
 Objetivo:
 
 - Permitir testar o fluxo principal sem depender de dados reais
-- Permitir testar auditoria de WhatsApp sem Evolution API real
+- Permitir testar auditoria de WhatsApp sem envio real
 
 Entregue:
 
@@ -582,8 +582,8 @@ Entregue:
 - `SafeGateway` para WhatsApp
 - Variaveis em `.env`
 - Composicao do gateway protegida no `cmd/api/main.go`
-- Tela de configuracao da Evolution API em Configuracoes
-- Botao de teste de conexao com Evolution API
+- Tela de configuracao do provedor WhatsApp em Configuracoes
+- Botao de teste de conexao com o provedor WhatsApp
 
 Validacao:
 

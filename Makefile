@@ -1,8 +1,7 @@
-COMPOSE=docker-compose
-EVOLUTION_COMPOSE=docker-compose -f docker-compose.evolution.yml
+COMPOSE=docker compose
 DATABASE_URL=postgres://boxengage:boxengage@localhost:5432/boxengage?sslmode=disable
 
-.PHONY: up down logs ps migrate-up backend-run backend-test demo-seed demo-reset demo-reset-seed evolution-up evolution-down evolution-logs evolution-ps
+.PHONY: up down logs ps migrate-up backend-run backend-test demo-seed demo-reset demo-reset-seed daily-automation
 
 up:
 	$(COMPOSE) up -d postgres
@@ -23,13 +22,13 @@ migrate-up:
 	done
 
 backend-run:
-	go run ./cmd/api
+	DATABASE_URL="$(DATABASE_URL)" go run ./cmd/api
 
 backend-test:
 	go test ./...
 
 demo-seed:
-	node scripts/demo-seed.mjs
+	API_BASE_URL=http://localhost:8080 node scripts/demo-seed.mjs
 
 demo-reset:
 	$(COMPOSE) exec -T postgres psql "$(DATABASE_URL)" -v ON_ERROR_STOP=1 -c "CREATE UNIQUE INDEX IF NOT EXISTS idx_checkins_unique_visit ON checkins (box_id, source, student_id, checkin_date, checkin_time);"
@@ -37,14 +36,5 @@ demo-reset:
 
 demo-reset-seed: demo-reset demo-seed
 
-evolution-up:
-	$(EVOLUTION_COMPOSE) up -d
-
-evolution-down:
-	$(EVOLUTION_COMPOSE) down
-
-evolution-logs:
-	$(EVOLUTION_COMPOSE) logs -f evolution-api
-
-evolution-ps:
-	$(EVOLUTION_COMPOSE) ps
+daily-automation:
+	API_BASE_URL=http://localhost:8080 node scripts/daily-automation.mjs

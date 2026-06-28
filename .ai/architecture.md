@@ -12,7 +12,7 @@ O EngageFit sera uma aplicacao web multi-tenant composta por:
 - UI com Tailwind, shadcn/ui e Lucide Icons
 - Autenticacao com JWT
 - Upload de arquivos XLSX e CSV
-- Integracao WhatsApp via Evolution API
+- Integracao WhatsApp via Twilio WhatsApp
 - Deploy local/inicial com Docker Compose
 
 Arquitetura do backend:
@@ -50,7 +50,7 @@ Camadas:
 - Domain: entidades e regras centrais
 - Application: casos de uso
 - Ports: interfaces de repositorios e servicos externos
-- Adapters: HTTP, PostgreSQL, parsers, Evolution API
+- Adapters: HTTP, PostgreSQL, parsers, Twilio WhatsApp e Meta Cloud API
 - Config: configuracao de ambiente
 
 ---
@@ -130,7 +130,7 @@ Cada origem tera parser especifico.
 
 Integracao:
 
-- Evolution API
+- Twilio WhatsApp
 
 Faz parte do MVP.
 

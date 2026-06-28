@@ -10,19 +10,17 @@ import (
 )
 
 const (
-	ProviderEvolution = "evolution"
 	ProviderMetaCloud = "meta_cloud"
 	ProviderTwilio    = "twilio"
 )
 
 type ProviderGateway struct {
-	evolution services.WhatsappGateway
 	metaCloud services.WhatsappGateway
 	twilio    services.WhatsappGateway
 }
 
-func NewProviderGateway(evolution services.WhatsappGateway, metaCloud services.WhatsappGateway, twilio services.WhatsappGateway) ProviderGateway {
-	return ProviderGateway{evolution: evolution, metaCloud: metaCloud, twilio: twilio}
+func NewProviderGateway(metaCloud services.WhatsappGateway, twilio services.WhatsappGateway) ProviderGateway {
+	return ProviderGateway{metaCloud: metaCloud, twilio: twilio}
 }
 
 func (g ProviderGateway) Test(ctx context.Context, settings domain.WhatsappSettings) error {
@@ -44,12 +42,10 @@ func (g ProviderGateway) Send(ctx context.Context, settings domain.WhatsappSetti
 func (g ProviderGateway) gateway(settings domain.WhatsappSettings) (services.WhatsappGateway, error) {
 	provider := strings.TrimSpace(strings.ToLower(settings.Provider))
 	if provider == "" {
-		provider = ProviderEvolution
+		provider = ProviderTwilio
 	}
 
 	switch provider {
-	case ProviderEvolution:
-		return g.evolution, nil
 	case ProviderMetaCloud:
 		return g.metaCloud, nil
 	case ProviderTwilio:

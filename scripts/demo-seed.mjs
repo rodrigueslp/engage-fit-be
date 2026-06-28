@@ -38,9 +38,9 @@ async function main() {
   const almostThereTemplate = await createTemplate(token, 'Falta pouco demo', almostThereTemplateContent);
   const achievedTemplate = await createTemplate(token, 'Meta atingida demo', achievedTemplateContent);
   const inactiveTemplate = await createTemplate(token, 'Aluno em risco demo', inactiveTemplateContent);
-  await createMessageCampaign(token, almostThereTemplate.id, 'Disparo teste - falta pouco', 'almost_there');
-  await createMessageCampaign(token, achievedTemplate.id, 'Disparo teste - meta atingida', 'achieved');
-  await createMessageCampaign(token, inactiveTemplate.id, 'Disparo teste - aluno em risco', 'inactive');
+  await createMessageCampaign(token, campaign.id, almostThereTemplate.id, 'Disparo teste - falta pouco', 'almost_there');
+  await createMessageCampaign(token, campaign.id, achievedTemplate.id, 'Disparo teste - meta atingida', 'achieved');
+  await createMessageCampaign(token, campaign.id, inactiveTemplate.id, 'Disparo teste - aluno em risco', 'inactive');
 
   console.log('');
   console.log('Demo pronto para teste de WhatsApp.');
@@ -164,11 +164,12 @@ async function createTemplate(token, name, content) {
   return response.json();
 }
 
-async function createMessageCampaign(token, templateId, name, audience) {
+async function createMessageCampaign(token, campaignId, templateId, name, audience) {
   const response = await authedFetch(token, '/api/v1/message-campaigns', {
     method: 'POST',
     body: JSON.stringify({
       name,
+      campaign_id: campaignId,
       audience,
       template_id: templateId,
     }),

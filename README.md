@@ -15,7 +15,6 @@ test-data/                      # fixtures de importacao e WhatsApp
 .ai/                            # planejamento do produto (backend + frontend)
 Makefile                        # atalhos locais (postgres, migrations, demo)
 docker-compose.yml              # Postgres local
-docker-compose.evolution.yml    # Evolution API local (legado/dev)
 ```
 
 ## Stack
@@ -37,7 +36,7 @@ internal/ports/services         # contratos de servicos externos
 internal/adapters/http          # router, middleware e handlers
 internal/adapters/persistence   # Postgres/GORM
 internal/adapters/parsers       # parsers Wellhub/TotalPass
-internal/adapters/whatsapp      # Evolution API
+internal/adapters/whatsapp      # Twilio e Meta Cloud API
 internal/adapters/security      # JWT e senha
 internal/adapters/reports       # exportadores
 internal/config                 # configuracao
@@ -131,8 +130,7 @@ O seed cria:
 - Brinde
 - Alunos e check-ins por importacao XLSX/CSV
 - Progresso recalculado
-- Configuracao WhatsApp em modo `mock://`
-- Template e campanha de WhatsApp demo
+- Templates e campanhas de WhatsApp demo vinculadas a campanha do mes
 - Auditoria de destinatarios em `message_recipients`
 
 Credenciais:
@@ -187,74 +185,9 @@ Templates:
   - `6`: `reward_name`
   - `7`: `platform`
 
-O provider `meta_cloud` continua disponivel como opcao avancada/futura. O provider `evolution` fica mantido para legado/desenvolvimento local.
+O provider `meta_cloud` continua disponivel como opcao avancada/futura. Evolution API foi removida do produto.
 
-## Evolution API local
-
-Para testar WhatsApp real em desenvolvimento, suba a Evolution API local:
-
-```bash
-make evolution-up
-```
-
-Servicos:
-
-- Evolution API: `http://localhost:8081`
-- API key local: `boxengage-local-key`
-
-Ver status:
-
-```bash
-make evolution-ps
-```
-
-Logs:
-
-```bash
-make evolution-logs
-```
-
-Parar:
-
-```bash
-make evolution-down
-```
-
-Criar instancia WhatsApp:
-
-```bash
-curl -X POST http://localhost:8081/instance/create \
-  -H "Content-Type: application/json" \
-  -H "apikey: boxengage-local-key" \
-  -d '{
-    "instanceName": "crossfit-alados",
-    "qrcode": true,
-    "integration": "WHATSAPP-BAILEYS"
-  }'
-```
-
-Conectar por QR Code:
-
-```bash
-curl http://localhost:8081/instance/connect/crossfit-alados \
-  -H "apikey: boxengage-local-key"
-```
-
-Validar estado:
-
-```bash
-curl http://localhost:8081/instance/connectionState/crossfit-alados \
-  -H "apikey: boxengage-local-key"
-```
-
-Configurar no EngageFit em `Configuracoes`:
-
-```txt
-Base URL: http://localhost:8081
-Instancia: crossfit-alados
-API key: boxengage-local-key
-Ativar WhatsApp: marcado
-```
+## Envio real em desenvolvimento
 
 Para receber mensagens reais apenas no seu celular em desenvolvimento, configure `.env`:
 
@@ -271,6 +204,25 @@ WHATSAPP_DEV_ALLOWED_RECIPIENT_PHONES=5511963834712,5518997980429
 ```
 
 Reinicie o backend apos alterar o `.env`.
+
+## Automacao diaria
+
+A rotina operacional diaria pode ser chamada por cron, GitHub Actions ou outro scheduler:
+
+```bash
+DAILY_CHECKINS_SOURCE=totalpass \
+DAILY_CHECKINS_FILE=/caminho/checkins-do-dia.csv \
+DAILY_SEND_MESSAGES=true \
+make daily-automation
+```
+
+Comportamento:
+
+- se `DAILY_CHECKINS_FILE` estiver configurado, importa o arquivo como `wellhub` ou `totalpass`;
+- recalcula todas as campanhas ativas;
+- quando `DAILY_SEND_MESSAGES=true`, envia campanhas de mensagem vinculadas a campanhas ativas;
+- campanhas de mensagem ja enviadas sao ignoradas, a menos que `DAILY_RESEND_MESSAGES=true`;
+- o resultado e impresso no console para auditoria operacional.
 
 ## Importacao de check-ins
 
@@ -317,4 +269,4 @@ Ainda nao implementa:
 - Handlers com casos de uso conectados
 - Parsers reais de XLSX/CSV
 - JWT real
-- Integracao real com Evolution API
+- Integracao real com Twilio WhatsApp

@@ -190,7 +190,7 @@ Registra:
 
 ## WhatsappSettings
 
-Configuracao da Evolution API para um box.
+Configuracao do provedor WhatsApp para um box.
 
 Registra:
 

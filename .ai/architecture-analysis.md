@@ -224,13 +224,13 @@ Constraint recomendada:
 
 ### `whatsapp_settings`
 
-Configuracao da Evolution API por box.
+Configuracao do provedor WhatsApp por box.
 
 | Campo | Tipo | Observacoes |
 |---|---|---|
 | `id` | UUID / BIGINT | PK |
 | `box_id` | FK | `boxes.id` |
-| `base_url` | VARCHAR | URL da Evolution API |
+| `base_url` | VARCHAR | URL do provedor WhatsApp |
 | `instance_name` | VARCHAR | |
 | `api_key_encrypted` | TEXT | Chave protegida |
 | `enabled` | BOOLEAN | |
@@ -465,7 +465,7 @@ backend/
         totalpass_xlsx_parser.go
 
       whatsapp/
-        evolution_client.go
+        twilio_client.go
 
       security/
         jwt_service.go
@@ -863,7 +863,7 @@ Formatos:
 
 ### Disparo de WhatsApp
 
-1. Usuario configura Evolution API em `WhatsappSettings`.
+1. Usuario configura Twilio WhatsApp em `WhatsappSettings`.
 2. Usuario cria template de mensagem.
 3. Usuario cria campanha de mensagem.
 4. Usuario escolhe publico:
@@ -873,7 +873,7 @@ Formatos:
    - `all`
 5. Sistema resolve destinatarios pelo `box_id`.
 6. Sistema cria registros em `MessageRecipient`.
-7. Sistema envia mensagens via Evolution API.
+7. Sistema envia mensagens via Twilio WhatsApp.
 8. Sistema atualiza status individual como `sent` ou `failed`.
 
 ---
@@ -934,7 +934,7 @@ Entrega de brinde para aluno.
 
 ### WhatsappSettings
 
-Configuracao da Evolution API por box.
+Configuracao do provedor WhatsApp por box.
 
 ### MessageTemplate
 
@@ -1009,9 +1009,9 @@ Auditoria individual dos destinatarios e status de envio.
 
 ### WhatsApp
 
-- Consultar configuracao Evolution API
-- Atualizar configuracao Evolution API
-- Testar configuracao Evolution API
+- Consultar configuracao do provedor WhatsApp
+- Atualizar configuracao do provedor WhatsApp
+- Testar configuracao do provedor WhatsApp
 - Criar template
 - Editar template
 - Listar templates
@@ -1034,7 +1034,7 @@ Auditoria individual dos destinatarios e status de envio.
 - MVP possui apenas usuario `OWNER`.
 - Dashboard e a principal funcionalidade.
 - WhatsApp faz parte do MVP.
-- Evolution API sera usada para WhatsApp.
+- Twilio WhatsApp sera usado para WhatsApp.
 - Receita financeira esta fora do MVP.
 - `Checkin` nao possui campo `revenue`.
 - Aluno proximo da meta: progresso maior ou igual a 80%.

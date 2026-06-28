@@ -298,11 +298,11 @@ func messageTemplateToModel(template domain.MessageTemplate) models.MessageTempl
 }
 
 func messageCampaignToDomain(model models.MessageCampaignModel) domain.MessageCampaign {
-	return domain.MessageCampaign{ID: domainID(model.ID), BoxID: domainID(model.BoxID), Name: model.Name, Audience: domain.MessageAudience(model.Audience), TemplateID: domainID(model.TemplateID), SentAt: model.SentAt, CreatedAt: model.CreatedAt}
+	return domain.MessageCampaign{ID: domainID(model.ID), BoxID: domainID(model.BoxID), CampaignID: domainID(model.CampaignID), Name: model.Name, Audience: domain.MessageAudience(model.Audience), TemplateID: domainID(model.TemplateID), SentAt: model.SentAt, CreatedAt: model.CreatedAt}
 }
 
 func messageCampaignToModel(campaign domain.MessageCampaign) models.MessageCampaignModel {
-	return models.MessageCampaignModel{ID: stringID(campaign.ID), BoxID: stringID(campaign.BoxID), Name: campaign.Name, Audience: string(campaign.Audience), TemplateID: stringID(campaign.TemplateID), SentAt: campaign.SentAt, CreatedAt: campaign.CreatedAt}
+	return models.MessageCampaignModel{ID: stringID(campaign.ID), BoxID: stringID(campaign.BoxID), CampaignID: stringID(campaign.CampaignID), Name: campaign.Name, Audience: string(campaign.Audience), TemplateID: stringID(campaign.TemplateID), SentAt: campaign.SentAt, CreatedAt: campaign.CreatedAt}
 }
 
 func messageRecipientToDomain(model models.MessageRecipientModel) domain.MessageRecipient {

@@ -8,6 +8,7 @@ type MessageTemplateRequest struct {
 
 type MessageCampaignRequest struct {
 	Name       string `json:"name"`
+	CampaignID string `json:"campaign_id"`
 	Audience   string `json:"audience"`
 	TemplateID string `json:"template_id"`
 }
@@ -22,6 +23,7 @@ type MessageTemplateResponse struct {
 type MessageCampaignResponse struct {
 	ID         string `json:"id"`
 	Name       string `json:"name"`
+	CampaignID string `json:"campaign_id"`
 	Audience   string `json:"audience"`
 	TemplateID string `json:"template_id"`
 	SentAt     string `json:"sent_at,omitempty"`
@@ -31,6 +33,14 @@ type SendMessageCampaignResponse struct {
 	Total  int `json:"total"`
 	Sent   int `json:"sent"`
 	Failed int `json:"failed"`
+}
+
+type MessageCampaignPreviewResponse struct {
+	Total       int    `json:"total"`
+	Body        string `json:"body"`
+	StudentID   string `json:"student_id,omitempty"`
+	StudentName string `json:"student_name,omitempty"`
+	Phone       string `json:"phone,omitempty"`
 }
 
 type MessageRecipientResponse struct {

@@ -43,10 +43,9 @@ func main() {
 
 	passwordService := security.NewPasswordService()
 	tokenService := security.NewJWTService(cfg.JWTSecret)
-	evolutionClient := whatsapp.NewEvolutionClient()
 	metaCloudClient := whatsapp.NewMetaCloudClient()
 	twilioClient := whatsapp.NewTwilioClient()
-	providerGateway := whatsapp.NewProviderGateway(evolutionClient, metaCloudClient, twilioClient)
+	providerGateway := whatsapp.NewProviderGateway(metaCloudClient, twilioClient)
 	whatsappGateway := whatsapp.NewSafeGateway(providerGateway, cfg.AppEnv, cfg.WhatsappAllowRealSend, cfg.WhatsappDevRecipientPhone, cfg.WhatsappDevAllowedRecipientPhones)
 	checkinParser := parsers.NewCheckinParser()
 

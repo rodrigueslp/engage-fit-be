@@ -135,6 +135,7 @@ type MessageTemplateModel struct {
 type MessageCampaignModel struct {
 	ID         string `gorm:"primaryKey"`
 	BoxID      string `gorm:"index"`
+	CampaignID string `gorm:"index"`
 	Name       string
 	Audience   string
 	TemplateID string

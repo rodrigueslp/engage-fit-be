@@ -193,7 +193,7 @@ Regras:
 
 - Configuracao pertence a um box.
 - Chave da API deve ser armazenada de forma protegida.
-- Evolution API faz parte do MVP.
+- Twilio WhatsApp faz parte do MVP; Meta Cloud API fica como opcao oficial futura.
 
 ---
 
