@@ -12,6 +12,7 @@ const resendMessages = process.env.DAILY_RESEND_MESSAGES === 'true';
 async function main() {
   await assertApiIsRunning();
   const token = await login();
+  let run;
 
   const audit = {
     imported: false,
@@ -21,33 +22,74 @@ async function main() {
     failedMessageCampaigns: 0,
   };
 
-  if (checkinsFile) {
-    await importDailyCheckins(token);
-    audit.imported = true;
-  }
+  try {
+    run = await createAutomationRun(token);
 
-  const activeCampaigns = (await authedJson(token, '/api/v1/campaigns')).filter((campaign) => campaign.active);
-  for (const campaign of activeCampaigns) {
-    await authedFetch(token, `/api/v1/campaigns/${campaign.id}/recalculate-progress`, { method: 'POST' });
-    audit.recalculated += 1;
-  }
-
-  if (sendMessages) {
-    const activeCampaignIDs = new Set(activeCampaigns.map((campaign) => campaign.id));
-    const messageCampaigns = await authedJson(token, '/api/v1/message-campaigns');
-    for (const messageCampaign of messageCampaigns) {
-      if (!activeCampaignIDs.has(messageCampaign.campaign_id) || (messageCampaign.sent_at && !resendMessages)) {
-        audit.skippedMessageCampaigns += 1;
-        continue;
-      }
-
-      const response = await authedFetch(token, `/api/v1/message-campaigns/${messageCampaign.id}/send`, { method: 'POST' });
-      const result = await response.json();
-      audit.sentMessageCampaigns += result.sent ?? 0;
-      audit.failedMessageCampaigns += result.failed ?? 0;
+    if (checkinsFile) {
+      await importDailyCheckins(token);
+      audit.imported = true;
     }
-  }
 
+    const activeCampaigns = (await authedJson(token, '/api/v1/campaigns')).filter((campaign) => campaign.active);
+    for (const campaign of activeCampaigns) {
+      await authedFetch(token, `/api/v1/campaigns/${campaign.id}/recalculate-progress`, { method: 'POST' });
+      audit.recalculated += 1;
+    }
+
+    if (sendMessages) {
+      const activeCampaignIDs = new Set(activeCampaigns.map((campaign) => campaign.id));
+      const messageCampaigns = await authedJson(token, '/api/v1/message-campaigns');
+      for (const messageCampaign of messageCampaigns) {
+        if (!activeCampaignIDs.has(messageCampaign.campaign_id) || (messageCampaign.sent_at && !resendMessages)) {
+          audit.skippedMessageCampaigns += 1;
+          continue;
+        }
+
+        const response = await authedFetch(token, `/api/v1/message-campaigns/${messageCampaign.id}/send`, { method: 'POST' });
+        const result = await response.json();
+        audit.sentMessageCampaigns += result.sent ?? 0;
+        audit.failedMessageCampaigns += result.failed ?? 0;
+      }
+    }
+
+    if (run?.id) {
+      await finishAutomationRun(token, run.id, 'success', audit);
+    }
+    printAudit(audit);
+  } catch (error) {
+    if (run?.id) {
+      await finishAutomationRun(token, run.id, 'failed', audit, error.message);
+    }
+    throw error;
+  }
+}
+
+async function createAutomationRun(token) {
+  return authedJson(token, '/api/v1/automation/runs', {
+    method: 'POST',
+    body: JSON.stringify({
+      source: checkinsFile ? checkinsSource : '',
+      filename: checkinsFile ? basename(checkinsFile) : '',
+    }),
+  });
+}
+
+async function finishAutomationRun(token, runId, status, audit, errorMessage = '') {
+  await authedFetch(token, `/api/v1/automation/runs/${runId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({
+      status,
+      imported: audit.imported,
+      recalculated_campaigns: audit.recalculated,
+      skipped_message_campaigns: audit.skippedMessageCampaigns,
+      sent_messages: audit.sentMessageCampaigns,
+      failed_messages: audit.failedMessageCampaigns,
+      error_message: errorMessage,
+    }),
+  });
+}
+
+function printAudit(audit) {
   console.log('Automacao diaria concluida.');
   console.log(`Importacao: ${audit.imported ? `${checkinsSource} (${basename(checkinsFile)})` : 'nenhum arquivo configurado'}`);
   console.log(`Campanhas recalculadas: ${audit.recalculated}`);
@@ -93,8 +135,8 @@ async function importDailyCheckins(token) {
   await assertResponse(response, 'importar check-ins diarios');
 }
 
-async function authedJson(token, path) {
-  const response = await authedFetch(token, path);
+async function authedJson(token, path, options = {}) {
+  const response = await authedFetch(token, path, options);
   return response.json();
 }
 

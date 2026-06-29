@@ -153,3 +153,81 @@ type MessageRecipientModel struct {
 	SentAt            *time.Time
 	CreatedAt         time.Time
 }
+
+type EmailSettingsModel struct {
+	ID                string `gorm:"primaryKey"`
+	BoxID             string `gorm:"uniqueIndex"`
+	Provider          string
+	SMTPHost          string `gorm:"column:smtp_host"`
+	SMTPPort          int    `gorm:"column:smtp_port"`
+	Username          string
+	PasswordEncrypted string
+	FromEmail         string
+	FromName          string
+	Enabled           bool
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+}
+
+type EmailTemplateModel struct {
+	ID        string `gorm:"primaryKey"`
+	BoxID     string `gorm:"index"`
+	Name      string
+	Subject   string
+	Content   string
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+type EmailCampaignModel struct {
+	ID         string `gorm:"primaryKey"`
+	BoxID      string `gorm:"index"`
+	CampaignID string `gorm:"index"`
+	Name       string
+	Audience   string
+	TemplateID string
+	SentAt     *time.Time
+	CreatedAt  time.Time
+}
+
+type EmailRecipientModel struct {
+	ID              string `gorm:"primaryKey"`
+	EmailCampaignID string `gorm:"index"`
+	StudentID       string
+	Email           string
+	Status          string
+	ErrorMessage    string
+	SentAt          *time.Time
+	CreatedAt       time.Time
+}
+
+type AutomationRunModel struct {
+	ID                      string `gorm:"primaryKey"`
+	BoxID                   string `gorm:"index"`
+	Status                  string `gorm:"index"`
+	Source                  string
+	Filename                string
+	Imported                bool
+	RecalculatedCampaigns   int
+	SkippedMessageCampaigns int
+	SentMessages            int
+	FailedMessages          int
+	ErrorMessage            string
+	StartedAt               time.Time
+	FinishedAt              *time.Time
+}
+
+type AutomationScheduleModel struct {
+	ID          string `gorm:"primaryKey"`
+	BoxID       string `gorm:"index"`
+	Name        string
+	Mode        string
+	RunTime     string
+	Timezone    string
+	DaysOfWeek  string
+	AllowResend bool
+	Enabled     bool
+	LastRunAt   *time.Time
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}

@@ -29,11 +29,16 @@ async function main() {
   const token = await login();
 
   const campaign = await createCampaign(token);
+  const secondaryCampaign = await createCampaign(token, 'Desafio extra do mes', 'Campanha ativa extra para validar operacao com multiplas campanhas.');
   await createGoal(token, campaign.id, 'totalpass', 10);
+  await createGoal(token, secondaryCampaign.id, 'totalpass', 12);
   await createReward(token, campaign.id);
+  await createReward(token, secondaryCampaign.id, 'Garrafa EngageFit', 'Brinde demo da segunda campanha ativa.', 50);
 
   await importCheckins(token, 'totalpass', totalpassCsv(), totalPassFilePath);
   await recalculateCampaign(token, campaign.id);
+  await recalculateCampaign(token, secondaryCampaign.id);
+  await configureEmailMock(token);
 
   const almostThereTemplate = await createTemplate(token, 'Falta pouco demo', almostThereTemplateContent);
   const achievedTemplate = await createTemplate(token, 'Meta atingida demo', achievedTemplateContent);
@@ -42,17 +47,26 @@ async function main() {
   await createMessageCampaign(token, campaign.id, achievedTemplate.id, 'Disparo teste - meta atingida', 'achieved');
   await createMessageCampaign(token, campaign.id, inactiveTemplate.id, 'Disparo teste - aluno em risco', 'inactive');
 
+  const emailAlmostThereTemplate = await createEmailTemplate(token, 'E-mail falta pouco demo', '{{name}}, falta pouco para sua meta', almostThereTemplateContent);
+  const emailAchievedTemplate = await createEmailTemplate(token, 'E-mail meta atingida demo', '{{name}}, meta atingida no {{box_name}}', achievedTemplateContent);
+  await createEmailCampaign(token, campaign.id, emailAlmostThereTemplate.id, 'E-mail teste - falta pouco', 'almost_there');
+  await createEmailCampaign(token, campaign.id, emailAchievedTemplate.id, 'E-mail teste - meta atingida', 'achieved');
+  await createAutomationSchedule(token);
+
   console.log('');
   console.log('Demo pronto para teste de WhatsApp.');
   console.log(`Login: ${ownerEmail}`);
   console.log(`Senha: ${ownerPassword}`);
-  console.log(`Campanha: ${campaign.name}`);
+  console.log(`Campanha principal: ${campaign.name}`);
+  console.log(`Campanha extra ativa: ${secondaryCampaign.name}`);
   console.log('Alunos seed TotalPass:');
   for (const student of demoStudents) {
     console.log(`- ${student.name}: ${student.checkins}/10 (${student.scenario}) -> ${student.phone}`);
   }
   console.log('Importe test-data/totalpass-checkins-hit-goal.csv para levar Luiz, Deborah e Bruno a 10/10.');
   console.log('Depois configure Twilio em Configuracoes e envie a campanha na tela WhatsApp.');
+  console.log('A tela E-mail ja fica com provider mock configurado para preview/envio seguro local.');
+  console.log('A tela Automacao tem uma rotina demo pausada para testar execucao manual.');
 }
 
 async function assertApiIsRunning() {
@@ -93,13 +107,13 @@ async function login() {
   return body.access_token;
 }
 
-async function createCampaign(token) {
+async function createCampaign(token, name, description) {
   const month = currentMonthRange();
   const response = await authedFetch(token, '/api/v1/campaigns', {
     method: 'POST',
     body: JSON.stringify({
-      name: `Brinde do mes ${month.label}`,
-      description: 'Campanha demo para validar meta TotalPass e disparo de WhatsApp.',
+      name: name ?? `Brinde do mes ${month.label}`,
+      description: description ?? 'Campanha demo para validar meta TotalPass e disparo de WhatsApp.',
       start_date: month.start,
       end_date: month.end,
     }),
@@ -116,13 +130,13 @@ async function createGoal(token, campaignId, source, targetCheckins) {
   await assertResponse(response, `criar meta ${source}`);
 }
 
-async function createReward(token, campaignId) {
+async function createReward(token, campaignId, name = 'Camiseta exclusiva Alados', description = 'Brinde demo para alunos que atingirem a meta do mes.', quantity = 100) {
   const response = await authedFetch(token, `/api/v1/campaigns/${campaignId}/rewards`, {
     method: 'POST',
     body: JSON.stringify({
-      name: 'Camiseta exclusiva Alados',
-      description: 'Brinde demo para alunos que atingirem a meta do mes.',
-      quantity: 100,
+      name,
+      description,
+      quantity,
     }),
   });
   await assertResponse(response, 'criar brinde demo');
@@ -150,6 +164,59 @@ async function recalculateCampaign(token, campaignId) {
     method: 'POST',
   });
   await assertResponse(response, 'recalcular campanha demo');
+}
+
+
+
+async function createAutomationSchedule(token) {
+  const response = await authedFetch(token, '/api/v1/automation/schedules', {
+    method: 'POST',
+    body: JSON.stringify({
+      name: 'Rotina demo - meio dia',
+      mode: 'full_daily',
+      run_time: '12:00',
+      timezone: 'America/Sao_Paulo',
+      days_of_week: '1,2,3,4,5',
+      allow_resend: false,
+      enabled: false,
+    }),
+  });
+  await assertResponse(response, 'criar rotina de automacao demo');
+}
+
+async function configureEmailMock(token) {
+  const response = await authedFetch(token, '/api/v1/email/settings', {
+    method: 'PUT',
+    body: JSON.stringify({
+      provider: 'mock',
+      smtp_host: 'mock://local',
+      smtp_port: 587,
+      username: '',
+      password: '',
+      from_email: 'engagefit@example.com',
+      from_name: 'EngageFit Demo',
+      enabled: true,
+    }),
+  });
+  await assertResponse(response, 'configurar e-mail mock demo');
+}
+
+async function createEmailTemplate(token, name, subject, content) {
+  const response = await authedFetch(token, '/api/v1/email-templates', {
+    method: 'POST',
+    body: JSON.stringify({ name, subject, content }),
+  });
+  await assertResponse(response, 'criar template de e-mail demo');
+  return response.json();
+}
+
+async function createEmailCampaign(token, campaignId, templateId, name, audience) {
+  const response = await authedFetch(token, '/api/v1/email-campaigns', {
+    method: 'POST',
+    body: JSON.stringify({ name, campaign_id: campaignId, audience, template_id: templateId }),
+  });
+  await assertResponse(response, 'criar campanha de e-mail demo');
+  return response.json();
 }
 
 async function createTemplate(token, name, content) {

@@ -270,3 +270,31 @@ Ainda nao implementa:
 - Parsers reais de XLSX/CSV
 - JWT real
 - Integracao real com Twilio WhatsApp
+
+
+## E-mail personalizado
+
+O EngageFit tambem possui disparos de e-mail no mesmo modelo operacional do WhatsApp: configuracao de provedor, templates com variaveis, campanhas vinculadas a uma campanha de meta, preview e auditoria por destinatario.
+
+Para desenvolvimento local, use o provider `mock` na tela `E-mail`. Para SMTP real em `APP_ENV=development`, o envio fica bloqueado por padrao e exige:
+
+```bash
+EMAIL_ALLOW_REAL_SEND=true
+EMAIL_DEV_RECIPIENT_EMAIL=seu-email@exemplo.com # opcional: redireciona todos os envios locais
+```
+
+## Auditoria da automacao diaria
+
+O comando `make daily-automation` registra uma execucao em `automation_runs`, finalizando com status, arquivo importado, campanhas recalculadas, mensagens enviadas e falhas. O historico fica disponivel na tela `Automacao` e nos endpoints `/api/v1/automation/runs`.
+
+
+### Worker interno de automacao
+
+A tela `Automacao` permite configurar rotinas de produto com horario, dias da semana e modo de execucao. Para o backend executar essas rotinas automaticamente, habilite o worker no ambiente da API:
+
+```bash
+AUTOMATION_WORKER_ENABLED=true
+AUTOMATION_WORKER_INTERVAL_SECONDS=60
+```
+
+Com o worker desligado, as rotinas continuam configuraveis e podem ser executadas manualmente pelo botao `Executar` na tela `Automacao`.

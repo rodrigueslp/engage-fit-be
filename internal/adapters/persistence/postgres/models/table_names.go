@@ -55,3 +55,27 @@ func (MessageCampaignModel) TableName() string {
 func (MessageRecipientModel) TableName() string {
 	return "message_recipients"
 }
+
+func (EmailSettingsModel) TableName() string {
+	return "email_settings"
+}
+
+func (EmailTemplateModel) TableName() string {
+	return "email_templates"
+}
+
+func (EmailCampaignModel) TableName() string {
+	return "email_campaigns"
+}
+
+func (EmailRecipientModel) TableName() string {
+	return "email_recipients"
+}
+
+func (AutomationRunModel) TableName() string {
+	return "automation_runs"
+}
+
+func (AutomationScheduleModel) TableName() string {
+	return "automation_schedules"
+}

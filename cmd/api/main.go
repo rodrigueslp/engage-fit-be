@@ -1,8 +1,11 @@
 package main
 
 import (
+	"context"
 	"log"
+	"time"
 
+	"boxengage/backend/internal/adapters/email"
 	"boxengage/backend/internal/adapters/http"
 	"boxengage/backend/internal/adapters/parsers"
 	"boxengage/backend/internal/adapters/persistence/postgres"
@@ -11,9 +14,11 @@ import (
 	"boxengage/backend/internal/adapters/security"
 	"boxengage/backend/internal/adapters/whatsapp"
 	"boxengage/backend/internal/app/auth"
+	"boxengage/backend/internal/app/automation"
 	"boxengage/backend/internal/app/boxes"
 	"boxengage/backend/internal/app/campaigns"
 	"boxengage/backend/internal/app/dashboard"
+	emailapp "boxengage/backend/internal/app/email"
 	"boxengage/backend/internal/app/imports"
 	"boxengage/backend/internal/app/messages"
 	reportsapp "boxengage/backend/internal/app/reports"
@@ -40,6 +45,9 @@ func main() {
 	rewardRepository := pgrepo.NewRewardGormRepository(db)
 	whatsappSettingsRepository := pgrepo.NewWhatsappSettingsGormRepository(db)
 	messageRepository := pgrepo.NewMessageGormRepository(db)
+	emailSettingsRepository := pgrepo.NewEmailSettingsGormRepository(db)
+	emailRepository := pgrepo.NewEmailGormRepository(db)
+	automationRepository := pgrepo.NewAutomationGormRepository(db)
 
 	passwordService := security.NewPasswordService()
 	tokenService := security.NewJWTService(cfg.JWTSecret)
@@ -47,6 +55,7 @@ func main() {
 	twilioClient := whatsapp.NewTwilioClient()
 	providerGateway := whatsapp.NewProviderGateway(metaCloudClient, twilioClient)
 	whatsappGateway := whatsapp.NewSafeGateway(providerGateway, cfg.AppEnv, cfg.WhatsappAllowRealSend, cfg.WhatsappDevRecipientPhone, cfg.WhatsappDevAllowedRecipientPhones)
+	emailGateway := email.NewSMTPGateway(cfg.AppEnv, cfg.EmailAllowRealSend, cfg.EmailDevRecipientEmail)
 	checkinParser := parsers.NewCheckinParser()
 
 	loginUseCase := auth.NewLoginUseCase(userRepository, passwordService, tokenService)
@@ -104,6 +113,31 @@ func main() {
 	getMessageCampaignUseCase := messages.NewGetMessageCampaignUseCase(messageRepository)
 	sendMessageCampaignUseCase := messages.NewSendMessageCampaignUseCase(messageRepository, boxRepository, studentRepository, checkinRepository, campaignRepository, rewardRepository, whatsappSettingsRepository, whatsappGateway)
 	listMessageRecipientsUseCase := messages.NewListMessageRecipientsUseCase(messageRepository)
+
+	getEmailSettingsUseCase := emailapp.NewGetSettingsUseCase(emailSettingsRepository)
+	updateEmailSettingsUseCase := emailapp.NewUpdateSettingsUseCase(emailSettingsRepository)
+	testEmailSettingsUseCase := emailapp.NewTestSettingsUseCase(emailGateway)
+	listEmailTemplatesUseCase := emailapp.NewListEmailTemplatesUseCase(emailRepository)
+	createEmailTemplateUseCase := emailapp.NewCreateEmailTemplateUseCase(emailRepository)
+	getEmailTemplateUseCase := emailapp.NewGetEmailTemplateUseCase(emailRepository)
+	updateEmailTemplateUseCase := emailapp.NewUpdateEmailTemplateUseCase(emailRepository)
+	deleteEmailTemplateUseCase := emailapp.NewDeleteEmailTemplateUseCase(emailRepository)
+	listEmailCampaignsUseCase := emailapp.NewListEmailCampaignsUseCase(emailRepository)
+	createEmailCampaignUseCase := emailapp.NewCreateEmailCampaignUseCase(emailRepository)
+	getEmailCampaignUseCase := emailapp.NewGetEmailCampaignUseCase(emailRepository)
+	sendEmailCampaignUseCase := emailapp.NewSendEmailCampaignUseCase(emailRepository, boxRepository, studentRepository, checkinRepository, campaignRepository, rewardRepository, emailSettingsRepository, emailGateway)
+	listEmailRecipientsUseCase := emailapp.NewListEmailRecipientsUseCase(emailRepository)
+
+	listAutomationRunsUseCase := automation.NewListRunsUseCase(automationRepository)
+	getAutomationRunUseCase := automation.NewGetRunUseCase(automationRepository)
+	createAutomationRunUseCase := automation.NewCreateRunUseCase(automationRepository)
+	updateAutomationRunUseCase := automation.NewUpdateRunUseCase(automationRepository)
+	listAutomationSchedulesUseCase := automation.NewListSchedulesUseCase(automationRepository)
+	getAutomationScheduleUseCase := automation.NewGetScheduleUseCase(automationRepository)
+	createAutomationScheduleUseCase := automation.NewCreateScheduleUseCase(automationRepository)
+	updateAutomationScheduleUseCase := automation.NewUpdateScheduleUseCase(automationRepository)
+	deleteAutomationScheduleUseCase := automation.NewDeleteScheduleUseCase(automationRepository)
+	executeAutomationScheduleUseCase := automation.NewExecuteScheduleUseCase(automationRepository, campaignRepository, messageRepository, recalculateCampaignProgressUseCase, sendMessageCampaignUseCase)
 
 	reportExporter := reportadapters.NewCSVExporter()
 	eligibleStudentsReportUseCase := reportsapp.NewEligibleStudentsReportUseCase(campaignRepository)
@@ -168,11 +202,42 @@ func main() {
 		SendMessageCampaignUseCase:   sendMessageCampaignUseCase,
 		ListMessageRecipientsUseCase: listMessageRecipientsUseCase,
 
+		GetEmailSettingsUseCase:    getEmailSettingsUseCase,
+		UpdateEmailSettingsUseCase: updateEmailSettingsUseCase,
+		TestEmailSettingsUseCase:   testEmailSettingsUseCase,
+		ListEmailTemplatesUseCase:  listEmailTemplatesUseCase,
+		CreateEmailTemplateUseCase: createEmailTemplateUseCase,
+		GetEmailTemplateUseCase:    getEmailTemplateUseCase,
+		UpdateEmailTemplateUseCase: updateEmailTemplateUseCase,
+		DeleteEmailTemplateUseCase: deleteEmailTemplateUseCase,
+		ListEmailCampaignsUseCase:  listEmailCampaignsUseCase,
+		CreateEmailCampaignUseCase: createEmailCampaignUseCase,
+		GetEmailCampaignUseCase:    getEmailCampaignUseCase,
+		SendEmailCampaignUseCase:   sendEmailCampaignUseCase,
+		ListEmailRecipientsUseCase: listEmailRecipientsUseCase,
+
+		ListAutomationRunsUseCase:        listAutomationRunsUseCase,
+		GetAutomationRunUseCase:          getAutomationRunUseCase,
+		CreateAutomationRunUseCase:       createAutomationRunUseCase,
+		UpdateAutomationRunUseCase:       updateAutomationRunUseCase,
+		ListAutomationSchedulesUseCase:   listAutomationSchedulesUseCase,
+		GetAutomationScheduleUseCase:     getAutomationScheduleUseCase,
+		CreateAutomationScheduleUseCase:  createAutomationScheduleUseCase,
+		UpdateAutomationScheduleUseCase:  updateAutomationScheduleUseCase,
+		DeleteAutomationScheduleUseCase:  deleteAutomationScheduleUseCase,
+		ExecuteAutomationScheduleUseCase: executeAutomationScheduleUseCase,
+
 		EligibleStudentsReportUseCase: eligibleStudentsReportUseCase,
 		PendingRewardsReportUseCase:   pendingRewardsReportUseCase,
 		MonthlyFrequencyReportUseCase: monthlyFrequencyReportUseCase,
 		ReportExporter:                reportExporter,
 	})
+
+	if cfg.AutomationWorkerEnabled {
+		interval := time.Duration(cfg.AutomationWorkerIntervalSeconds) * time.Second
+		automation.NewWorker(executeAutomationScheduleUseCase, interval).Start(context.Background())
+		log.Printf("automation worker enabled with interval %s", interval)
+	}
 
 	if err := router.Run(cfg.HTTPAddress()); err != nil {
 		log.Fatalf("failed to start api: %v", err)

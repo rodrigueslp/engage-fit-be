@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -16,6 +17,10 @@ type Config struct {
 	WhatsappAllowRealSend             bool
 	WhatsappDevRecipientPhone         string
 	WhatsappDevAllowedRecipientPhones string
+	EmailAllowRealSend                bool
+	EmailDevRecipientEmail            string
+	AutomationWorkerEnabled           bool
+	AutomationWorkerIntervalSeconds   int
 }
 
 func Load() Config {
@@ -30,6 +35,10 @@ func Load() Config {
 		WhatsappAllowRealSend:             getEnv("WHATSAPP_ALLOW_REAL_SEND", "false") == "true",
 		WhatsappDevRecipientPhone:         getEnv("WHATSAPP_DEV_RECIPIENT_PHONE", ""),
 		WhatsappDevAllowedRecipientPhones: getEnv("WHATSAPP_DEV_ALLOWED_RECIPIENT_PHONES", ""),
+		EmailAllowRealSend:                getEnv("EMAIL_ALLOW_REAL_SEND", "false") == "true",
+		EmailDevRecipientEmail:            getEnv("EMAIL_DEV_RECIPIENT_EMAIL", ""),
+		AutomationWorkerEnabled:           getEnv("AUTOMATION_WORKER_ENABLED", "false") == "true",
+		AutomationWorkerIntervalSeconds:   getEnvInt("AUTOMATION_WORKER_INTERVAL_SECONDS", 60),
 	}
 }
 
@@ -75,4 +84,16 @@ func getEnv(key, fallback string) string {
 		return fallback
 	}
 	return value
+}
+
+func getEnvInt(key string, fallback int) int {
+	value := os.Getenv(key)
+	if value == "" {
+		return fallback
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil {
+		return fallback
+	}
+	return parsed
 }

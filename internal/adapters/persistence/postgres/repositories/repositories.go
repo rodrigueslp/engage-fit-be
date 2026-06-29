@@ -73,3 +73,27 @@ type MessageGormRepository struct {
 func NewMessageGormRepository(db *gorm.DB) MessageGormRepository {
 	return MessageGormRepository{db: db}
 }
+
+type EmailSettingsGormRepository struct {
+	db *gorm.DB
+}
+
+func NewEmailSettingsGormRepository(db *gorm.DB) EmailSettingsGormRepository {
+	return EmailSettingsGormRepository{db: db}
+}
+
+type EmailGormRepository struct {
+	db *gorm.DB
+}
+
+func NewEmailGormRepository(db *gorm.DB) EmailGormRepository {
+	return EmailGormRepository{db: db}
+}
+
+type AutomationGormRepository struct {
+	db *gorm.DB
+}
+
+func NewAutomationGormRepository(db *gorm.DB) AutomationGormRepository {
+	return AutomationGormRepository{db: db}
+}

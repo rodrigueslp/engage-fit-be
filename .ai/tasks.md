@@ -110,8 +110,9 @@
 - [x] Ajustar seed demo para usar planilhas reais quando disponiveis
 - [x] Impedir duplicacao de check-ins na reimportacao da mesma planilha
 - [x] Proteger envio real de WhatsApp em desenvolvimento com numero override
-- [ ] Implementar e-mail personalizado
-- [ ] Implementar automacao diaria de importacao e disparos
+- [x] Implementar e-mail personalizado
+- [x] Implementar automacao diaria de importacao e disparos
+- [x] Criar rotinas automaticas configuraveis pelo usuario final
 
 ---
 
@@ -215,3 +216,14 @@
 - [x] Em risco: 7 dias sem check-in
 - [x] Elegivel: check-ins >= meta
 - [x] Todas as consultas operacionais filtradas por `box_id`
+
+
+---
+
+## Pendencias pos-plano
+
+- [ ] Adicionar filtros server-side e paginacao para relatorios quando houver volume real
+- [ ] Criar relatorio de historico de brindes entregues por periodo
+- [ ] Criar relatorio de conversao de mensagens por campanha
+- [ ] Adicionar testes de integracao contra PostgreSQL real para repositories, relatorios, brindes e mensagens
+- [ ] Refinar UX mobile de tabelas grandes apos teste em aparelho real

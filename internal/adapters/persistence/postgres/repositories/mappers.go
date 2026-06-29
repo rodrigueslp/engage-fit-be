@@ -330,3 +330,149 @@ func messageRecipientToModel(recipient domain.MessageRecipient) models.MessageRe
 		CreatedAt:         recipient.CreatedAt,
 	}
 }
+
+func emailSettingsToDomain(model models.EmailSettingsModel) domain.EmailSettings {
+	return domain.EmailSettings{
+		ID:                domainID(model.ID),
+		BoxID:             domainID(model.BoxID),
+		Provider:          model.Provider,
+		SMTPHost:          model.SMTPHost,
+		SMTPPort:          model.SMTPPort,
+		Username:          model.Username,
+		PasswordEncrypted: model.PasswordEncrypted,
+		FromEmail:         model.FromEmail,
+		FromName:          model.FromName,
+		Enabled:           model.Enabled,
+		CreatedAt:         model.CreatedAt,
+		UpdatedAt:         model.UpdatedAt,
+	}
+}
+
+func emailSettingsToModel(settings domain.EmailSettings) models.EmailSettingsModel {
+	return models.EmailSettingsModel{
+		ID:                stringID(settings.ID),
+		BoxID:             stringID(settings.BoxID),
+		Provider:          settings.Provider,
+		SMTPHost:          settings.SMTPHost,
+		SMTPPort:          settings.SMTPPort,
+		Username:          settings.Username,
+		PasswordEncrypted: settings.PasswordEncrypted,
+		FromEmail:         settings.FromEmail,
+		FromName:          settings.FromName,
+		Enabled:           settings.Enabled,
+		CreatedAt:         settings.CreatedAt,
+		UpdatedAt:         settings.UpdatedAt,
+	}
+}
+
+func emailTemplateToDomain(model models.EmailTemplateModel) domain.EmailTemplate {
+	return domain.EmailTemplate{ID: domainID(model.ID), BoxID: domainID(model.BoxID), Name: model.Name, Subject: model.Subject, Content: model.Content, CreatedAt: model.CreatedAt, UpdatedAt: model.UpdatedAt}
+}
+
+func emailTemplateToModel(template domain.EmailTemplate) models.EmailTemplateModel {
+	return models.EmailTemplateModel{ID: stringID(template.ID), BoxID: stringID(template.BoxID), Name: template.Name, Subject: template.Subject, Content: template.Content, CreatedAt: template.CreatedAt, UpdatedAt: template.UpdatedAt}
+}
+
+func emailCampaignToDomain(model models.EmailCampaignModel) domain.EmailCampaign {
+	return domain.EmailCampaign{ID: domainID(model.ID), BoxID: domainID(model.BoxID), CampaignID: domainID(model.CampaignID), Name: model.Name, Audience: domain.MessageAudience(model.Audience), TemplateID: domainID(model.TemplateID), SentAt: model.SentAt, CreatedAt: model.CreatedAt}
+}
+
+func emailCampaignToModel(campaign domain.EmailCampaign) models.EmailCampaignModel {
+	return models.EmailCampaignModel{ID: stringID(campaign.ID), BoxID: stringID(campaign.BoxID), CampaignID: stringID(campaign.CampaignID), Name: campaign.Name, Audience: string(campaign.Audience), TemplateID: stringID(campaign.TemplateID), SentAt: campaign.SentAt, CreatedAt: campaign.CreatedAt}
+}
+
+func emailRecipientToDomain(model models.EmailRecipientModel) domain.EmailRecipient {
+	return domain.EmailRecipient{
+		ID:              domainID(model.ID),
+		EmailCampaignID: domainID(model.EmailCampaignID),
+		StudentID:       domainID(model.StudentID),
+		Email:           model.Email,
+		Status:          domain.MessageRecipientStatus(model.Status),
+		ErrorMessage:    model.ErrorMessage,
+		SentAt:          model.SentAt,
+		CreatedAt:       model.CreatedAt,
+	}
+}
+
+func emailRecipientToModel(recipient domain.EmailRecipient) models.EmailRecipientModel {
+	return models.EmailRecipientModel{
+		ID:              stringID(recipient.ID),
+		EmailCampaignID: stringID(recipient.EmailCampaignID),
+		StudentID:       stringID(recipient.StudentID),
+		Email:           recipient.Email,
+		Status:          string(recipient.Status),
+		ErrorMessage:    recipient.ErrorMessage,
+		SentAt:          recipient.SentAt,
+		CreatedAt:       recipient.CreatedAt,
+	}
+}
+
+func automationRunToDomain(model models.AutomationRunModel) domain.AutomationRun {
+	return domain.AutomationRun{
+		ID:                      domainID(model.ID),
+		BoxID:                   domainID(model.BoxID),
+		Status:                  model.Status,
+		Source:                  model.Source,
+		Filename:                model.Filename,
+		Imported:                model.Imported,
+		RecalculatedCampaigns:   model.RecalculatedCampaigns,
+		SkippedMessageCampaigns: model.SkippedMessageCampaigns,
+		SentMessages:            model.SentMessages,
+		FailedMessages:          model.FailedMessages,
+		ErrorMessage:            model.ErrorMessage,
+		StartedAt:               model.StartedAt,
+		FinishedAt:              model.FinishedAt,
+	}
+}
+
+func automationRunToModel(run domain.AutomationRun) models.AutomationRunModel {
+	return models.AutomationRunModel{
+		ID:                      stringID(run.ID),
+		BoxID:                   stringID(run.BoxID),
+		Status:                  run.Status,
+		Source:                  run.Source,
+		Filename:                run.Filename,
+		Imported:                run.Imported,
+		RecalculatedCampaigns:   run.RecalculatedCampaigns,
+		SkippedMessageCampaigns: run.SkippedMessageCampaigns,
+		SentMessages:            run.SentMessages,
+		FailedMessages:          run.FailedMessages,
+		ErrorMessage:            run.ErrorMessage,
+		StartedAt:               run.StartedAt,
+		FinishedAt:              run.FinishedAt,
+	}
+}
+
+func automationScheduleToDomain(model models.AutomationScheduleModel) domain.AutomationSchedule {
+	return domain.AutomationSchedule{
+		ID:          domainID(model.ID),
+		BoxID:       domainID(model.BoxID),
+		Name:        model.Name,
+		Mode:        model.Mode,
+		RunTime:     model.RunTime,
+		Timezone:    model.Timezone,
+		DaysOfWeek:  model.DaysOfWeek,
+		AllowResend: model.AllowResend,
+		Enabled:     model.Enabled,
+		LastRunAt:   model.LastRunAt,
+		CreatedAt:   model.CreatedAt,
+		UpdatedAt:   model.UpdatedAt,
+	}
+}
+
+func automationScheduleToModel(schedule domain.AutomationSchedule) models.AutomationScheduleModel {
+	return models.AutomationScheduleModel{
+		ID:          stringID(schedule.ID),
+		BoxID:       stringID(schedule.BoxID),
+		Name:        schedule.Name,
+		Mode:        schedule.Mode,
+		RunTime:     schedule.RunTime,
+		Timezone:    schedule.Timezone,
+		DaysOfWeek:  schedule.DaysOfWeek,
+		AllowResend: schedule.AllowResend,
+		Enabled:     schedule.Enabled,
+		LastRunAt:   schedule.LastRunAt,
+		CreatedAt:   schedule.CreatedAt,
+		UpdatedAt:   schedule.UpdatedAt,
+	}
+}

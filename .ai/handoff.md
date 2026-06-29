@@ -168,6 +168,20 @@ Implementado:
 - Automacao diaria operacional:
   - script `scripts/daily-automation.mjs` e target `make daily-automation`.
   - importa arquivo opcional (`DAILY_CHECKINS_FILE`), recalcula campanhas ativas, envia campanhas de mensagem vinculadas (`DAILY_SEND_MESSAGES=true`).
+- E-mail personalizado:
+  - provider `smtp` com modo seguro em development e provider `mock` para testes locais.
+  - settings em `GET/PUT/POST /api/v1/email/settings` e `/test`.
+  - templates em `/api/v1/email-templates` com assunto, corpo e variaveis iguais as campanhas WhatsApp.
+  - campanhas em `/api/v1/email-campaigns` com `campaign_id`, audiencia, preview, envio manual e auditoria por destinatario.
+  - envio real local fica bloqueado por padrao; usar `EMAIL_ALLOW_REAL_SEND=true` ou provider `mock`.
+- Automacao diaria como feature do produto:
+  - tabelas `automation_runs` e `automation_schedules`.
+  - endpoints de historico: `GET/POST /api/v1/automation/runs`, `GET/PATCH /api/v1/automation/runs/:id`.
+  - endpoints de rotinas: `GET/POST /api/v1/automation/schedules`, `PUT/DELETE /api/v1/automation/schedules/:id`, `POST /api/v1/automation/schedules/:id/run`.
+  - tela `Automacao` permite criar rotina com horario, dias da semana, modo, reenvio e status ativo/pausado.
+  - modos: `full_daily`, `recalculate_only`, `send_almost_there`, `send_achieved`, `send_inactive`.
+  - worker interno roda agendas quando `AUTOMATION_WORKER_ENABLED=true`; intervalo configuravel por `AUTOMATION_WORKER_INTERVAL_SECONDS`.
+  - `scripts/daily-automation.mjs` permanece como alternativa operacional/CI e tambem registra `automation_runs`.
 
 Validacao atual:
 
@@ -232,6 +246,18 @@ Implementado:
   - botao enviar/reenviar campanha
   - retorno visual de `sent/total/failed` apos envio
   - auditoria do ultimo envio por destinatario, incluindo `error_message` da Twilio
+- E-mail:
+  - tela dedicada no menu lateral.
+  - configuracao SMTP/mock com teste de credenciais.
+  - templates com assunto/corpo e variaveis operacionais.
+  - campanhas vinculadas a campanha de meta, preview renderizado, envio/reenviar e auditoria do ultimo envio.
+- Automacao:
+  - tela dedicada no menu lateral.
+  - cria/pausa/remove rotinas automaticas com horario, dias, modo e permissao de reenvio.
+  - botao `Executar` permite rodar uma rotina manualmente.
+  - historico de execucoes diarias com status, importacao, campanhas recalculadas, mensagens enviadas, falhas e erros.
+- Dashboard operacional:
+  - atalhos para Brindes, Relatorios, WhatsApp e Automacao.
 - Configuracoes:
   - Card `Regras de risco`:
     - Aluno em risco apos X dias sem check-in.
@@ -422,23 +448,25 @@ make daily-automation
 
 Prioridade alta:
 
-1. Implementar e-mail personalizado.
+1. Relatorios avancados e filtros server-side quando o volume crescer.
 2. Evoluir automacao diaria:
    - agendar via cron/CI em ambiente real
    - definir fonte automatica dos check-ins do dia anterior
-   - auditar resultados em tabela/UI, nao apenas console
-3. Lidar melhor com multiplas campanhas ativas simultaneas na operacao (UX e seed demo).
+   - definir fonte automatica dos check-ins do dia anterior
+   - agendar via cron/CI em ambiente real
+3. Lidar melhor com multiplas campanhas ativas simultaneas na operacao apos testes com clientes reais.
 
 Prioridade media:
 
-1. Relatorios avancados:
+1. Testes automatizados para use cases de relatorio, controle de brindes, mensagens e e-mail.
+2. Relatorios avancados:
    - filtros server-side/paginacao se volume crescer.
    - historico de brindes entregues por periodo.
    - relatorio de conversao de mensagens por campanha.
 2. UX mobile/responsiva para tabelas grandes.
-3. Testes automatizados para use cases de relatorio e controle de brindes.
-4. Dashboard com atalhos para telas operacionais (`Brindes`, `Relatorios`, `WhatsApp`).
-5. Melhorar seed/demo para cobrir multiplas campanhas com brindes simultaneos.
+3. Testes de integracao de repositories contra PostgreSQL real.
+4. Refinar Dashboard com atalhos conforme feedback de uso.
+5. Melhorar seed/demo com mais cenarios de conversao de mensagens.
 
 ## Arquivos importantes
 
@@ -470,6 +498,8 @@ Frontend:
 
 - `engage-fit-fe/src/pages/campaigns/CampaignsPage.tsx`
 - `engage-fit-fe/src/pages/whatsapp/WhatsappPage.tsx`
+- `engage-fit-fe/src/pages/email/EmailPage.tsx`
+- `engage-fit-fe/src/pages/automation/AutomationPage.tsx`
 - `engage-fit-fe/src/pages/settings/SettingsPage.tsx`
 - `engage-fit-fe/src/features/api/endpoints.ts`
 - `engage-fit-fe/.npmrc`
@@ -480,6 +510,7 @@ Infra/dev:
 - `engage-fit-be/docker-compose.yml`
 - `engage-fit-be/scripts/demo-seed.mjs`
 - `engage-fit-be/scripts/daily-automation.mjs`
+- `engage-fit-be/migrations/024_create_email_and_automation.sql`
 - `engage-fit-be/test-data/totalpass-checkins-hit-goal.csv`
 
 ## Orientacao para iniciar novo chat

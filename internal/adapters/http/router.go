@@ -8,9 +8,11 @@ import (
 	"boxengage/backend/internal/adapters/http/handlers"
 	"boxengage/backend/internal/adapters/http/middleware"
 	"boxengage/backend/internal/app/auth"
+	"boxengage/backend/internal/app/automation"
 	"boxengage/backend/internal/app/boxes"
 	"boxengage/backend/internal/app/campaigns"
 	"boxengage/backend/internal/app/dashboard"
+	"boxengage/backend/internal/app/email"
 	"boxengage/backend/internal/app/imports"
 	"boxengage/backend/internal/app/messages"
 	"boxengage/backend/internal/app/reports"
@@ -77,6 +79,31 @@ type RouterDependencies struct {
 	GetMessageCampaignUseCase    messages.GetMessageCampaignUseCase
 	SendMessageCampaignUseCase   messages.SendMessageCampaignUseCase
 	ListMessageRecipientsUseCase messages.ListMessageRecipientsUseCase
+
+	GetEmailSettingsUseCase    email.GetSettingsUseCase
+	UpdateEmailSettingsUseCase email.UpdateSettingsUseCase
+	TestEmailSettingsUseCase   email.TestSettingsUseCase
+	ListEmailTemplatesUseCase  email.ListEmailTemplatesUseCase
+	CreateEmailTemplateUseCase email.CreateEmailTemplateUseCase
+	GetEmailTemplateUseCase    email.GetEmailTemplateUseCase
+	UpdateEmailTemplateUseCase email.UpdateEmailTemplateUseCase
+	DeleteEmailTemplateUseCase email.DeleteEmailTemplateUseCase
+	ListEmailCampaignsUseCase  email.ListEmailCampaignsUseCase
+	CreateEmailCampaignUseCase email.CreateEmailCampaignUseCase
+	GetEmailCampaignUseCase    email.GetEmailCampaignUseCase
+	SendEmailCampaignUseCase   email.SendEmailCampaignUseCase
+	ListEmailRecipientsUseCase email.ListEmailRecipientsUseCase
+
+	ListAutomationRunsUseCase        automation.ListRunsUseCase
+	GetAutomationRunUseCase          automation.GetRunUseCase
+	CreateAutomationRunUseCase       automation.CreateRunUseCase
+	UpdateAutomationRunUseCase       automation.UpdateRunUseCase
+	ListAutomationSchedulesUseCase   automation.ListSchedulesUseCase
+	GetAutomationScheduleUseCase     automation.GetScheduleUseCase
+	CreateAutomationScheduleUseCase  automation.CreateScheduleUseCase
+	UpdateAutomationScheduleUseCase  automation.UpdateScheduleUseCase
+	DeleteAutomationScheduleUseCase  automation.DeleteScheduleUseCase
+	ExecuteAutomationScheduleUseCase automation.ExecuteScheduleUseCase
 
 	EligibleStudentsReportUseCase reports.EligibleStudentsReportUseCase
 	PendingRewardsReportUseCase   reports.PendingRewardsReportUseCase
@@ -172,6 +199,33 @@ func NewRouter(deps RouterDependencies) *gin.Engine {
 	protected.GET("/message-campaigns/:id/preview", messagesHandler.PreviewCampaign)
 	protected.POST("/message-campaigns/:id/send", messagesHandler.SendCampaign)
 	protected.GET("/message-campaigns/:id/recipients", messagesHandler.ListRecipients)
+
+	emailHandler := handlers.NewEmailHandler(deps.GetEmailSettingsUseCase, deps.UpdateEmailSettingsUseCase, deps.TestEmailSettingsUseCase, deps.ListEmailTemplatesUseCase, deps.CreateEmailTemplateUseCase, deps.GetEmailTemplateUseCase, deps.UpdateEmailTemplateUseCase, deps.DeleteEmailTemplateUseCase, deps.ListEmailCampaignsUseCase, deps.CreateEmailCampaignUseCase, deps.GetEmailCampaignUseCase, deps.SendEmailCampaignUseCase, deps.ListEmailRecipientsUseCase)
+	protected.GET("/email/settings", emailHandler.GetSettings)
+	protected.PUT("/email/settings", emailHandler.UpdateSettings)
+	protected.POST("/email/settings/test", emailHandler.TestSettings)
+	protected.GET("/email-templates", emailHandler.ListTemplates)
+	protected.POST("/email-templates", emailHandler.CreateTemplate)
+	protected.GET("/email-templates/:id", emailHandler.GetTemplate)
+	protected.PUT("/email-templates/:id", emailHandler.UpdateTemplate)
+	protected.DELETE("/email-templates/:id", emailHandler.DeleteTemplate)
+	protected.GET("/email-campaigns", emailHandler.ListCampaigns)
+	protected.POST("/email-campaigns", emailHandler.CreateCampaign)
+	protected.GET("/email-campaigns/:id", emailHandler.GetCampaign)
+	protected.GET("/email-campaigns/:id/preview", emailHandler.PreviewCampaign)
+	protected.POST("/email-campaigns/:id/send", emailHandler.SendCampaign)
+	protected.GET("/email-campaigns/:id/recipients", emailHandler.ListRecipients)
+
+	automationHandler := handlers.NewAutomationHandler(deps.ListAutomationRunsUseCase, deps.GetAutomationRunUseCase, deps.CreateAutomationRunUseCase, deps.UpdateAutomationRunUseCase, deps.ListAutomationSchedulesUseCase, deps.GetAutomationScheduleUseCase, deps.CreateAutomationScheduleUseCase, deps.UpdateAutomationScheduleUseCase, deps.DeleteAutomationScheduleUseCase, deps.ExecuteAutomationScheduleUseCase)
+	protected.GET("/automation/runs", automationHandler.ListRuns)
+	protected.POST("/automation/runs", automationHandler.CreateRun)
+	protected.GET("/automation/runs/:id", automationHandler.GetRun)
+	protected.PATCH("/automation/runs/:id", automationHandler.UpdateRun)
+	protected.GET("/automation/schedules", automationHandler.ListSchedules)
+	protected.POST("/automation/schedules", automationHandler.CreateSchedule)
+	protected.PUT("/automation/schedules/:id", automationHandler.UpdateSchedule)
+	protected.DELETE("/automation/schedules/:id", automationHandler.DeleteSchedule)
+	protected.POST("/automation/schedules/:id/run", automationHandler.RunScheduleNow)
 
 	reportsHandler := handlers.NewReportsHandler(deps.EligibleStudentsReportUseCase, deps.PendingRewardsReportUseCase, deps.MonthlyFrequencyReportUseCase, deps.ReportExporter)
 	protected.GET("/reports/eligible-students", reportsHandler.EligibleStudents)
