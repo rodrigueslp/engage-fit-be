@@ -7,7 +7,7 @@ const ownerPassword = process.env.DEMO_OWNER_PASSWORD ?? 'change-me';
 const totalPassFilePath = process.env.DEMO_TOTALPASS_FILE ?? '';
 const luizPhone = '5511963834712';
 const demoStudents = [
-  { name: 'Luiz', email: 'luiz@example.com', phone: luizPhone, checkins: 9, scenario: 'falta 1 check-in' },
+  { name: 'Luiz', email: 'lprodrigs@gmail.com', phone: luizPhone, checkins: 9, scenario: 'falta 1 check-in' },
   { name: 'Deborah', email: 'deborah@example.com', phone: luizPhone, checkins: 8, scenario: 'faltam 2 check-ins' },
   { name: 'Bruno Teste', email: 'bruno.teste@example.com', phone: luizPhone, checkins: 7, scenario: 'abaixo do corte de falta pouco' },
   { name: 'Carla Teste', email: 'carla.teste@example.com', phone: luizPhone, checkins: 10, scenario: 'meta ja atingida' },

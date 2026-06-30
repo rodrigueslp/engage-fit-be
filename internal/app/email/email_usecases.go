@@ -3,6 +3,7 @@ package email
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"strings"
 	"time"
@@ -196,6 +197,7 @@ func (uc SendEmailCampaignUseCase) Execute(ctx context.Context, boxID, campaignI
 			recipient.Status = domain.MessageRecipientFailed
 			recipient.ErrorMessage = err.Error()
 			output.Failed++
+			slog.WarnContext(ctx, "email_recipient_send_failed", "box_id", string(boxID), "email_campaign_id", string(campaignID), "student_id", string(recipient.StudentID), "to_email", recipient.Email, "provider", settings.Provider, "smtp_host", settings.SMTPHost, "error", err.Error())
 		} else {
 			recipient.Status = domain.MessageRecipientSent
 			output.Sent++
@@ -208,6 +210,7 @@ func (uc SendEmailCampaignUseCase) Execute(ctx context.Context, boxID, campaignI
 	if err := uc.email.UpdateCampaign(ctx, *emailCampaign); err != nil {
 		return nil, err
 	}
+	slog.InfoContext(ctx, "email_campaign_send_finished", "box_id", string(boxID), "email_campaign_id", string(campaignID), "total", output.Total, "sent", output.Sent, "failed", output.Failed)
 	return output, nil
 }
 

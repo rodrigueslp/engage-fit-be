@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"log"
 	"net/http"
 	"time"
 
@@ -220,7 +221,8 @@ func (h MessagesHandler) SendCampaign(c *gin.Context) {
 
 	output, err := h.sendCampaign.Execute(c.Request.Context(), boxID, domain.ID(c.Param("id")))
 	if err != nil {
-		respondError(c, err)
+		log.Printf("message campaign send failed: box_id=%s campaign_id=%s error=%v", boxID, c.Param("id"), err)
+		c.JSON(http.StatusBadGateway, gin.H{"message": err.Error()})
 		return
 	}
 

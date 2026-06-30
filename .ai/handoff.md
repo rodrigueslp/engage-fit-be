@@ -1,6 +1,6 @@
 # EngageFit - Handoff de Contexto
 
-Atualizado em: 2026-06-28
+Atualizado em: 2026-06-30
 
 ## Papel do projeto
 
@@ -28,7 +28,7 @@ Frontend:
 ## Decisoes principais
 
 - Sistema multi-tenant desde o inicio.
-- Entidades centrais: `Box`, `User`, `Student`, `Checkin`, `Campaign`, `CampaignGoal`, `Reward`, `CampaignProgress`, `RewardDelivery`, `WhatsappSettings`, `MessageTemplate`, `MessageCampaign`, `MessageRecipient`.
+- Entidades centrais: `Box`, `User`, `Student`, `Checkin`, `Campaign`, `CampaignGoal`, `Reward`, `CampaignProgress`, `RewardDelivery`, `WhatsappSettings`, `MessageTemplate`, `MessageCampaign`, `MessageRecipient`, `EmailSettings`, `EmailTemplate`, `EmailCampaign`, `EmailRecipient`, `AutomationRun`, `AutomationSchedule`.
 - MVP tem apenas perfil `OWNER`.
 - Sem receita financeira no MVP.
 - `Checkin` nao possui `revenue`.
@@ -41,7 +41,7 @@ Frontend:
   - entregue quando usuario marca manualmente.
   - disponivel calculado como `quantity - delivered_deliveries`.
   - pendencias nao descontam estoque real ate serem entregues.
-- Widgets do dashboard (`Campanhas ativas`, `Proximos da meta`, `Alunos em risco`, `Brindes pendentes`) usam paginacao client-side de 5 itens por pagina.
+- Widgets do dashboard (`Campanhas ativas`, `Próximos da meta`, `Alunos em risco`, `Brindes pendentes`) usam paginacao client-side de 5 itens por pagina.
 - Alunos em risco agora possuem acompanhamento:
   - `risk_status`: `active`, `observing`, `paused`, `not_interested`.
   - `risk_last_message_at`: ultima mensagem de risco enviada.
@@ -61,6 +61,7 @@ Frontend:
   - frequencia mensal.
   - todos com visualizacao na UI, filtros client-side e exportacao CSV.
 - Navegacao frontend usa hash (`#dashboard`, `#campaigns`, `#rewards`, etc.) para preservar a tela apos refresh. Logo da sidebar navega para `Dashboard`.
+- E-mail personalizado e automacao diaria com agendamento/auditoria persistida ja foram implementados. Próximos focos devem partir das pendencias funcionais abaixo, nao da mensagem antiga de handoff.
 
 ## Estado atual implementado
 
@@ -138,7 +139,7 @@ Implementado:
   - `boxes` tem `risk_inactive_days` e `risk_message_cooldown_days`.
   - `PATCH /api/v1/students/:id/risk-status` atualiza status manual.
   - `Dashboard` usa `risk_inactive_days` para classificar aluno em risco.
-  - `SendMessageCampaignUseCase` aplica `risk_message_cooldown_days` para audiencia `inactive`.
+  - `SendMessageCampaignUseCase` aplica `risk_message_cooldown_days` para audiência `inactive`.
   - envio `inactive` bem-sucedido marca aluno como `observing` e grava `risk_last_message_at`.
 - Controle de brindes:
   - `GET /api/v1/rewards/deliveries` lista entregas pendentes e entregues com campanha, aluno, telefone, brinde e status.
@@ -156,7 +157,7 @@ Implementado:
 - Campanhas de mensagem vinculadas a campanha de meta:
   - `message_campaigns.campaign_id` referencia `campaigns.id`.
   - migration: `migrations/022_add_message_campaign_campaign_id.sql`.
-  - audiencias `almost_there`, `near_goal` e `achieved` usam a campanha vinculada, nao todas as campanhas ativas.
+  - audiências `almost_there`, `near_goal` e `achieved` usam a campanha vinculada, nao todas as campanhas ativas.
   - template context (variaveis `campaign_name`, `reward_name`, check-ins) usa a campanha vinculada.
 - Preview de mensagem antes do envio:
   - `GET /api/v1/message-campaigns/:id/preview` retorna `body`, `total`, aluno exemplo e telefone.
@@ -172,7 +173,7 @@ Implementado:
   - provider `smtp` com modo seguro em development e provider `mock` para testes locais.
   - settings em `GET/PUT/POST /api/v1/email/settings` e `/test`.
   - templates em `/api/v1/email-templates` com assunto, corpo e variaveis iguais as campanhas WhatsApp.
-  - campanhas em `/api/v1/email-campaigns` com `campaign_id`, audiencia, preview, envio manual e auditoria por destinatario.
+  - campanhas em `/api/v1/email-campaigns` com `campaign_id`, audiência, preview, envio manual e auditoria por destinatario.
   - envio real local fica bloqueado por padrao; usar `EMAIL_ALLOW_REAL_SEND=true` ou provider `mock`.
 - Automacao diaria como feature do produto:
   - tabelas `automation_runs` e `automation_schedules`.
@@ -381,7 +382,7 @@ Ambos contem:
 Fluxo de teste:
 
 1. `make demo-reset-seed`
-2. Enviar a campanha `Disparo teste - falta pouco` para validar a audiencia dinamica.
+2. Enviar a campanha `Disparo teste - falta pouco` para validar a audiência dinamica.
 3. Enviar a campanha `Disparo teste - aluno em risco` para validar `inactive`; Marina Risco deve virar `observing` e nao receber novo envio ate passar o cooldown configurado em `Configuracoes > Regras de risco`.
 4. Importar `test-data/totalpass-checkins-hit-goal.csv` ou `test-data/totalpass-checkins-23-06-2026.xlsx` na tela de importacoes com fonte `TotalPass`.
 5. Luiz, Deborah e Bruno ficam com 10/10 check-ins.
@@ -418,9 +419,15 @@ Ativar WhatsApp: marcado
 
 Para disparo comercial em massa:
 
-- Criar/aprovar templates na Twilio.
-- Preencher `Content SID` (`HX...`) no template do EngageFit.
-- Garantir que as variaveis do template Twilio estejam na ordem documentada no README.
+- Regra do WhatsApp/Twilio: mensagem livre so e confiavel dentro da janela de conversa de 24h apos o destinatario responder/iniciar conversa. Fora disso, usar template aprovado com `Content SID` (`HX...`).
+- Sandbox: manter comportamento de teste atual, sem bloquear envio quando `content_sid` estiver vazio; o backend tenta enviar texto livre e registra o erro da Twilio se ela recusar (ex.: `63016`).
+- Producao: validar com cliente antes de implementar. Direcao proposta: cada cliente cria modelos de mensagem usando apenas variaveis liberadas pelo sistema (`{{nome_aluno}}`, `{{nome_academia}}`, campanha, brinde etc.). O sistema converte isso para um template Twilio/WhatsApp e envia para aprovacao.
+- Aprovacao pode ser operacional via Content Template Builder no console da Twilio no inicio, ou automatizada depois via Twilio Content API. A API cria o content template, dispara/acompanha aprovacao para WhatsApp e retorna/expoe o `Content SID` aprovado.
+- Depois de aprovado, salvar `content_sid`, status de aprovacao, idioma e mapeamento de variaveis por tenant/template.
+- Para envio comercial fora da janela de 24h, enviar via Twilio usando `ContentSid` e `ContentVariables`, nao `Body` livre.
+- Remetente por cliente: possivel, mas cada tenant precisa ter seu proprio WhatsApp Sender/numero aprovado na Twilio/WABA ou uma configuracao equivalente. O backend deve escolher o remetente e credenciais pelo tenant.
+- Garantir que as variaveis do template Twilio estejam na ordem esperada pelo provider.
+- Decisao adiada: validar com cliente se aceitara fluxo de templates aprovados antes de implementar onboarding/aprovacao em producao.
 
 Validacao apos mudanca:
 
@@ -444,29 +451,119 @@ DAILY_SEND_MESSAGES=true \
 make daily-automation
 ```
 
+## Ideia futura: treino do dia com mensagens geradas por LLM
+
+Feature proposta para evolucao futura: automacao inteligente de mensagens do treino do dia, especialmente para boxes de CrossFit.
+
+Objetivo:
+
+- Permitir que o box cadastre ou importe o treino/WOD do dia.
+- Gerar mensagens personalizadas para alunos pelo WhatsApp com dicas contextuais do treino.
+- Aumentar comparecimento, engajamento diario e percepcao de acompanhamento individual.
+- Transformar o EngageFit de uma plataforma que reage a check-ins/metas em uma ferramenta que tambem ativa alunos antes do treino.
+
+Exemplo de uso:
+
+```txt
+Fulano, hoje tem PR de back squat no CrossFit Alados.
+Chegue alguns minutos antes para aquecer bem quadril, tornozelos e posterior.
+Na hora das tentativas, priorize tecnica, respiracao e profundidade consistente.
+Se estiver em duvida sobre carga, chama o coach antes de subir o peso.
+Bora buscar esse PR com seguranca.
+```
+
+Desenho sugerido para MVP:
+
+- Nova area `Treino do dia` ou `WOD`:
+  - data.
+  - titulo.
+  - movimentos principais.
+  - objetivo do treino (`forca`, `metcon`, `ginastico`, `cardio`, `PR`, `benchmark`, etc.).
+  - observacoes do coach.
+- Botao `Gerar mensagens` usando LLM.
+- Gerar variacoes por publico:
+  - todos os alunos.
+  - alunos em risco.
+  - alunos proximos da meta/check-ins.
+  - alunos frequentes.
+- Preview obrigatorio antes do envio, pelo menos na primeira versao.
+- Reutilizar infraestrutura atual de WhatsApp:
+  - templates/campanhas.
+  - preview renderizado.
+  - auditoria por destinatario.
+  - automacao/agendamento no futuro.
+
+Cuidados de produto e compliance:
+
+- Nao vender como "IA livre mandando qualquer coisa"; posicionar como `automacao inteligente do treino do dia`.
+- LLM deve gerar texto dentro de guardrails:
+  - mensagens curtas.
+  - tom motivacional e pratico.
+  - sem prescricao individual de dieta.
+  - sem orientacao medica.
+  - sem prometer resultado fisico.
+  - dicas tecnicas gerais e seguras.
+  - recomendar falar com o coach em caso de duvida sobre carga, dor ou adaptacao.
+- Para nutricao, usar apenas orientacao generica, por exemplo: chegar bem alimentado/hidratado e seguir plano de nutricionista quando houver.
+- Para tecnica, usar orientacoes seguras e gerais, nunca diagnostico individual.
+- Considerar aprovacao manual pelo coach/owner antes do envio no MVP.
+
+Restricao importante de WhatsApp:
+
+- Fora da janela de conversa de 24h, mensagem livre gerada por LLM pode falhar ou nao ser permitida comercialmente.
+- Caminho seguro:
+  - usar template aprovado para iniciar conversa, por exemplo: `Oi {{1}}, hoje tem treino importante no {{2}}. Quer receber dicas rapidas para mandar bem? Responda QUERO.`
+  - apos resposta do aluno, enviar a mensagem livre dentro da janela de 24h.
+  - alternativa: criar templates aprovados por categoria de treino com variaveis controladas.
+- Integracao futura deve respeitar `ContentSid`/templates aprovados para producao.
+
+Possiveis entidades futuras:
+
+- `Workout`
+- `WorkoutMovement`
+- `WorkoutMessageDraft`
+- `WorkoutMessageCampaign`
+- `LLMGenerationLog`
+
+Possiveis configuracoes por box:
+
+- tom da comunicacao.
+- tamanho maximo da mensagem.
+- assinatura/padrao de encerramento.
+- habilitar/desabilitar mencoes de nutricao generica.
+- aprovacao obrigatoria antes de envio.
+- horarios permitidos de envio.
+
 ## Pendencias funcionais
 
 Prioridade alta:
 
 1. Relatorios avancados e filtros server-side quando o volume crescer.
-2. Evoluir automacao diaria:
-   - agendar via cron/CI em ambiente real
-   - definir fonte automatica dos check-ins do dia anterior
-   - definir fonte automatica dos check-ins do dia anterior
-   - agendar via cron/CI em ambiente real
-3. Lidar melhor com multiplas campanhas ativas simultaneas na operacao apos testes com clientes reais.
+2. Operacionalizar automacao em ambiente real:
+   - decidir se o worker interno (`AUTOMATION_WORKER_ENABLED=true`) sera o caminho principal em producao ou se havera cron/CI externo como fallback.
+   - definir fonte automatica dos check-ins do dia anterior.
+   - configurar observabilidade/alertas para `automation_runs` com falha.
+3. Avaliar o sistema inteiro e padronizar logs/telemetria pensando em observabilidade futura:
+   - definir convencao unica de logs estruturados por camada (HTTP, use cases, gateways externos, jobs/worker, scripts operacionais).
+   - garantir `request_id`/correlation id atravessando handlers, casos de uso e chamadas externas.
+   - padronizar campos: tenant/box_id, usuario quando aplicavel, entidade, operacao, status, latencia, erro bruto e erro normalizado.
+   - definir niveis (`debug`, `info`, `warn`, `error`) e evitar vazamento de segredos/PII sensivel.
+   - preparar caminho para coletor futuro (ex.: OpenTelemetry, Loki, Datadog ou similar), metricas e alertas.
+4. Lidar melhor com multiplas campanhas ativas simultaneas na operacao apos testes com clientes reais.
 
 Prioridade media:
 
-1. Testes automatizados para use cases de relatorio, controle de brindes, mensagens e e-mail.
-2. Relatorios avancados:
+1. Renomear a entidade `Box` no dominio/UI para um conceito mais generico antes de expandir para academias convencionais. O sistema nasceu focado em boxes de CrossFit, mas o posicionamento atual e fitness/academias em geral; avaliar nomes como `Academy`, `Gym`, `Business`, `Unit` ou `Organization`. A migracao deve preservar `box_id` ou planejar renomeacao gradual de banco/API/frontend sem quebrar dados existentes.
+2. Testes automatizados para use cases de relatorio, controle de brindes, mensagens e e-mail.
+3. Relatorios avancados:
    - filtros server-side/paginacao se volume crescer.
    - historico de brindes entregues por periodo.
    - relatorio de conversao de mensagens por campanha.
-2. UX mobile/responsiva para tabelas grandes.
-3. Testes de integracao de repositories contra PostgreSQL real.
-4. Refinar Dashboard com atalhos conforme feedback de uso.
-5. Melhorar seed/demo com mais cenarios de conversao de mensagens.
+4. UX mobile/responsiva para tabelas grandes.
+5. Testes de integracao de repositories contra PostgreSQL real.
+6. Refinar Dashboard com atalhos conforme feedback de uso.
+7. Melhorar seed/demo com mais cenarios de conversao de mensagens e e-mail.
+8. Avaliar e implementar `Treino do dia` com mensagens geradas por LLM, respeitando guardrails e restricoes comerciais do WhatsApp.
 
 ## Arquivos importantes
 
@@ -488,11 +585,17 @@ Backend:
 - `engage-fit-be/cmd/api/main.go`
 - `engage-fit-be/internal/app/imports/import_checkins_usecase.go`
 - `engage-fit-be/internal/app/messages/message_usecases.go`
+- `engage-fit-be/internal/app/email/email_usecases.go`
+- `engage-fit-be/internal/app/automation/automation_usecases.go`
+- `engage-fit-be/internal/app/automation/worker.go`
 - `engage-fit-be/internal/adapters/whatsapp/twilio_client.go`
 - `engage-fit-be/internal/adapters/whatsapp/provider_gateway.go`
 - `engage-fit-be/internal/adapters/whatsapp/safe_gateway.go`
+- `engage-fit-be/internal/adapters/email/smtp_gateway.go`
 - `engage-fit-be/migrations/022_add_message_campaign_campaign_id.sql`
 - `engage-fit-be/migrations/023_remove_evolution_provider.sql`
+- `engage-fit-be/migrations/024_create_email_and_automation.sql`
+- `engage-fit-be/migrations/025_create_automation_schedules.sql`
 
 Frontend:
 
@@ -511,6 +614,7 @@ Infra/dev:
 - `engage-fit-be/scripts/demo-seed.mjs`
 - `engage-fit-be/scripts/daily-automation.mjs`
 - `engage-fit-be/migrations/024_create_email_and_automation.sql`
+- `engage-fit-be/migrations/025_create_automation_schedules.sql`
 - `engage-fit-be/test-data/totalpass-checkins-hit-goal.csv`
 
 ## Orientacao para iniciar novo chat
@@ -518,5 +622,5 @@ Infra/dev:
 Mensagem sugerida:
 
 ```txt
-Leia `.ai/handoff.md` e continue a partir dele. WhatsApp ja tem preview renderizado, campanhas de mensagem vinculadas a `campaign_id`, edicao de campanhas/metas/brindes na UI, Evolution API removida (Twilio + Meta Cloud), e automacao diaria via `make daily-automation`. Proximo foco sugerido: e-mail personalizado e evoluir a automacao diaria para agendamento real com auditoria persistida.
+Leia `.ai/handoff.md` e continue a partir dele. WhatsApp ja tem preview renderizado, campanhas de mensagem vinculadas a `campaign_id`, edicao de campanhas/metas/brindes na UI, Evolution API removida (Twilio + Meta Cloud), e-mail personalizado implementado, e automacao diaria implementada com `automation_runs`, `automation_schedules`, worker interno e alternativa operacional via `make daily-automation`. Próximo foco sugerido: operacionalizar automacao em ambiente real, definir fonte automatica de check-ins do dia anterior, adicionar alertas para falhas e evoluir relatorios/filtros server-side.
 ```

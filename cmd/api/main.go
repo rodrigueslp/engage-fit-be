@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"log"
+	"log/slog"
+	"os"
 	"time"
 
 	"boxengage/backend/internal/adapters/email"
@@ -29,6 +31,8 @@ import (
 )
 
 func main() {
+	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
+
 	cfg := config.Load()
 
 	db, err := postgres.Open(cfg.DatabaseURL)

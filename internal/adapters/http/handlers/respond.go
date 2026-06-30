@@ -16,6 +16,7 @@ func notImplemented(c *gin.Context, resource string) {
 }
 
 func respondError(c *gin.Context, err error) {
+	_ = c.Error(err)
 	status := http.StatusInternalServerError
 	message := "internal server error"
 

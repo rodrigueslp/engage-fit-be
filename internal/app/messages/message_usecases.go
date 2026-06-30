@@ -2,7 +2,6 @@ package messages
 
 import (
 	"context"
-	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -162,10 +161,6 @@ func (uc SendMessageCampaignUseCase) Execute(ctx context.Context, boxID, campaig
 	if err != nil {
 		return nil, err
 	}
-	if requiresTwilioContentTemplate(*whatsappSettings) && strings.TrimSpace(template.ContentSID) == "" {
-		return nil, fmt.Errorf("twilio whatsapp requires an approved Content SID (HX...) on the template; freeform messages only work within 24h after the recipient replies (Twilio error 63016)")
-	}
-
 	audience, err := uc.resolveAudience(ctx, boxID, *messageCampaign)
 	if err != nil {
 		return nil, err
