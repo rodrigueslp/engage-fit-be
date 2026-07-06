@@ -476,3 +476,137 @@ func automationScheduleToModel(schedule domain.AutomationSchedule) models.Automa
 		UpdatedAt:   schedule.UpdatedAt,
 	}
 }
+
+func workoutToDomain(model models.WorkoutModel) domain.Workout {
+	status := domain.WorkoutStatus(model.Status)
+	if status == "" {
+		status = domain.WorkoutStatusDraft
+	}
+	return domain.Workout{
+		ID:          domainID(model.ID),
+		BoxID:       domainID(model.BoxID),
+		WorkoutDate: model.WorkoutDate,
+		Title:       model.Title,
+		Goal:        model.Goal,
+		Movements:   model.Movements,
+		CoachNotes:  model.CoachNotes,
+		Status:      status,
+		CreatedAt:   model.CreatedAt,
+		UpdatedAt:   model.UpdatedAt,
+	}
+}
+
+func workoutToModel(workout domain.Workout) models.WorkoutModel {
+	status := workout.Status
+	if status == "" {
+		status = domain.WorkoutStatusDraft
+	}
+	return models.WorkoutModel{
+		ID:          stringID(workout.ID),
+		BoxID:       stringID(workout.BoxID),
+		WorkoutDate: workout.WorkoutDate,
+		Title:       workout.Title,
+		Goal:        workout.Goal,
+		Movements:   workout.Movements,
+		CoachNotes:  workout.CoachNotes,
+		Status:      string(status),
+		CreatedAt:   workout.CreatedAt,
+		UpdatedAt:   workout.UpdatedAt,
+	}
+}
+
+func workoutDraftToDomain(model models.WorkoutMessageDraftModel) domain.WorkoutMessageDraft {
+	status := domain.WorkoutMessageDraftStatus(model.Status)
+	if status == "" {
+		status = domain.WorkoutMessageDraftStatusDraft
+	}
+	var campaignID domain.ID
+	if model.CampaignID != nil {
+		campaignID = domainID(*model.CampaignID)
+	}
+	return domain.WorkoutMessageDraft{
+		ID:               domainID(model.ID),
+		BoxID:            domainID(model.BoxID),
+		WorkoutID:        domainID(model.WorkoutID),
+		CampaignID:       campaignID,
+		Audience:         domain.MessageAudience(model.Audience),
+		GeneratedBody:    model.GeneratedBody,
+		ApprovedBody:     model.ApprovedBody,
+		Status:           status,
+		TotalRecipients:  model.TotalRecipients,
+		SentRecipients:   model.SentRecipients,
+		FailedRecipients: model.FailedRecipients,
+		GeneratedAt:      model.GeneratedAt,
+		ApprovedAt:       model.ApprovedAt,
+		SentAt:           model.SentAt,
+	}
+}
+
+func workoutDraftToModel(draft domain.WorkoutMessageDraft) models.WorkoutMessageDraftModel {
+	status := draft.Status
+	if status == "" {
+		status = domain.WorkoutMessageDraftStatusDraft
+	}
+	var campaignID *string
+	if draft.CampaignID != "" {
+		value := stringID(draft.CampaignID)
+		campaignID = &value
+	}
+	return models.WorkoutMessageDraftModel{
+		ID:               stringID(draft.ID),
+		BoxID:            stringID(draft.BoxID),
+		WorkoutID:        stringID(draft.WorkoutID),
+		CampaignID:       campaignID,
+		Audience:         string(draft.Audience),
+		GeneratedBody:    draft.GeneratedBody,
+		ApprovedBody:     draft.ApprovedBody,
+		Status:           string(status),
+		TotalRecipients:  draft.TotalRecipients,
+		SentRecipients:   draft.SentRecipients,
+		FailedRecipients: draft.FailedRecipients,
+		GeneratedAt:      draft.GeneratedAt,
+		ApprovedAt:       draft.ApprovedAt,
+		SentAt:           draft.SentAt,
+	}
+}
+
+func workoutRecipientToDomain(model models.WorkoutMessageRecipientModel) domain.WorkoutMessageRecipient {
+	return domain.WorkoutMessageRecipient{
+		ID:                    domainID(model.ID),
+		WorkoutMessageDraftID: domainID(model.WorkoutMessageDraftID),
+		StudentID:             domainID(model.StudentID),
+		Phone:                 model.Phone,
+		Status:                domain.MessageRecipientStatus(model.Status),
+		ErrorMessage:          model.ErrorMessage,
+		SentAt:                model.SentAt,
+		CreatedAt:             model.CreatedAt,
+	}
+}
+
+func workoutRecipientToModel(recipient domain.WorkoutMessageRecipient) models.WorkoutMessageRecipientModel {
+	return models.WorkoutMessageRecipientModel{
+		ID:                    stringID(recipient.ID),
+		WorkoutMessageDraftID: stringID(recipient.WorkoutMessageDraftID),
+		StudentID:             stringID(recipient.StudentID),
+		Phone:                 recipient.Phone,
+		Status:                string(recipient.Status),
+		ErrorMessage:          recipient.ErrorMessage,
+		SentAt:                recipient.SentAt,
+		CreatedAt:             recipient.CreatedAt,
+	}
+}
+
+func llmGenerationLogToModel(log domain.LLMGenerationLog) models.LLMGenerationLogModel {
+	return models.LLMGenerationLogModel{
+		ID:            stringID(log.ID),
+		BoxID:         stringID(log.BoxID),
+		WorkoutID:     stringID(log.WorkoutID),
+		DraftID:       stringID(log.DraftID),
+		Provider:      log.Provider,
+		Model:         log.Model,
+		PromptSummary: log.PromptSummary,
+		Status:        log.Status,
+		ErrorMessage:  log.ErrorMessage,
+		CreatedAt:     log.CreatedAt,
+	}
+}

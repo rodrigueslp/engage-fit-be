@@ -9,6 +9,7 @@ import (
 
 	"boxengage/backend/internal/adapters/email"
 	"boxengage/backend/internal/adapters/http"
+	"boxengage/backend/internal/adapters/llm"
 	"boxengage/backend/internal/adapters/parsers"
 	"boxengage/backend/internal/adapters/persistence/postgres"
 	pgrepo "boxengage/backend/internal/adapters/persistence/postgres/repositories"
@@ -27,6 +28,7 @@ import (
 	"boxengage/backend/internal/app/rewards"
 	"boxengage/backend/internal/app/students"
 	whatsappapp "boxengage/backend/internal/app/whatsapp"
+	"boxengage/backend/internal/app/workouts"
 	"boxengage/backend/internal/config"
 )
 
@@ -52,6 +54,7 @@ func main() {
 	emailSettingsRepository := pgrepo.NewEmailSettingsGormRepository(db)
 	emailRepository := pgrepo.NewEmailGormRepository(db)
 	automationRepository := pgrepo.NewAutomationGormRepository(db)
+	workoutRepository := pgrepo.NewWorkoutGormRepository(db)
 
 	passwordService := security.NewPasswordService()
 	tokenService := security.NewJWTService(cfg.JWTSecret)
@@ -60,6 +63,7 @@ func main() {
 	providerGateway := whatsapp.NewProviderGateway(metaCloudClient, twilioClient)
 	whatsappGateway := whatsapp.NewSafeGateway(providerGateway, cfg.AppEnv, cfg.WhatsappAllowRealSend, cfg.WhatsappDevRecipientPhone, cfg.WhatsappDevAllowedRecipientPhones)
 	emailGateway := email.NewSMTPGateway(cfg.AppEnv, cfg.EmailAllowRealSend, cfg.EmailDevRecipientEmail)
+	llmGenerator := llm.NewOpenAIGenerator(cfg.OpenAIAPIKey, cfg.OpenAIModel, cfg.OpenAITimeoutSeconds)
 	checkinParser := parsers.NewCheckinParser()
 
 	loginUseCase := auth.NewLoginUseCase(userRepository, passwordService, tokenService)
@@ -142,6 +146,19 @@ func main() {
 	updateAutomationScheduleUseCase := automation.NewUpdateScheduleUseCase(automationRepository)
 	deleteAutomationScheduleUseCase := automation.NewDeleteScheduleUseCase(automationRepository)
 	executeAutomationScheduleUseCase := automation.NewExecuteScheduleUseCase(automationRepository, campaignRepository, messageRepository, recalculateCampaignProgressUseCase, sendMessageCampaignUseCase)
+
+	listWorkoutsUseCase := workouts.NewListWorkoutsUseCase(workoutRepository)
+	createWorkoutUseCase := workouts.NewCreateWorkoutUseCase(workoutRepository)
+	getWorkoutUseCase := workouts.NewGetWorkoutUseCase(workoutRepository)
+	updateWorkoutUseCase := workouts.NewUpdateWorkoutUseCase(workoutRepository)
+	deleteWorkoutUseCase := workouts.NewDeleteWorkoutUseCase(workoutRepository)
+	listWorkoutDraftsUseCase := workouts.NewListWorkoutDraftsUseCase(workoutRepository)
+	generateWorkoutDraftUseCase := workouts.NewGenerateWorkoutDraftUseCase(workoutRepository, boxRepository, studentRepository, checkinRepository, campaignRepository, llmGenerator)
+	getWorkoutDraftUseCase := workouts.NewGetWorkoutDraftUseCase(workoutRepository)
+	updateWorkoutDraftUseCase := workouts.NewUpdateWorkoutDraftUseCase(workoutRepository)
+	approveWorkoutDraftUseCase := workouts.NewApproveWorkoutDraftUseCase(workoutRepository)
+	sendWorkoutDraftUseCase := workouts.NewSendWorkoutDraftUseCase(workoutRepository, boxRepository, studentRepository, checkinRepository, campaignRepository, whatsappSettingsRepository, whatsappGateway)
+	listWorkoutRecipientsUseCase := workouts.NewListWorkoutRecipientsUseCase(workoutRepository)
 
 	reportExporter := reportadapters.NewCSVExporter()
 	eligibleStudentsReportUseCase := reportsapp.NewEligibleStudentsReportUseCase(campaignRepository)
@@ -230,6 +247,19 @@ func main() {
 		UpdateAutomationScheduleUseCase:  updateAutomationScheduleUseCase,
 		DeleteAutomationScheduleUseCase:  deleteAutomationScheduleUseCase,
 		ExecuteAutomationScheduleUseCase: executeAutomationScheduleUseCase,
+
+		ListWorkoutsUseCase:          listWorkoutsUseCase,
+		CreateWorkoutUseCase:         createWorkoutUseCase,
+		GetWorkoutUseCase:            getWorkoutUseCase,
+		UpdateWorkoutUseCase:         updateWorkoutUseCase,
+		DeleteWorkoutUseCase:         deleteWorkoutUseCase,
+		ListWorkoutDraftsUseCase:     listWorkoutDraftsUseCase,
+		GenerateWorkoutDraftUseCase:  generateWorkoutDraftUseCase,
+		GetWorkoutDraftUseCase:       getWorkoutDraftUseCase,
+		UpdateWorkoutDraftUseCase:    updateWorkoutDraftUseCase,
+		ApproveWorkoutDraftUseCase:   approveWorkoutDraftUseCase,
+		SendWorkoutDraftUseCase:      sendWorkoutDraftUseCase,
+		ListWorkoutRecipientsUseCase: listWorkoutRecipientsUseCase,
 
 		EligibleStudentsReportUseCase: eligibleStudentsReportUseCase,
 		PendingRewardsReportUseCase:   pendingRewardsReportUseCase,

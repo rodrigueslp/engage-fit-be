@@ -52,6 +52,7 @@ async function main() {
   await createEmailCampaign(token, campaign.id, emailAlmostThereTemplate.id, 'E-mail teste - falta pouco', 'almost_there');
   await createEmailCampaign(token, campaign.id, emailAchievedTemplate.id, 'E-mail teste - meta atingida', 'achieved');
   await createAutomationSchedule(token);
+  await createWorkout(token);
 
   console.log('');
   console.log('Demo pronto para teste de WhatsApp.');
@@ -67,6 +68,7 @@ async function main() {
   console.log('Depois configure Twilio em Configuracoes e envie a campanha na tela WhatsApp.');
   console.log('A tela E-mail ja fica com provider mock configurado para preview/envio seguro local.');
   console.log('A tela Automacao tem uma rotina demo pausada para testar execucao manual.');
+  console.log('A tela Treino do dia tem um WOD demo cadastrado; configure OPENAI_API_KEY para gerar rascunhos por IA.');
 }
 
 async function assertApiIsRunning() {
@@ -167,6 +169,21 @@ async function recalculateCampaign(token, campaignId) {
 }
 
 
+async function createWorkout(token) {
+  const response = await authedFetch(token, '/api/v1/workouts', {
+    method: 'POST',
+    body: JSON.stringify({
+      workout_date: formatDate(new Date()),
+      title: 'WOD demo - força e condicionamento',
+      goal: 'forca + metcon',
+      movements: 'Back squat 5x3; AMRAP 12 min com wall ball, box jump e corrida curta.',
+      coach_notes: 'Priorizar aquecimento de quadril e tornozelo. Ajustar carga para manter tecnica consistente.',
+      status: 'published',
+    }),
+  });
+  await assertResponse(response, 'criar treino do dia demo');
+  return response.json();
+}
 
 async function createAutomationSchedule(token) {
   const response = await authedFetch(token, '/api/v1/automation/schedules', {

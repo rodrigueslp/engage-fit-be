@@ -21,6 +21,9 @@ type Config struct {
 	EmailDevRecipientEmail            string
 	AutomationWorkerEnabled           bool
 	AutomationWorkerIntervalSeconds   int
+	OpenAIAPIKey                      string
+	OpenAIModel                       string
+	OpenAITimeoutSeconds              int
 }
 
 func Load() Config {
@@ -39,6 +42,9 @@ func Load() Config {
 		EmailDevRecipientEmail:            getEnv("EMAIL_DEV_RECIPIENT_EMAIL", ""),
 		AutomationWorkerEnabled:           getEnv("AUTOMATION_WORKER_ENABLED", "false") == "true",
 		AutomationWorkerIntervalSeconds:   getEnvInt("AUTOMATION_WORKER_INTERVAL_SECONDS", 60),
+		OpenAIAPIKey:                      getEnv("OPENAI_API_KEY", ""),
+		OpenAIModel:                       getEnv("OPENAI_MODEL", "gpt-4.1-mini"),
+		OpenAITimeoutSeconds:              getEnvInt("OPENAI_TIMEOUT_SECONDS", 30),
 	}
 }
 

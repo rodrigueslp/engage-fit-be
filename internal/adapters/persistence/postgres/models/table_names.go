@@ -79,3 +79,19 @@ func (AutomationRunModel) TableName() string {
 func (AutomationScheduleModel) TableName() string {
 	return "automation_schedules"
 }
+
+func (WorkoutModel) TableName() string {
+	return "workouts"
+}
+
+func (WorkoutMessageDraftModel) TableName() string {
+	return "workout_message_drafts"
+}
+
+func (WorkoutMessageRecipientModel) TableName() string {
+	return "workout_message_recipients"
+}
+
+func (LLMGenerationLogModel) TableName() string {
+	return "llm_generation_logs"
+}

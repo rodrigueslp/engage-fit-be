@@ -97,3 +97,11 @@ type AutomationGormRepository struct {
 func NewAutomationGormRepository(db *gorm.DB) AutomationGormRepository {
 	return AutomationGormRepository{db: db}
 }
+
+type WorkoutGormRepository struct {
+	db *gorm.DB
+}
+
+func NewWorkoutGormRepository(db *gorm.DB) WorkoutGormRepository {
+	return WorkoutGormRepository{db: db}
+}

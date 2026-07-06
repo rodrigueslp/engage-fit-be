@@ -1,6 +1,6 @@
 # EngageFit - Handoff de Contexto
 
-Atualizado em: 2026-06-30
+Atualizado em: 2026-07-02
 
 ## Papel do projeto
 
@@ -28,7 +28,7 @@ Frontend:
 ## Decisoes principais
 
 - Sistema multi-tenant desde o inicio.
-- Entidades centrais: `Box`, `User`, `Student`, `Checkin`, `Campaign`, `CampaignGoal`, `Reward`, `CampaignProgress`, `RewardDelivery`, `WhatsappSettings`, `MessageTemplate`, `MessageCampaign`, `MessageRecipient`, `EmailSettings`, `EmailTemplate`, `EmailCampaign`, `EmailRecipient`, `AutomationRun`, `AutomationSchedule`.
+- Entidades centrais: `Box`, `User`, `Student`, `Checkin`, `Campaign`, `CampaignGoal`, `Reward`, `CampaignProgress`, `RewardDelivery`, `WhatsappSettings`, `MessageTemplate`, `MessageCampaign`, `MessageRecipient`, `EmailSettings`, `EmailTemplate`, `EmailCampaign`, `EmailRecipient`, `AutomationRun`, `AutomationSchedule`, `Workout`, `WorkoutMessageDraft`, `WorkoutMessageRecipient`, `LLMGenerationLog`.
 - MVP tem apenas perfil `OWNER`.
 - Sem receita financeira no MVP.
 - `Checkin` nao possui `revenue`.
@@ -61,7 +61,7 @@ Frontend:
   - frequencia mensal.
   - todos com visualizacao na UI, filtros client-side e exportacao CSV.
 - Navegacao frontend usa hash (`#dashboard`, `#campaigns`, `#rewards`, etc.) para preservar a tela apos refresh. Logo da sidebar navega para `Dashboard`.
-- E-mail personalizado e automacao diaria com agendamento/auditoria persistida ja foram implementados. Próximos focos devem partir das pendencias funcionais abaixo, nao da mensagem antiga de handoff.
+- E-mail personalizado, automacao diaria com agendamento/auditoria persistida e `Treino do dia` com rascunhos gerados por LLM ja foram implementados. Próximos focos devem partir das pendencias funcionais abaixo, nao da mensagem antiga de handoff.
 
 ## Estado atual implementado
 
@@ -183,6 +183,15 @@ Implementado:
   - modos: `full_daily`, `recalculate_only`, `send_almost_there`, `send_achieved`, `send_inactive`.
   - worker interno roda agendas quando `AUTOMATION_WORKER_ENABLED=true`; intervalo configuravel por `AUTOMATION_WORKER_INTERVAL_SECONDS`.
   - `scripts/daily-automation.mjs` permanece como alternativa operacional/CI e tambem registra `automation_runs`.
+- Treino do dia com mensagens geradas por LLM:
+  - migration: `migrations/026_create_workouts.sql`.
+  - entidades/tabelas: `workouts`, `workout_message_drafts`, `workout_message_recipients`, `llm_generation_logs`.
+  - adapter OpenAI via `OPENAI_API_KEY`, `OPENAI_MODEL` e `OPENAI_TIMEOUT_SECONDS`; default de modelo: `gpt-4.1-mini`.
+  - prompt com guardrails: mensagem curta, pratica, segura, sem dieta individual, sem orientacao medica, sem promessa de resultado e recomendando falar com o coach em caso de dor/duvida/adaptacao.
+  - endpoints: `GET/POST /api/v1/workouts`, `GET/PUT/DELETE /api/v1/workouts/:id`, `GET/POST /api/v1/workouts/:id/message-drafts`, `PUT /api/v1/workout-message-drafts/:id`, `POST /api/v1/workout-message-drafts/:id/approve`, `POST /api/v1/workout-message-drafts/:id/send`, `GET /api/v1/workout-message-drafts/:id/recipients`.
+  - envio WhatsApp exige rascunho aprovado manualmente (`approved`) e usa texto livre aprovado pelo owner; restricoes comerciais do WhatsApp/Twilio aparecem como falhas auditadas por destinatario.
+  - audiencias reutilizadas: `all`, `inactive`, `almost_there`, `near_goal`, `achieved`; as audiencias de progresso exigem `campaign_id`.
+  - `make demo-reset` limpa as tabelas novas e `scripts/demo-seed.mjs` cria um WOD demo sem chamar OpenAI.
 
 Validacao atual:
 
@@ -257,6 +266,12 @@ Implementado:
   - cria/pausa/remove rotinas automaticas com horario, dias, modo e permissao de reenvio.
   - botao `Executar` permite rodar uma rotina manualmente.
   - historico de execucoes diarias com status, importacao, campanhas recalculadas, mensagens enviadas, falhas e erros.
+- Treino do dia:
+  - tela dedicada no menu lateral.
+  - cadastro de WOD/treino com data, titulo, objetivo, movimentos principais e observacoes do coach.
+  - geracao de rascunho por IA para audiencias existentes.
+  - edicao do texto, aprovacao manual obrigatoria e envio pelo WhatsApp.
+  - auditoria do ultimo envio por destinatario, incluindo falhas do provider.
 - Dashboard operacional:
   - atalhos para Brindes, Relatorios, WhatsApp e Automacao.
 - Configuracoes:
@@ -451,88 +466,29 @@ DAILY_SEND_MESSAGES=true \
 make daily-automation
 ```
 
-## Ideia futura: treino do dia com mensagens geradas por LLM
+## Treino do dia com mensagens geradas por LLM
 
-Feature proposta para evolucao futura: automacao inteligente de mensagens do treino do dia, especialmente para boxes de CrossFit.
+Implementado em 2026-07-02 como MVP operacional com aprovacao manual antes do envio.
 
-Objetivo:
+Fluxo atual:
 
-- Permitir que o box cadastre ou importe o treino/WOD do dia.
-- Gerar mensagens personalizadas para alunos pelo WhatsApp com dicas contextuais do treino.
-- Aumentar comparecimento, engajamento diario e percepcao de acompanhamento individual.
-- Transformar o EngageFit de uma plataforma que reage a check-ins/metas em uma ferramenta que tambem ativa alunos antes do treino.
-
-Exemplo de uso:
-
-```txt
-Fulano, hoje tem PR de back squat no CrossFit Alados.
-Chegue alguns minutos antes para aquecer bem quadril, tornozelos e posterior.
-Na hora das tentativas, priorize tecnica, respiracao e profundidade consistente.
-Se estiver em duvida sobre carga, chama o coach antes de subir o peso.
-Bora buscar esse PR com seguranca.
-```
-
-Desenho sugerido para MVP:
-
-- Nova area `Treino do dia` ou `WOD`:
-  - data.
-  - titulo.
-  - movimentos principais.
-  - objetivo do treino (`forca`, `metcon`, `ginastico`, `cardio`, `PR`, `benchmark`, etc.).
-  - observacoes do coach.
-- Botao `Gerar mensagens` usando LLM.
-- Gerar variacoes por publico:
-  - todos os alunos.
-  - alunos em risco.
-  - alunos proximos da meta/check-ins.
-  - alunos frequentes.
-- Preview obrigatorio antes do envio, pelo menos na primeira versao.
-- Reutilizar infraestrutura atual de WhatsApp:
-  - templates/campanhas.
-  - preview renderizado.
-  - auditoria por destinatario.
-  - automacao/agendamento no futuro.
-
-Cuidados de produto e compliance:
-
-- Nao vender como "IA livre mandando qualquer coisa"; posicionar como `automacao inteligente do treino do dia`.
-- LLM deve gerar texto dentro de guardrails:
-  - mensagens curtas.
-  - tom motivacional e pratico.
-  - sem prescricao individual de dieta.
-  - sem orientacao medica.
-  - sem prometer resultado fisico.
-  - dicas tecnicas gerais e seguras.
-  - recomendar falar com o coach em caso de duvida sobre carga, dor ou adaptacao.
-- Para nutricao, usar apenas orientacao generica, por exemplo: chegar bem alimentado/hidratado e seguir plano de nutricionista quando houver.
-- Para tecnica, usar orientacoes seguras e gerais, nunca diagnostico individual.
-- Considerar aprovacao manual pelo coach/owner antes do envio no MVP.
+- Owner cadastra o treino/WOD do dia.
+- Owner escolhe audiencia (`all`, `inactive`, `almost_there`, `near_goal`, `achieved`).
+- Backend gera rascunho com OpenAI usando guardrails de seguranca.
+- Owner revisa/edita o texto e aprova manualmente.
+- Sistema envia pelo WhatsApp usando texto livre aprovado e registra auditoria por destinatario.
 
 Restricao importante de WhatsApp:
 
-- Fora da janela de conversa de 24h, mensagem livre gerada por LLM pode falhar ou nao ser permitida comercialmente.
-- Caminho seguro:
-  - usar template aprovado para iniciar conversa, por exemplo: `Oi {{1}}, hoje tem treino importante no {{2}}. Quer receber dicas rapidas para mandar bem? Responda QUERO.`
-  - apos resposta do aluno, enviar a mensagem livre dentro da janela de 24h.
-  - alternativa: criar templates aprovados por categoria de treino com variaveis controladas.
-- Integracao futura deve respeitar `ContentSid`/templates aprovados para producao.
+- O MVP envia texto livre aprovado pelo owner. Fora da janela de conversa de 24h, Twilio/Meta podem bloquear a mensagem; o erro fica registrado em `workout_message_recipients.error_message`.
+- Proximo passo comercial recomendado: evoluir para templates aprovados/opt-in antes de usar em producao em massa.
 
-Possiveis entidades futuras:
+Futuras evolucoes:
 
-- `Workout`
-- `WorkoutMovement`
-- `WorkoutMessageDraft`
-- `WorkoutMessageCampaign`
-- `LLMGenerationLog`
-
-Possiveis configuracoes por box:
-
-- tom da comunicacao.
-- tamanho maximo da mensagem.
-- assinatura/padrao de encerramento.
-- habilitar/desabilitar mencoes de nutricao generica.
-- aprovacao obrigatoria antes de envio.
-- horarios permitidos de envio.
+- Automacao/agendamento de geracao/envio de rascunhos do treino.
+- Configuracoes por box para tom, tamanho maximo, assinatura, horarios permitidos e exigencia de aprovacao.
+- Templates aprovados por categoria de treino ou fluxo de opt-in para respeitar WhatsApp fora da janela de 24h.
+- Audiencia de alunos frequentes, caso a operacao valide a regra de frequencia.
 
 ## Pendencias funcionais
 
@@ -563,7 +519,7 @@ Prioridade media:
 5. Testes de integracao de repositories contra PostgreSQL real.
 6. Refinar Dashboard com atalhos conforme feedback de uso.
 7. Melhorar seed/demo com mais cenarios de conversao de mensagens e e-mail.
-8. Avaliar e implementar `Treino do dia` com mensagens geradas por LLM, respeitando guardrails e restricoes comerciais do WhatsApp.
+8. Evoluir `Treino do dia` para fluxo comercial com templates aprovados/opt-in, agendamento e configuracoes por box.
 
 ## Arquivos importantes
 
@@ -588,14 +544,17 @@ Backend:
 - `engage-fit-be/internal/app/email/email_usecases.go`
 - `engage-fit-be/internal/app/automation/automation_usecases.go`
 - `engage-fit-be/internal/app/automation/worker.go`
+- `engage-fit-be/internal/app/workouts/workout_usecases.go`
 - `engage-fit-be/internal/adapters/whatsapp/twilio_client.go`
 - `engage-fit-be/internal/adapters/whatsapp/provider_gateway.go`
 - `engage-fit-be/internal/adapters/whatsapp/safe_gateway.go`
 - `engage-fit-be/internal/adapters/email/smtp_gateway.go`
+- `engage-fit-be/internal/adapters/llm/openai_generator.go`
 - `engage-fit-be/migrations/022_add_message_campaign_campaign_id.sql`
 - `engage-fit-be/migrations/023_remove_evolution_provider.sql`
 - `engage-fit-be/migrations/024_create_email_and_automation.sql`
 - `engage-fit-be/migrations/025_create_automation_schedules.sql`
+- `engage-fit-be/migrations/026_create_workouts.sql`
 
 Frontend:
 
@@ -603,6 +562,7 @@ Frontend:
 - `engage-fit-fe/src/pages/whatsapp/WhatsappPage.tsx`
 - `engage-fit-fe/src/pages/email/EmailPage.tsx`
 - `engage-fit-fe/src/pages/automation/AutomationPage.tsx`
+- `engage-fit-fe/src/pages/workouts/WorkoutsPage.tsx`
 - `engage-fit-fe/src/pages/settings/SettingsPage.tsx`
 - `engage-fit-fe/src/features/api/endpoints.ts`
 - `engage-fit-fe/.npmrc`
@@ -615,6 +575,7 @@ Infra/dev:
 - `engage-fit-be/scripts/daily-automation.mjs`
 - `engage-fit-be/migrations/024_create_email_and_automation.sql`
 - `engage-fit-be/migrations/025_create_automation_schedules.sql`
+- `engage-fit-be/migrations/026_create_workouts.sql`
 - `engage-fit-be/test-data/totalpass-checkins-hit-goal.csv`
 
 ## Orientacao para iniciar novo chat
@@ -622,5 +583,5 @@ Infra/dev:
 Mensagem sugerida:
 
 ```txt
-Leia `.ai/handoff.md` e continue a partir dele. WhatsApp ja tem preview renderizado, campanhas de mensagem vinculadas a `campaign_id`, edicao de campanhas/metas/brindes na UI, Evolution API removida (Twilio + Meta Cloud), e-mail personalizado implementado, e automacao diaria implementada com `automation_runs`, `automation_schedules`, worker interno e alternativa operacional via `make daily-automation`. Próximo foco sugerido: operacionalizar automacao em ambiente real, definir fonte automatica de check-ins do dia anterior, adicionar alertas para falhas e evoluir relatorios/filtros server-side.
+Leia `.ai/handoff.md` e continue a partir dele. WhatsApp ja tem preview renderizado, campanhas de mensagem vinculadas a `campaign_id`, edicao de campanhas/metas/brindes na UI, Evolution API removida (Twilio + Meta Cloud), e-mail personalizado implementado, automacao diaria implementada com `automation_runs`, `automation_schedules`, worker interno e alternativa operacional via `make daily-automation`, e Treino do dia implementado com OpenAI, rascunhos aprovaveis e envio WhatsApp auditado. Próximo foco sugerido: operacionalizar automacao em ambiente real, definir fonte automatica de check-ins do dia anterior, adicionar alertas para falhas, evoluir relatorios/filtros server-side e amadurecer o fluxo comercial do Treino do dia com templates aprovados/opt-in.
 ```

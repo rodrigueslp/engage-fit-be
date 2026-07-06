@@ -231,3 +231,57 @@ type AutomationScheduleModel struct {
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 }
+
+type WorkoutModel struct {
+	ID          string `gorm:"primaryKey"`
+	BoxID       string `gorm:"index"`
+	WorkoutDate time.Time
+	Title       string
+	Goal        string
+	Movements   string
+	CoachNotes  string
+	Status      string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
+type WorkoutMessageDraftModel struct {
+	ID               string `gorm:"primaryKey"`
+	BoxID            string `gorm:"index"`
+	WorkoutID        string `gorm:"index"`
+	CampaignID       *string
+	Audience         string `gorm:"index"`
+	GeneratedBody    string
+	ApprovedBody     string
+	Status           string `gorm:"index"`
+	TotalRecipients  int
+	SentRecipients   int
+	FailedRecipients int
+	GeneratedAt      time.Time
+	ApprovedAt       *time.Time
+	SentAt           *time.Time
+}
+
+type WorkoutMessageRecipientModel struct {
+	ID                    string `gorm:"primaryKey"`
+	WorkoutMessageDraftID string `gorm:"index"`
+	StudentID             string
+	Phone                 string
+	Status                string `gorm:"index"`
+	ErrorMessage          string
+	SentAt                *time.Time
+	CreatedAt             time.Time
+}
+
+type LLMGenerationLogModel struct {
+	ID            string `gorm:"primaryKey"`
+	BoxID         string `gorm:"index"`
+	WorkoutID     string `gorm:"index"`
+	DraftID       string `gorm:"index"`
+	Provider      string
+	Model         string
+	PromptSummary string
+	Status        string
+	ErrorMessage  string
+	CreatedAt     time.Time
+}

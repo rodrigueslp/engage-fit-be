@@ -32,7 +32,7 @@ demo-seed:
 
 demo-reset:
 	$(COMPOSE) exec -T postgres psql "$(DATABASE_URL)" -v ON_ERROR_STOP=1 -c "CREATE UNIQUE INDEX IF NOT EXISTS idx_checkins_unique_visit ON checkins (box_id, source, student_id, checkin_date, checkin_time);"
-	$(COMPOSE) exec -T postgres psql "$(DATABASE_URL)" -v ON_ERROR_STOP=1 -c "TRUNCATE TABLE message_recipients, message_campaigns, message_templates, reward_deliveries, rewards, campaign_progresses, campaign_goals, campaigns, checkins, import_histories, students RESTART IDENTITY CASCADE;"
+	$(COMPOSE) exec -T postgres psql "$(DATABASE_URL)" -v ON_ERROR_STOP=1 -c "TRUNCATE TABLE workout_message_recipients, workout_message_drafts, llm_generation_logs, workouts, message_recipients, message_campaigns, message_templates, reward_deliveries, rewards, campaign_progresses, campaign_goals, campaigns, checkins, import_histories, students RESTART IDENTITY CASCADE;"
 
 demo-reset-seed: demo-reset demo-seed
 

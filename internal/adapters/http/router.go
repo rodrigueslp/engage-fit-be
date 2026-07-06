@@ -19,6 +19,7 @@ import (
 	"boxengage/backend/internal/app/rewards"
 	"boxengage/backend/internal/app/students"
 	"boxengage/backend/internal/app/whatsapp"
+	"boxengage/backend/internal/app/workouts"
 	"boxengage/backend/internal/ports/services"
 )
 
@@ -104,6 +105,19 @@ type RouterDependencies struct {
 	UpdateAutomationScheduleUseCase  automation.UpdateScheduleUseCase
 	DeleteAutomationScheduleUseCase  automation.DeleteScheduleUseCase
 	ExecuteAutomationScheduleUseCase automation.ExecuteScheduleUseCase
+
+	ListWorkoutsUseCase          workouts.ListWorkoutsUseCase
+	CreateWorkoutUseCase         workouts.CreateWorkoutUseCase
+	GetWorkoutUseCase            workouts.GetWorkoutUseCase
+	UpdateWorkoutUseCase         workouts.UpdateWorkoutUseCase
+	DeleteWorkoutUseCase         workouts.DeleteWorkoutUseCase
+	ListWorkoutDraftsUseCase     workouts.ListWorkoutDraftsUseCase
+	GenerateWorkoutDraftUseCase  workouts.GenerateWorkoutDraftUseCase
+	GetWorkoutDraftUseCase       workouts.GetWorkoutDraftUseCase
+	UpdateWorkoutDraftUseCase    workouts.UpdateWorkoutDraftUseCase
+	ApproveWorkoutDraftUseCase   workouts.ApproveWorkoutDraftUseCase
+	SendWorkoutDraftUseCase      workouts.SendWorkoutDraftUseCase
+	ListWorkoutRecipientsUseCase workouts.ListWorkoutRecipientsUseCase
 
 	EligibleStudentsReportUseCase reports.EligibleStudentsReportUseCase
 	PendingRewardsReportUseCase   reports.PendingRewardsReportUseCase
@@ -200,6 +214,19 @@ func NewRouter(deps RouterDependencies) *gin.Engine {
 	protected.GET("/message-campaigns/:id/preview", messagesHandler.PreviewCampaign)
 	protected.POST("/message-campaigns/:id/send", messagesHandler.SendCampaign)
 	protected.GET("/message-campaigns/:id/recipients", messagesHandler.ListRecipients)
+
+	workoutsHandler := handlers.NewWorkoutsHandler(deps.ListWorkoutsUseCase, deps.CreateWorkoutUseCase, deps.GetWorkoutUseCase, deps.UpdateWorkoutUseCase, deps.DeleteWorkoutUseCase, deps.ListWorkoutDraftsUseCase, deps.GenerateWorkoutDraftUseCase, deps.GetWorkoutDraftUseCase, deps.UpdateWorkoutDraftUseCase, deps.ApproveWorkoutDraftUseCase, deps.SendWorkoutDraftUseCase, deps.ListWorkoutRecipientsUseCase)
+	protected.GET("/workouts", workoutsHandler.List)
+	protected.POST("/workouts", workoutsHandler.Create)
+	protected.GET("/workouts/:id", workoutsHandler.Get)
+	protected.PUT("/workouts/:id", workoutsHandler.Update)
+	protected.DELETE("/workouts/:id", workoutsHandler.Delete)
+	protected.GET("/workouts/:id/message-drafts", workoutsHandler.ListDrafts)
+	protected.POST("/workouts/:id/message-drafts", workoutsHandler.GenerateDraft)
+	protected.PUT("/workout-message-drafts/:id", workoutsHandler.UpdateDraft)
+	protected.POST("/workout-message-drafts/:id/approve", workoutsHandler.ApproveDraft)
+	protected.POST("/workout-message-drafts/:id/send", workoutsHandler.SendDraft)
+	protected.GET("/workout-message-drafts/:id/recipients", workoutsHandler.ListRecipients)
 
 	emailHandler := handlers.NewEmailHandler(deps.GetEmailSettingsUseCase, deps.UpdateEmailSettingsUseCase, deps.TestEmailSettingsUseCase, deps.ListEmailTemplatesUseCase, deps.CreateEmailTemplateUseCase, deps.GetEmailTemplateUseCase, deps.UpdateEmailTemplateUseCase, deps.DeleteEmailTemplateUseCase, deps.ListEmailCampaignsUseCase, deps.CreateEmailCampaignUseCase, deps.GetEmailCampaignUseCase, deps.SendEmailCampaignUseCase, deps.ListEmailRecipientsUseCase)
 	protected.GET("/email/settings", emailHandler.GetSettings)
