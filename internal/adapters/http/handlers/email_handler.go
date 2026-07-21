@@ -112,7 +112,7 @@ func (h EmailHandler) TestSettings(c *gin.Context) {
 		}
 	}
 	if err := h.testSettings.Execute(c.Request.Context(), settings); err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{"message": err.Error()})
+		respondPublicError(c, http.StatusBadGateway, "email_provider_failed", "email provider request failed")
 		return
 	}
 	c.Status(http.StatusNoContent)
@@ -290,7 +290,12 @@ func (h EmailHandler) PreviewCampaign(c *gin.Context) {
 }
 
 func (h EmailHandler) ListRecipients(c *gin.Context) {
-	result, err := h.listRecipients.Execute(c.Request.Context(), domain.ID(c.Param("id")))
+	boxID, err := middleware.BoxID(c)
+	if err != nil {
+		respondUnauthorized(c)
+		return
+	}
+	result, err := h.listRecipients.Execute(c.Request.Context(), boxID, domain.ID(c.Param("id")))
 	if err != nil {
 		respondError(c, err)
 		return

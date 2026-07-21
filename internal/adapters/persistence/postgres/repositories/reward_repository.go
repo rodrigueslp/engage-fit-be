@@ -11,7 +11,7 @@ import (
 	"boxengage/backend/internal/domain"
 )
 
-func (r RewardGormRepository) ListByCampaign(ctx context.Context, campaignID domain.ID) ([]domain.Reward, error) {
+func (r RewardGormRepository) ListByCampaign(ctx context.Context, boxID, campaignID domain.ID) ([]domain.Reward, error) {
 	var modelsList []models.RewardModel
 	if err := r.db.WithContext(ctx).
 		Model(&models.RewardModel{}).
@@ -21,7 +21,8 @@ func (r RewardGormRepository) ListByCampaign(ctx context.Context, campaignID dom
 			COALESCE(SUM(CASE WHEN reward_deliveries.delivered = true THEN 1 ELSE 0 END), 0) AS delivered_deliveries
 		`).
 		Joins("LEFT JOIN reward_deliveries ON reward_deliveries.reward_id = rewards.id").
-		Where("rewards.campaign_id = ?", stringID(campaignID)).
+		Joins("JOIN campaigns ON campaigns.id = rewards.campaign_id").
+		Where("campaigns.box_id = ? AND rewards.campaign_id = ?", stringID(boxID), stringID(campaignID)).
 		Group("rewards.id").
 		Order("rewards.name ASC").
 		Find(&modelsList).Error; err != nil {
@@ -35,9 +36,13 @@ func (r RewardGormRepository) ListByCampaign(ctx context.Context, campaignID dom
 	return rewards, nil
 }
 
-func (r RewardGormRepository) FindByID(ctx context.Context, id domain.ID) (*domain.Reward, error) {
+func (r RewardGormRepository) FindByID(ctx context.Context, boxID, id domain.ID) (*domain.Reward, error) {
 	var model models.RewardModel
-	if err := r.db.WithContext(ctx).Where("id = ?", stringID(id)).First(&model).Error; err != nil {
+	if err := r.db.WithContext(ctx).
+		Select("rewards.*").
+		Joins("JOIN campaigns ON campaigns.id = rewards.campaign_id").
+		Where("campaigns.box_id = ? AND rewards.id = ?", stringID(boxID), stringID(id)).
+		First(&model).Error; err != nil {
 		return nil, err
 	}
 
@@ -54,13 +59,36 @@ func (r RewardGormRepository) Save(ctx context.Context, reward *domain.Reward) e
 	return r.db.WithContext(ctx).Create(&model).Error
 }
 
-func (r RewardGormRepository) Update(ctx context.Context, reward domain.Reward) error {
+func (r RewardGormRepository) Update(ctx context.Context, boxID domain.ID, reward domain.Reward) error {
 	model := rewardToModel(reward)
-	return r.db.WithContext(ctx).Save(&model).Error
+	result := r.db.WithContext(ctx).
+		Model(&models.RewardModel{}).
+		Where("id = ? AND campaign_id IN (?)", stringID(reward.ID), r.campaignIDsForBox(boxID)).
+		Updates(&model)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
 }
 
-func (r RewardGormRepository) Delete(ctx context.Context, id domain.ID) error {
-	return r.db.WithContext(ctx).Where("id = ?", stringID(id)).Delete(&models.RewardModel{}).Error
+func (r RewardGormRepository) Delete(ctx context.Context, boxID, id domain.ID) error {
+	result := r.db.WithContext(ctx).
+		Where("id = ? AND campaign_id IN (?)", stringID(id), r.campaignIDsForBox(boxID)).
+		Delete(&models.RewardModel{})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
+}
+
+func (r RewardGormRepository) campaignIDsForBox(boxID domain.ID) *gorm.DB {
+	return r.db.Model(&models.CampaignModel{}).Select("id").Where("box_id = ?", stringID(boxID))
 }
 
 func (r RewardGormRepository) ListDeliveries(ctx context.Context, boxID domain.ID) ([]domain.RewardDelivery, error) {

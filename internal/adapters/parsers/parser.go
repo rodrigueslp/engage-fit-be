@@ -20,6 +20,12 @@ import (
 
 type CheckinParser struct{}
 
+const (
+	maxImportRows                   = 50_000
+	maxImportColumns                = 256
+	maxSpreadsheetUncompressedBytes = 50 * 1024 * 1024
+)
+
 func NewCheckinParser() CheckinParser {
 	return CheckinParser{}
 }
@@ -85,6 +91,9 @@ func parseXLSX(data []byte, source domain.Source) ([]services.ParsedCheckin, err
 }
 
 func parseRows(rows [][]string, source domain.Source) ([]services.ParsedCheckin, error) {
+	if len(rows) > maxImportRows {
+		return nil, fmt.Errorf("import exceeds maximum of %d rows", maxImportRows)
+	}
 	if len(rows) < 2 {
 		return []services.ParsedCheckin{}, nil
 	}
@@ -261,6 +270,9 @@ func readSharedStrings(zipReader *zip.Reader) ([]string, error) {
 	if file == nil {
 		return []string{}, nil
 	}
+	if file.UncompressedSize64 > maxSpreadsheetUncompressedBytes {
+		return nil, errors.New("shared strings file is too large")
+	}
 
 	reader, err := file.Open()
 	if err != nil {
@@ -300,6 +312,9 @@ func readFirstSheet(zipReader *zip.Reader, sharedStrings []string) ([][]string, 
 	if file == nil {
 		return nil, errors.New("sheet1.xml not found")
 	}
+	if file.UncompressedSize64 > maxSpreadsheetUncompressedBytes {
+		return nil, errors.New("worksheet is too large")
+	}
 
 	reader, err := file.Open()
 	if err != nil {
@@ -313,10 +328,16 @@ func readFirstSheet(zipReader *zip.Reader, sharedStrings []string) ([][]string, 
 	}
 
 	rows := make([][]string, 0, len(sheet.Rows))
+	if len(sheet.Rows) > maxImportRows {
+		return nil, fmt.Errorf("import exceeds maximum of %d rows", maxImportRows)
+	}
 	for _, sheetRow := range sheet.Rows {
 		row := []string{}
 		for _, cell := range sheetRow.Cells {
 			column := cellColumnIndex(cell.Ref)
+			if column >= maxImportColumns {
+				return nil, fmt.Errorf("import exceeds maximum of %d columns", maxImportColumns)
+			}
 			for len(row) <= column {
 				row = append(row, "")
 			}

@@ -8,6 +8,8 @@ const checkinsFile = process.env.DAILY_CHECKINS_FILE ?? '';
 const checkinsSource = process.env.DAILY_CHECKINS_SOURCE ?? 'totalpass';
 const sendMessages = process.env.DAILY_SEND_MESSAGES === 'true';
 const resendMessages = process.env.DAILY_RESEND_MESSAGES === 'true';
+const automationTimezone = process.env.DAILY_AUTOMATION_TIMEZONE ?? 'America/Sao_Paulo';
+const automationIdempotencyKey = process.env.DAILY_AUTOMATION_IDEMPOTENCY_KEY ?? `daily:${dateInTimezone(new Date(), automationTimezone)}`;
 
 async function main() {
   await assertApiIsRunning();
@@ -24,6 +26,10 @@ async function main() {
 
   try {
     run = await createAutomationRun(token);
+    if (run.idempotent_replay) {
+      console.log(`Automacao ${automationIdempotencyKey} ja foi iniciada anteriormente; nenhuma etapa foi repetida.`);
+      return;
+    }
 
     if (checkinsFile) {
       await importDailyCheckins(token);
@@ -67,11 +73,23 @@ async function main() {
 async function createAutomationRun(token) {
   return authedJson(token, '/api/v1/automation/runs', {
     method: 'POST',
+    headers: { 'Idempotency-Key': automationIdempotencyKey },
     body: JSON.stringify({
       source: checkinsFile ? checkinsSource : '',
       filename: checkinsFile ? basename(checkinsFile) : '',
     }),
   });
+}
+
+function dateInTimezone(date, timezone) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+  const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${value.year}-${value.month}-${value.day}`;
 }
 
 async function finishAutomationRun(token, runId, status, audit, errorMessage = '') {

@@ -5,7 +5,13 @@ const apiBaseUrl = process.env.API_BASE_URL ?? 'http://localhost:8080';
 const ownerEmail = process.env.DEMO_OWNER_EMAIL ?? 'owner@example.com';
 const ownerPassword = process.env.DEMO_OWNER_PASSWORD ?? 'change-me';
 const totalPassFilePath = process.env.DEMO_TOTALPASS_FILE ?? '';
+const ownerSetupToken = process.env.DEMO_OWNER_SETUP_TOKEN ?? '';
 const luizPhone = '5511963834712';
+const officialWhatsappTemplates = [
+  { type: 'ALMOST_THERE', contentSid: 'HX0a74da5635b2401c1b0ce1769aaea1ac' },
+  { type: 'GOAL_REACHED', contentSid: 'HX63d54262966db42c1641c32ab64b11c9' },
+  { type: 'WE_MISS_YOU', contentSid: 'HX198c7dcaf71ae42a733719eee86d5aa5' },
+];
 const demoStudents = [
   { name: 'Luiz', email: 'lprodrigs@gmail.com', phone: luizPhone, checkins: 9, scenario: 'falta 1 check-in' },
   { name: 'Deborah', email: 'deborah@example.com', phone: luizPhone, checkins: 8, scenario: 'faltam 2 check-ins' },
@@ -40,12 +46,10 @@ async function main() {
   await recalculateCampaign(token, secondaryCampaign.id);
   await configureEmailMock(token);
 
-  const almostThereTemplate = await createTemplate(token, 'Falta pouco demo', almostThereTemplateContent);
-  const achievedTemplate = await createTemplate(token, 'Meta atingida demo', achievedTemplateContent);
-  const inactiveTemplate = await createTemplate(token, 'Aluno em risco demo', inactiveTemplateContent);
-  await createMessageCampaign(token, campaign.id, almostThereTemplate.id, 'Disparo teste - falta pouco', 'almost_there');
-  await createMessageCampaign(token, campaign.id, achievedTemplate.id, 'Disparo teste - meta atingida', 'achieved');
-  await createMessageCampaign(token, campaign.id, inactiveTemplate.id, 'Disparo teste - aluno em risco', 'inactive');
+  await createMessageCampaign(token, campaign.id, 'ALMOST_THERE', 'Disparo teste - falta pouco');
+  await createMessageCampaign(token, campaign.id, 'GOAL_REACHED', 'Disparo teste - meta atingida');
+  await createMessageCampaign(token, campaign.id, 'WE_MISS_YOU', 'Disparo teste - aluno em risco');
+  await configureOfficialWhatsappTemplates(token);
 
   const emailAlmostThereTemplate = await createEmailTemplate(token, 'E-mail falta pouco demo', '{{name}}, falta pouco para sua meta', almostThereTemplateContent);
   const emailAchievedTemplate = await createEmailTemplate(token, 'E-mail meta atingida demo', '{{name}}, meta atingida no {{box_name}}', achievedTemplateContent);
@@ -81,9 +85,21 @@ async function assertApiIsRunning() {
 }
 
 async function createOwnerIfNeeded() {
-  const response = await fetch(`${apiBaseUrl}/api/v1/setup/owner`, {
+  const loginResponse = await fetch(`${apiBaseUrl}/api/v1/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: ownerEmail, password: ownerPassword }),
+  });
+  if (loginResponse.ok) {
+    return;
+  }
+  if (loginResponse.status !== 401) {
+    await assertResponse(loginResponse, 'verificar owner demo existente');
+  }
+
+  const response = await fetch(`${apiBaseUrl}/api/v1/setup/owner`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...(ownerSetupToken ? { 'X-Setup-Token': ownerSetupToken } : {}) },
     body: JSON.stringify({
       box_name: 'CrossFit Alados',
       owner_name: 'Owner Demo',
@@ -92,9 +108,6 @@ async function createOwnerIfNeeded() {
     }),
   });
 
-  if (response.ok || response.status === 400 || response.status === 409 || response.status === 500) {
-    return;
-  }
   await assertResponse(response, 'criar owner demo');
 }
 
@@ -236,30 +249,30 @@ async function createEmailCampaign(token, campaignId, templateId, name, audience
   return response.json();
 }
 
-async function createTemplate(token, name, content) {
-  const response = await authedFetch(token, '/api/v1/message-templates', {
-    method: 'POST',
-    body: JSON.stringify({
-      name,
-      content,
-    }),
-  });
-  await assertResponse(response, 'criar template demo');
-  return response.json();
-}
-
-async function createMessageCampaign(token, campaignId, templateId, name, audience) {
+async function createMessageCampaign(token, campaignId, templateType, name) {
   const response = await authedFetch(token, '/api/v1/message-campaigns', {
     method: 'POST',
     body: JSON.stringify({
       name,
       campaign_id: campaignId,
-      audience,
-      template_id: templateId,
+      template_type: templateType,
     }),
   });
   await assertResponse(response, 'criar campanha de mensagem demo');
   return response.json();
+}
+
+async function configureOfficialWhatsappTemplates(token) {
+  for (const template of officialWhatsappTemplates) {
+    const response = await authedFetch(token, '/api/v1/message-templates/' + template.type, {
+      method: 'PUT',
+      body: JSON.stringify({
+        content_sid: template.contentSid,
+        approval_status: 'APPROVED',
+      }),
+    });
+    await assertResponse(response, 'configurar template WhatsApp ' + template.type);
+  }
 }
 
 function totalpassCsv() {

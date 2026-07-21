@@ -11,6 +11,9 @@ import (
 	"strings"
 	"time"
 
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+
+	"boxengage/backend/internal/observability"
 	"boxengage/backend/internal/ports/services"
 )
 
@@ -30,11 +33,19 @@ func NewOpenAIGenerator(apiKey, model string, timeoutSeconds int) OpenAIGenerato
 	return OpenAIGenerator{
 		apiKey: apiKey,
 		model:  model,
-		client: &http.Client{Timeout: time.Duration(timeoutSeconds) * time.Second},
+		client: &http.Client{Timeout: time.Duration(timeoutSeconds) * time.Second, Transport: otelhttp.NewTransport(http.DefaultTransport)},
 	}
 }
 
-func (g OpenAIGenerator) GenerateWorkoutMessage(ctx context.Context, input services.WorkoutMessageGenerationInput) (*services.WorkoutMessageGenerationOutput, error) {
+func (g OpenAIGenerator) GenerateWorkoutMessage(ctx context.Context, input services.WorkoutMessageGenerationInput) (output *services.WorkoutMessageGenerationOutput, resultErr error) {
+	startedAt := time.Now()
+	defer func() {
+		status := "success"
+		if resultErr != nil {
+			status = "error"
+		}
+		observability.RecordGateway(ctx, "openai", "generate_workout_message", status, time.Since(startedAt))
+	}()
 	if strings.TrimSpace(g.apiKey) == "" {
 		return nil, errors.New("OPENAI_API_KEY is not configured")
 	}

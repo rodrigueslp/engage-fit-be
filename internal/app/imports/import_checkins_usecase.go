@@ -10,6 +10,7 @@ import (
 	"gorm.io/gorm"
 
 	"boxengage/backend/internal/domain"
+	"boxengage/backend/internal/observability"
 	"boxengage/backend/internal/ports/repositories"
 	"boxengage/backend/internal/ports/services"
 )
@@ -35,13 +36,25 @@ type ImportCheckinsUseCase struct {
 	checkins  repositories.CheckinRepository
 	campaigns repositories.CampaignRepository
 	rewards   repositories.RewardRepository
+	privacy   repositories.PrivacyRepository
 }
 
-func NewImportCheckinsUseCase(parser services.CheckinFileParser, imports repositories.ImportHistoryRepository, students repositories.StudentRepository, checkins repositories.CheckinRepository, campaigns repositories.CampaignRepository, rewards repositories.RewardRepository) ImportCheckinsUseCase {
-	return ImportCheckinsUseCase{parser: parser, imports: imports, students: students, checkins: checkins, campaigns: campaigns, rewards: rewards}
+func NewImportCheckinsUseCase(parser services.CheckinFileParser, imports repositories.ImportHistoryRepository, students repositories.StudentRepository, checkins repositories.CheckinRepository, campaigns repositories.CampaignRepository, rewards repositories.RewardRepository, privacy repositories.PrivacyRepository) ImportCheckinsUseCase {
+	return ImportCheckinsUseCase{parser: parser, imports: imports, students: students, checkins: checkins, campaigns: campaigns, rewards: rewards, privacy: privacy}
 }
 
-func (uc ImportCheckinsUseCase) Execute(ctx context.Context, input ImportCheckinsInput) (*ImportCheckinsOutput, error) {
+func (uc ImportCheckinsUseCase) Execute(ctx context.Context, input ImportCheckinsInput) (output *ImportCheckinsOutput, resultErr error) {
+	startedAt := time.Now()
+	defer func() {
+		status, records, checkins := "failed", 0, 0
+		if output != nil {
+			records, checkins = output.TotalRecords, output.Checkins
+		}
+		if resultErr == nil {
+			status = "success"
+		}
+		observability.RecordImport(ctx, string(input.Source), status, records, checkins, time.Since(startedAt))
+	}()
 	parsed, err := uc.parser.Parse(ctx, input.File, input.Source, input.Filename)
 	if err != nil {
 		return nil, err
@@ -64,6 +77,13 @@ func (uc ImportCheckinsUseCase) Execute(ctx context.Context, input ImportCheckin
 
 	for _, parsedCheckin := range parsed {
 		identity := studentIdentity(parsedCheckin)
+		suppressed, err := uc.privacy.IsIdentitySuppressed(ctx, input.BoxID, input.Source, identity)
+		if err != nil {
+			return nil, err
+		}
+		if suppressed {
+			continue
+		}
 		student, err := uc.students.FindByExternalID(ctx, input.BoxID, input.Source, identity)
 		if err != nil {
 			if !errors.Is(err, gorm.ErrRecordNotFound) {
@@ -165,7 +185,7 @@ func (uc ImportCheckinsUseCase) recalculateActiveCampaigns(ctx context.Context, 
 			}
 		}
 
-		rewards, err := uc.rewards.ListByCampaign(ctx, campaign.ID)
+		rewards, err := uc.rewards.ListByCampaign(ctx, boxID, campaign.ID)
 		if err != nil {
 			return err
 		}

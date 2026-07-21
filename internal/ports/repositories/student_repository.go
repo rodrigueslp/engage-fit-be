@@ -8,14 +8,15 @@ import (
 )
 
 type StudentFilters struct {
-	Source     *domain.Source
-	Search     string
-	CampaignID *domain.ID
-	Achieved   *bool
-	NearGoal   *bool
-	Inactive   *bool
-	Page       int
-	Limit      int
+	Source          *domain.Source
+	Search          string
+	CampaignID      *domain.ID
+	Achieved        *bool
+	NearGoal        *bool
+	Inactive        *bool
+	ContactableOnly bool
+	Page            int
+	Limit           int
 }
 
 type StudentRepository interface {
@@ -25,4 +26,5 @@ type StudentRepository interface {
 	Save(ctx context.Context, student *domain.Student) error
 	UpdateRiskStatus(ctx context.Context, boxID, id domain.ID, status domain.StudentRiskStatus) error
 	MarkRiskMessageSent(ctx context.Context, boxID, id domain.ID, sentAt time.Time) error
+	UpdateContactPreference(ctx context.Context, boxID, id domain.ID, status domain.ContactStatus, source string, updatedAt time.Time) error
 }

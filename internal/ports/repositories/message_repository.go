@@ -9,6 +9,7 @@ import (
 type MessageRepository interface {
 	ListTemplates(ctx context.Context, boxID domain.ID) ([]domain.MessageTemplate, error)
 	FindTemplateByID(ctx context.Context, boxID, id domain.ID) (*domain.MessageTemplate, error)
+	FindTemplateByType(ctx context.Context, boxID domain.ID, templateType domain.MessageTemplateType) (*domain.MessageTemplate, error)
 	SaveTemplate(ctx context.Context, template *domain.MessageTemplate) error
 	UpdateTemplate(ctx context.Context, template domain.MessageTemplate) error
 	DeleteTemplate(ctx context.Context, boxID, id domain.ID) error

@@ -7,11 +7,11 @@ import (
 )
 
 type RewardRepository interface {
-	ListByCampaign(ctx context.Context, campaignID domain.ID) ([]domain.Reward, error)
-	FindByID(ctx context.Context, id domain.ID) (*domain.Reward, error)
+	ListByCampaign(ctx context.Context, boxID, campaignID domain.ID) ([]domain.Reward, error)
+	FindByID(ctx context.Context, boxID, id domain.ID) (*domain.Reward, error)
 	Save(ctx context.Context, reward *domain.Reward) error
-	Update(ctx context.Context, reward domain.Reward) error
-	Delete(ctx context.Context, id domain.ID) error
+	Update(ctx context.Context, boxID domain.ID, reward domain.Reward) error
+	Delete(ctx context.Context, boxID, id domain.ID) error
 
 	ListDeliveries(ctx context.Context, boxID domain.ID) ([]domain.RewardDelivery, error)
 	ListPendingDeliveries(ctx context.Context, boxID domain.ID) ([]domain.RewardDelivery, error)

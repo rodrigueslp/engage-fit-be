@@ -54,6 +54,9 @@ type WorkoutMessageRecipient struct {
 	Phone                 string
 	Status                MessageRecipientStatus
 	ErrorMessage          string
+	ProviderMessageSID    string
+	ProviderStatus        string
+	DispatchID            ID
 	SentAt                *time.Time
 	CreatedAt             time.Time
 }

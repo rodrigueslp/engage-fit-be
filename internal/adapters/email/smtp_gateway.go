@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"net/smtp"
 	"strings"
+	"time"
 
 	"boxengage/backend/internal/domain"
+	"boxengage/backend/internal/observability"
 	"boxengage/backend/internal/ports/services"
 )
 
@@ -38,8 +40,15 @@ func (g SMTPGateway) Test(ctx context.Context, settings domain.EmailSettings) er
 	return nil
 }
 
-func (g SMTPGateway) Send(ctx context.Context, settings domain.EmailSettings, message services.EmailMessage) error {
-	_ = ctx
+func (g SMTPGateway) Send(ctx context.Context, settings domain.EmailSettings, message services.EmailMessage) (resultErr error) {
+	startedAt := time.Now()
+	defer func() {
+		status := "success"
+		if resultErr != nil {
+			status = "error"
+		}
+		observability.RecordGateway(ctx, "smtp", "send", status, time.Since(startedAt))
+	}()
 	if !settings.Enabled {
 		return fmt.Errorf("email provider is disabled")
 	}

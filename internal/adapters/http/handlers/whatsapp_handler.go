@@ -32,6 +32,14 @@ func (h WhatsappHandler) GetSettings(c *gin.Context) {
 		return
 	}
 
+	h.getForBox(c, boxID)
+}
+
+func (h WhatsappHandler) AdminGetSettings(c *gin.Context) {
+	h.getForBox(c, domain.ID(c.Param("id")))
+}
+
+func (h WhatsappHandler) getForBox(c *gin.Context, boxID domain.ID) {
 	settings, err := h.getSettings.Execute(c.Request.Context(), boxID)
 	if err != nil {
 		respondError(c, err)
@@ -53,23 +61,57 @@ func (h WhatsappHandler) UpdateSettings(c *gin.Context) {
 		respondBadRequest(c)
 		return
 	}
+	current, err := h.getSettings.Execute(c.Request.Context(), boxID)
+	if err != nil {
+		respondError(c, err)
+		return
+	}
+	current.ConnectionMode = normalizeWhatsappConnectionMode(request.ConnectionMode)
+	current.UpdatedAt = time.Now()
+	if err := h.updateSettings.Execute(c.Request.Context(), current); err != nil {
+		respondError(c, err)
+		return
+	}
+	h.getForBox(c, boxID)
+}
+
+func (h WhatsappHandler) AdminUpdateSettings(c *gin.Context) {
+	h.updateForBox(c, domain.ID(c.Param("id")))
+}
+
+func (h WhatsappHandler) updateForBox(c *gin.Context, boxID domain.ID) {
+	var request dto.WhatsappSettingsRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		respondBadRequest(c)
+		return
+	}
 
 	apiKey := strings.TrimSpace(request.APIKey)
-	if apiKey == "" {
-		current, err := h.getSettings.Execute(c.Request.Context(), boxID)
-		if err == nil {
-			apiKey = current.APIKeyEncrypted
-		}
+	current, currentErr := h.getSettings.Execute(c.Request.Context(), boxID)
+	if apiKey == "" && currentErr == nil {
+		apiKey = current.APIKeyEncrypted
+	}
+
+	connectionMode := normalizeWhatsappConnectionMode(request.ConnectionMode)
+	provider := normalizeWhatsappProvider(request.Provider)
+	baseURL := request.BaseURL
+	instanceName := request.InstanceName
+	enabled := request.Enabled
+	if connectionMode == domain.WhatsappConnectionPlatform && currentErr == nil {
+		provider = current.Provider
+		baseURL = current.BaseURL
+		instanceName = current.InstanceName
 	}
 
 	now := time.Now()
 	settings := domain.WhatsappSettings{
 		BoxID:           boxID,
-		Provider:        normalizeWhatsappProvider(request.Provider),
-		BaseURL:         request.BaseURL,
-		InstanceName:    request.InstanceName,
+		ConnectionMode:  connectionMode,
+		Provider:        provider,
+		BaseURL:         baseURL,
+		InstanceName:    instanceName,
 		APIKeyEncrypted: apiKey,
-		Enabled:         request.Enabled,
+		Enabled:         enabled,
 		CreatedAt:       now,
 		UpdatedAt:       now,
 	}
@@ -79,7 +121,12 @@ func (h WhatsappHandler) UpdateSettings(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, whatsappSettingsResponse(settings))
+	saved, err := h.getSettings.Execute(c.Request.Context(), boxID)
+	if err != nil {
+		respondError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, whatsappSettingsResponse(*saved))
 }
 
 func (h WhatsappHandler) TestSettings(c *gin.Context) {
@@ -89,8 +136,25 @@ func (h WhatsappHandler) TestSettings(c *gin.Context) {
 		return
 	}
 
+	current, err := h.getSettings.Execute(c.Request.Context(), boxID)
+	if err != nil {
+		respondError(c, err)
+		return
+	}
+	if err := h.testSettings.Execute(c.Request.Context(), *current); err != nil {
+		respondPublicError(c, http.StatusBadGateway, "whatsapp_provider_failed", "WhatsApp provider request failed")
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
+func (h WhatsappHandler) AdminTestSettings(c *gin.Context) {
+	h.testForBox(c, domain.ID(c.Param("id")))
+}
+
+func (h WhatsappHandler) testForBox(c *gin.Context, boxID domain.ID) {
 	var request dto.WhatsappSettingsRequest
-	hasDraft := c.ShouldBindJSON(&request) == nil && strings.TrimSpace(request.Provider) != ""
+	hasDraft := c.ShouldBindJSON(&request) == nil
 
 	var settings domain.WhatsappSettings
 	current, err := h.getSettings.Execute(c.Request.Context(), boxID)
@@ -104,6 +168,7 @@ func (h WhatsappHandler) TestSettings(c *gin.Context) {
 	}
 
 	if hasDraft {
+		settings.ConnectionMode = normalizeWhatsappConnectionMode(request.ConnectionMode)
 		settings.Provider = normalizeWhatsappProvider(request.Provider)
 		settings.BaseURL = request.BaseURL
 		settings.InstanceName = request.InstanceName
@@ -114,7 +179,7 @@ func (h WhatsappHandler) TestSettings(c *gin.Context) {
 	}
 
 	if err := h.testSettings.Execute(c.Request.Context(), settings); err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{"message": err.Error()})
+		respondPublicError(c, http.StatusBadGateway, "whatsapp_provider_failed", "WhatsApp provider request failed")
 		return
 	}
 
@@ -127,15 +192,25 @@ func whatsappSettingsResponse(settings domain.WhatsappSettings) dto.WhatsappSett
 		updatedAt = settings.UpdatedAt.Format("2006-01-02T15:04:05Z07:00")
 	}
 	return dto.WhatsappSettingsResponse{
-		ID:           string(settings.ID),
-		BoxID:        string(settings.BoxID),
-		Provider:     normalizeWhatsappProvider(settings.Provider),
-		BaseURL:      settings.BaseURL,
-		InstanceName: settings.InstanceName,
-		HasAPIKey:    strings.TrimSpace(settings.APIKeyEncrypted) != "",
-		UpdatedAt:    updatedAt,
-		Enabled:      settings.Enabled,
+		ID:                string(settings.ID),
+		BoxID:             string(settings.BoxID),
+		ConnectionMode:    string(normalizeWhatsappConnectionMode(string(settings.ConnectionMode))),
+		Provider:          normalizeWhatsappProvider(settings.Provider),
+		BaseURL:           settings.BaseURL,
+		InstanceName:      settings.InstanceName,
+		HasAPIKey:         strings.TrimSpace(settings.APIKeyEncrypted) != "",
+		UpdatedAt:         updatedAt,
+		Enabled:           settings.Enabled,
+		PlatformAvailable: settings.PlatformAvailable,
+		PlatformSender:    settings.PlatformSender,
 	}
+}
+
+func normalizeWhatsappConnectionMode(mode string) domain.WhatsappConnectionMode {
+	if strings.TrimSpace(strings.ToLower(mode)) == string(domain.WhatsappConnectionDedicated) {
+		return domain.WhatsappConnectionDedicated
+	}
+	return domain.WhatsappConnectionPlatform
 }
 
 func normalizeWhatsappProvider(provider string) string {

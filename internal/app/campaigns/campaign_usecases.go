@@ -138,7 +138,10 @@ func NewUpsertCampaignGoalUseCase(campaigns repositories.CampaignRepository) Ups
 	return UpsertCampaignGoalUseCase{campaigns: campaigns}
 }
 
-func (uc UpsertCampaignGoalUseCase) Execute(ctx context.Context, goal *domain.CampaignGoal) error {
+func (uc UpsertCampaignGoalUseCase) Execute(ctx context.Context, boxID domain.ID, goal *domain.CampaignGoal) error {
+	if _, err := uc.campaigns.FindByID(ctx, boxID, goal.CampaignID); err != nil {
+		return err
+	}
 	return uc.campaigns.UpsertGoal(ctx, goal)
 }
 
@@ -150,7 +153,10 @@ func NewDeleteCampaignGoalUseCase(campaigns repositories.CampaignRepository) Del
 	return DeleteCampaignGoalUseCase{campaigns: campaigns}
 }
 
-func (uc DeleteCampaignGoalUseCase) Execute(ctx context.Context, campaignID, goalID domain.ID) error {
+func (uc DeleteCampaignGoalUseCase) Execute(ctx context.Context, boxID, campaignID, goalID domain.ID) error {
+	if _, err := uc.campaigns.FindByID(ctx, boxID, campaignID); err != nil {
+		return err
+	}
 	return uc.campaigns.DeleteGoal(ctx, campaignID, goalID)
 }
 
@@ -162,7 +168,10 @@ func NewListCampaignGoalsUseCase(campaigns repositories.CampaignRepository) List
 	return ListCampaignGoalsUseCase{campaigns: campaigns}
 }
 
-func (uc ListCampaignGoalsUseCase) Execute(ctx context.Context, campaignID domain.ID) ([]domain.CampaignGoal, error) {
+func (uc ListCampaignGoalsUseCase) Execute(ctx context.Context, boxID, campaignID domain.ID) ([]domain.CampaignGoal, error) {
+	if _, err := uc.campaigns.FindByID(ctx, boxID, campaignID); err != nil {
+		return nil, err
+	}
 	return uc.campaigns.ListGoals(ctx, campaignID)
 }
 
@@ -174,7 +183,10 @@ func NewListCampaignProgressUseCase(campaigns repositories.CampaignRepository) L
 	return ListCampaignProgressUseCase{campaigns: campaigns}
 }
 
-func (uc ListCampaignProgressUseCase) Execute(ctx context.Context, campaignID domain.ID) ([]domain.CampaignProgress, error) {
+func (uc ListCampaignProgressUseCase) Execute(ctx context.Context, boxID, campaignID domain.ID) ([]domain.CampaignProgress, error) {
+	if _, err := uc.campaigns.FindByID(ctx, boxID, campaignID); err != nil {
+		return nil, err
+	}
 	return uc.campaigns.ListProgress(ctx, campaignID)
 }
 
@@ -238,7 +250,7 @@ func (uc RecalculateCampaignProgressUseCase) Execute(ctx context.Context, boxID,
 		}
 	}
 
-	rewards, err := uc.rewards.ListByCampaign(ctx, campaignID)
+	rewards, err := uc.rewards.ListByCampaign(ctx, boxID, campaignID)
 	if err != nil {
 		return err
 	}

@@ -166,7 +166,12 @@ func (h CampaignsHandler) UpdateGoal(c *gin.Context) {
 }
 
 func (h CampaignsHandler) DeleteGoal(c *gin.Context) {
-	if err := h.deleteGoal.Execute(c.Request.Context(), domain.ID(c.Param("id")), domain.ID(c.Param("goalId"))); err != nil {
+	boxID, err := middleware.BoxID(c)
+	if err != nil {
+		respondUnauthorized(c)
+		return
+	}
+	if err := h.deleteGoal.Execute(c.Request.Context(), boxID, domain.ID(c.Param("id")), domain.ID(c.Param("goalId"))); err != nil {
 		respondError(c, err)
 		return
 	}
@@ -174,7 +179,12 @@ func (h CampaignsHandler) DeleteGoal(c *gin.Context) {
 }
 
 func (h CampaignsHandler) ListGoals(c *gin.Context) {
-	result, err := h.listGoals.Execute(c.Request.Context(), domain.ID(c.Param("id")))
+	boxID, err := middleware.BoxID(c)
+	if err != nil {
+		respondUnauthorized(c)
+		return
+	}
+	result, err := h.listGoals.Execute(c.Request.Context(), boxID, domain.ID(c.Param("id")))
 	if err != nil {
 		respondError(c, err)
 		return
@@ -198,7 +208,7 @@ func (h CampaignsHandler) Progress(c *gin.Context) {
 		respondUnauthorized(c)
 		return
 	}
-	result, err := h.listProgress.Execute(c.Request.Context(), domain.ID(c.Param("id")))
+	result, err := h.listProgress.Execute(c.Request.Context(), boxID, domain.ID(c.Param("id")))
 	if err != nil {
 		respondError(c, err)
 		return
@@ -268,6 +278,11 @@ func campaignRequest(c *gin.Context) (parsedCampaignRequest, bool) {
 }
 
 func (h CampaignsHandler) upsertGoalRequest(c *gin.Context, goalID string) {
+	boxID, err := middleware.BoxID(c)
+	if err != nil {
+		respondUnauthorized(c)
+		return
+	}
 	var request dto.CampaignGoalRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
 		respondBadRequest(c)
@@ -280,7 +295,7 @@ func (h CampaignsHandler) upsertGoalRequest(c *gin.Context, goalID string) {
 		Source:         domain.Source(request.Source),
 		TargetCheckins: request.TargetCheckins,
 	}
-	if err := h.upsertGoal.Execute(c.Request.Context(), &goal); err != nil {
+	if err := h.upsertGoal.Execute(c.Request.Context(), boxID, &goal); err != nil {
 		respondError(c, err)
 		return
 	}
@@ -299,7 +314,7 @@ func (h CampaignsHandler) progressFiltered(c *gin.Context, include func(domain.C
 		respondUnauthorized(c)
 		return
 	}
-	result, err := h.listProgress.Execute(c.Request.Context(), domain.ID(c.Param("id")))
+	result, err := h.listProgress.Execute(c.Request.Context(), boxID, domain.ID(c.Param("id")))
 	if err != nil {
 		respondError(c, err)
 		return

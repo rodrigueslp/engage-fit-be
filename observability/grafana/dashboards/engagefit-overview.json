@@ -1,0 +1,80 @@
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "graphTooltip": 1,
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Requisições (5 min)",
+      "id": 1,
+      "gridPos": {"h": 8, "w": 6, "x": 0, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "sum(increase(engagefit_http_server_requests_total[5m]))", "refId": "A"}]
+    },
+    {
+      "type": "stat",
+      "title": "Erros 5xx (5 min)",
+      "id": 2,
+      "gridPos": {"h": 8, "w": 6, "x": 6, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "sum(increase(engagefit_http_server_requests_total{http_response_status_code=~\"5..\"}[5m]))", "refId": "A"}]
+    },
+    {
+      "type": "timeseries",
+      "title": "Latência p95 por rota",
+      "id": 3,
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "histogram_quantile(0.95, sum by (le, http_route) (rate(engagefit_http_server_duration_seconds_bucket[5m])))", "legendFormat": "{{http_route}}", "refId": "A"}]
+    },
+    {
+      "type": "timeseries",
+      "title": "Volume por status",
+      "id": 4,
+      "gridPos": {"h": 9, "w": 12, "x": 0, "y": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "sum by (http_response_status_code) (rate(engagefit_http_server_requests_total[5m]))", "legendFormat": "HTTP {{http_response_status_code}}", "refId": "A"}]
+    },
+    {
+      "type": "logs",
+      "title": "Logs da API",
+      "id": 5,
+      "gridPos": {"h": 9, "w": 12, "x": 12, "y": 8},
+      "datasource": {"type": "loki", "uid": "loki"},
+      "targets": [{"expr": "{service_name=\"engagefit-api\"}", "refId": "A"}]
+    },
+    {
+      "type": "stat",
+      "title": "Importações com falha (1h)",
+      "id": 6,
+      "gridPos": {"h": 7, "w": 6, "x": 0, "y": 17},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "sum(increase(engagefit_imports_operations_total{import_status=\"failed\"}[1h]))", "refId": "A"}]
+    },
+    {
+      "type": "timeseries",
+      "title": "Automações por resultado",
+      "id": 7,
+      "gridPos": {"h": 7, "w": 9, "x": 6, "y": 17},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "sum by (automation_status, automation_mode) (increase(engagefit_automation_runs_total[1h]))", "legendFormat": "{{automation_mode}} / {{automation_status}}", "refId": "A"}]
+    },
+    {
+      "type": "timeseries",
+      "title": "Gateways por resultado",
+      "id": 8,
+      "gridPos": {"h": 7, "w": 9, "x": 15, "y": 17},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "sum by (gateway_name, gateway_operation, gateway_status) (increase(engagefit_gateway_calls_total[1h]))", "legendFormat": "{{gateway_name}} / {{gateway_operation}} / {{gateway_status}}", "refId": "A"}]
+    }
+  ],
+  "refresh": "15s",
+  "schemaVersion": 41,
+  "tags": ["engagefit", "opentelemetry"],
+  "templating": {"list": []},
+  "time": {"from": "now-1h", "to": "now"},
+  "timezone": "browser",
+  "title": "EngageFit - Visão geral",
+  "uid": "engagefit-overview",
+  "version": 1
+}

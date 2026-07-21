@@ -2,14 +2,21 @@ package automation
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"log/slog"
+	"regexp"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 
 	"boxengage/backend/internal/app/campaigns"
 	"boxengage/backend/internal/app/messages"
 	"boxengage/backend/internal/domain"
+	"boxengage/backend/internal/observability"
 	"boxengage/backend/internal/ports/repositories"
+	"gorm.io/gorm"
 )
 
 const (
@@ -20,6 +27,12 @@ const (
 	ScheduleModeInactive    = "send_inactive"
 	defaultDaysOfWeek       = "0,1,2,3,4,5,6"
 	defaultTimezone         = "America/Sao_Paulo"
+)
+
+var (
+	ErrInvalidSchedule       = errors.New("invalid automation schedule")
+	ErrInvalidIdempotencyKey = errors.New("invalid idempotency key")
+	validIdempotencyKey      = regexp.MustCompile(`^[A-Za-z0-9._:-]{1,128}$`)
 )
 
 type ListRunsUseCase struct {
@@ -51,14 +64,17 @@ type CreateRunUseCase struct {
 func NewCreateRunUseCase(runs repositories.AutomationRepository) CreateRunUseCase {
 	return CreateRunUseCase{runs: runs}
 }
-func (uc CreateRunUseCase) Execute(ctx context.Context, run *domain.AutomationRun) error {
+func (uc CreateRunUseCase) Execute(ctx context.Context, run *domain.AutomationRun) (*domain.AutomationRun, bool, error) {
+	if run.ExecutionKey != "" && !validIdempotencyKey.MatchString(run.ExecutionKey) {
+		return nil, false, fmt.Errorf("%w: use 1-128 safe characters", ErrInvalidIdempotencyKey)
+	}
 	if run.Status == "" {
 		run.Status = "running"
 	}
 	if run.StartedAt.IsZero() {
 		run.StartedAt = time.Now()
 	}
-	return uc.runs.SaveRun(ctx, run)
+	return startAutomationRun(ctx, uc.runs, run)
 }
 
 type UpdateRunUseCase struct {
@@ -102,7 +118,9 @@ func NewCreateScheduleUseCase(automation repositories.AutomationRepository) Crea
 	return CreateScheduleUseCase{automation: automation}
 }
 func (uc CreateScheduleUseCase) Execute(ctx context.Context, schedule *domain.AutomationSchedule) error {
-	normalizeSchedule(schedule)
+	if err := normalizeAndValidateSchedule(schedule); err != nil {
+		return err
+	}
 	return uc.automation.SaveSchedule(ctx, schedule)
 }
 
@@ -114,7 +132,9 @@ func NewUpdateScheduleUseCase(automation repositories.AutomationRepository) Upda
 	return UpdateScheduleUseCase{automation: automation}
 }
 func (uc UpdateScheduleUseCase) Execute(ctx context.Context, schedule domain.AutomationSchedule) error {
-	normalizeSchedule(&schedule)
+	if err := normalizeAndValidateSchedule(&schedule); err != nil {
+		return err
+	}
 	return uc.automation.UpdateSchedule(ctx, schedule)
 }
 
@@ -130,40 +150,67 @@ func (uc DeleteScheduleUseCase) Execute(ctx context.Context, boxID, id domain.ID
 }
 
 type ExecuteScheduleUseCase struct {
-	automation  repositories.AutomationRepository
-	campaigns   repositories.CampaignRepository
-	messages    repositories.MessageRepository
-	recalculate campaigns.RecalculateCampaignProgressUseCase
-	sendMessage messages.SendMessageCampaignUseCase
+	automation    repositories.AutomationRepository
+	campaigns     repositories.CampaignRepository
+	messages      repositories.MessageRepository
+	recalculate   campaigns.RecalculateCampaignProgressUseCase
+	sendMessage   messages.SendMessageCampaignUseCase
+	staleAfter    time.Duration
+	catchupWindow time.Duration
 }
 
-func NewExecuteScheduleUseCase(automation repositories.AutomationRepository, campaignsRepo repositories.CampaignRepository, messageRepo repositories.MessageRepository, recalculate campaigns.RecalculateCampaignProgressUseCase, sendMessage messages.SendMessageCampaignUseCase) ExecuteScheduleUseCase {
-	return ExecuteScheduleUseCase{automation: automation, campaigns: campaignsRepo, messages: messageRepo, recalculate: recalculate, sendMessage: sendMessage}
+func NewExecuteScheduleUseCase(automation repositories.AutomationRepository, campaignsRepo repositories.CampaignRepository, messageRepo repositories.MessageRepository, recalculate campaigns.RecalculateCampaignProgressUseCase, sendMessage messages.SendMessageCampaignUseCase, timings ...time.Duration) ExecuteScheduleUseCase {
+	timeout := 2 * time.Hour
+	if len(timings) > 0 && timings[0] > 0 {
+		timeout = timings[0]
+	}
+	catchup := 15 * time.Minute
+	if len(timings) > 1 && timings[1] > 0 {
+		catchup = timings[1]
+	}
+	return ExecuteScheduleUseCase{automation: automation, campaigns: campaignsRepo, messages: messageRepo, recalculate: recalculate, sendMessage: sendMessage, staleAfter: timeout, catchupWindow: catchup}
 }
 
 func (uc ExecuteScheduleUseCase) Execute(ctx context.Context, boxID, scheduleID domain.ID) (*domain.AutomationRun, error) {
+	return uc.ExecuteWithKey(ctx, boxID, scheduleID, "")
+}
+
+func (uc ExecuteScheduleUseCase) ExecuteWithKey(ctx context.Context, boxID, scheduleID domain.ID, executionKey string) (*domain.AutomationRun, error) {
+	if executionKey != "" && !validIdempotencyKey.MatchString(executionKey) {
+		return nil, fmt.Errorf("%w: use 1-128 safe characters", ErrInvalidIdempotencyKey)
+	}
 	schedule, err := uc.automation.FindScheduleByID(ctx, boxID, scheduleID)
 	if err != nil {
 		return nil, err
 	}
-	return uc.ExecuteSchedule(ctx, *schedule)
+	return uc.executeSchedule(ctx, *schedule, executionKey, nil, true)
 }
 
 func (uc ExecuteScheduleUseCase) ExecuteSchedule(ctx context.Context, schedule domain.AutomationSchedule) (*domain.AutomationRun, error) {
+	return uc.executeSchedule(ctx, schedule, "", nil, true)
+}
+
+func (uc ExecuteScheduleUseCase) executeSchedule(ctx context.Context, schedule domain.AutomationSchedule, executionKey string, scheduledFor *time.Time, updateLastRun bool) (*domain.AutomationRun, error) {
 	now := time.Now()
-	run := domain.AutomationRun{BoxID: schedule.BoxID, Status: "running", Source: "schedule", Filename: schedule.Name, StartedAt: now}
-	if err := uc.automation.SaveRun(ctx, &run); err != nil {
+	run := domain.AutomationRun{BoxID: schedule.BoxID, ScheduleID: schedule.ID, ExecutionKey: executionKey, ScheduledFor: scheduledFor, Status: "running", Source: "schedule", Mode: schedule.Mode, Filename: schedule.Name, StartedAt: now}
+	startedRun, existing, err := startAutomationRun(ctx, uc.automation, &run)
+	if err != nil {
 		return nil, err
 	}
+	if existing {
+		return startedRun, nil
+	}
+	run = *startedRun
+	run.Mode = schedule.Mode
 
-	var errors []string
+	var failures []string
 	activeCampaigns, err := uc.campaigns.ListActive(ctx, schedule.BoxID)
 	if err != nil {
-		errors = append(errors, err.Error())
+		failures = append(failures, err.Error())
 	} else if shouldRecalculate(schedule.Mode) {
 		for _, campaign := range activeCampaigns {
 			if err := uc.recalculate.Execute(ctx, schedule.BoxID, campaign.ID); err != nil {
-				errors = append(errors, err.Error())
+				failures = append(failures, err.Error())
 				continue
 			}
 			run.RecalculatedCampaigns++
@@ -177,7 +224,7 @@ func (uc ExecuteScheduleUseCase) ExecuteSchedule(ctx context.Context, schedule d
 		}
 		messageCampaigns, err := uc.messages.ListCampaigns(ctx, schedule.BoxID)
 		if err != nil {
-			errors = append(errors, err.Error())
+			failures = append(failures, err.Error())
 		} else {
 			for _, messageCampaign := range messageCampaigns {
 				if !activeIDs[messageCampaign.CampaignID] || !audienceMatchesMode(schedule.Mode, messageCampaign.Audience) || (messageCampaign.SentAt != nil && !schedule.AllowResend) {
@@ -187,7 +234,7 @@ func (uc ExecuteScheduleUseCase) ExecuteSchedule(ctx context.Context, schedule d
 				result, err := uc.sendMessage.Execute(ctx, schedule.BoxID, messageCampaign.ID)
 				if err != nil {
 					run.FailedMessages++
-					errors = append(errors, err.Error())
+					failures = append(failures, err.Error())
 					continue
 				}
 				run.SentMessages += result.Sent
@@ -199,39 +246,66 @@ func (uc ExecuteScheduleUseCase) ExecuteSchedule(ctx context.Context, schedule d
 	finishedAt := time.Now()
 	run.FinishedAt = &finishedAt
 	run.Status = "success"
-	if len(errors) > 0 {
+	if len(failures) > 0 {
 		run.Status = "failed"
-		run.ErrorMessage = strings.Join(errors, " | ")
+		run.ErrorMessage = strings.Join(failures, " | ")
 	}
 	if err := uc.automation.UpdateRun(ctx, run); err != nil {
 		return nil, err
 	}
 
-	schedule.LastRunAt = &finishedAt
-	_ = uc.automation.UpdateSchedule(ctx, schedule)
+	if updateLastRun {
+		if err := uc.automation.MarkScheduleRun(ctx, schedule.BoxID, schedule.ID, finishedAt); err != nil {
+			return &run, err
+		}
+	}
 	return &run, nil
 }
 
 func (uc ExecuteScheduleUseCase) ExecuteDue(ctx context.Context, now time.Time) ([]domain.AutomationRun, error) {
+	var executionErrors []error
+	staleRuns, err := uc.automation.FailStaleRuns(ctx, now.Add(-uc.staleAfter))
+	if err != nil {
+		executionErrors = append(executionErrors, fmt.Errorf("mark stale automation runs: %w", err))
+	} else if staleRuns > 0 {
+		observability.RecordStaleAutomationRuns(ctx, staleRuns)
+		slog.WarnContext(ctx, "automation_stale_runs_failed", "count", staleRuns, "timeout_minutes", uc.staleAfter.Minutes())
+	}
 	schedules, err := uc.automation.ListEnabledSchedules(ctx)
 	if err != nil {
-		return nil, err
+		return nil, errors.Join(append(executionErrors, err)...)
 	}
 	runs := []domain.AutomationRun{}
 	for _, schedule := range schedules {
-		if !IsScheduleDue(schedule, now) {
+		if !IsScheduleDueWithin(schedule, now, uc.catchupWindow) {
 			continue
 		}
-		run, err := uc.ExecuteSchedule(ctx, schedule)
+		scheduledFor := scheduledTime(schedule, now).UTC()
+		claimed, err := uc.automation.ClaimSchedule(ctx, schedule.BoxID, schedule.ID, scheduledFor)
 		if err != nil {
-			return runs, err
+			executionErrors = append(executionErrors, fmt.Errorf("claim schedule %s: %w", schedule.ID, err))
+			continue
+		}
+		if !claimed {
+			continue
+		}
+		schedule.LastRunAt = &scheduledFor
+		executionKey := fmt.Sprintf("schedule:%s:%s", schedule.ID, scheduledFor.Format("20060102T1504Z"))
+		run, err := uc.executeSchedule(ctx, schedule, executionKey, &scheduledFor, false)
+		if err != nil {
+			executionErrors = append(executionErrors, fmt.Errorf("execute schedule %s: %w", schedule.ID, err))
+			continue
 		}
 		runs = append(runs, *run)
 	}
-	return runs, nil
+	return runs, errors.Join(executionErrors...)
 }
 
 func IsScheduleDue(schedule domain.AutomationSchedule, now time.Time) bool {
+	return IsScheduleDueWithin(schedule, now, time.Minute)
+}
+
+func IsScheduleDueWithin(schedule domain.AutomationSchedule, now time.Time, catchupWindow time.Duration) bool {
 	if !schedule.Enabled {
 		return false
 	}
@@ -243,37 +317,98 @@ func IsScheduleDue(schedule domain.AutomationSchedule, now time.Time) bool {
 	if !dayAllowed(schedule.DaysOfWeek, int(localNow.Weekday())) {
 		return false
 	}
-	if localNow.Format("15:04") != schedule.RunTime {
+	scheduledFor := scheduledTime(schedule, now)
+	if localNow.Before(scheduledFor) || !localNow.Before(scheduledFor.Add(catchupWindow)) {
 		return false
 	}
-	if schedule.LastRunAt != nil && schedule.LastRunAt.In(location).Format("2006-01-02 15:04") == localNow.Format("2006-01-02 15:04") {
-		return false
+	if schedule.LastRunAt != nil {
+		lastRun := schedule.LastRunAt.In(location)
+		if !lastRun.Before(scheduledFor) && lastRun.Format("2006-01-02") == scheduledFor.Format("2006-01-02") {
+			return false
+		}
 	}
 	return true
 }
 
-func normalizeSchedule(schedule *domain.AutomationSchedule) {
-	schedule.Mode = normalizeMode(schedule.Mode)
+func scheduledTime(schedule domain.AutomationSchedule, now time.Time) time.Time {
+	location, err := time.LoadLocation(scheduleTimezone(schedule.Timezone))
+	if err != nil {
+		location = time.FixedZone("BRT", -3*60*60)
+	}
+	localNow := now.In(location)
+	parsed, err := time.Parse("15:04", schedule.RunTime)
+	if err != nil {
+		return localNow
+	}
+	return time.Date(localNow.Year(), localNow.Month(), localNow.Day(), parsed.Hour(), parsed.Minute(), 0, 0, location)
+}
+
+func normalizeAndValidateSchedule(schedule *domain.AutomationSchedule) error {
+	schedule.Name = strings.TrimSpace(schedule.Name)
+	if schedule.Name == "" || len(schedule.Name) > 255 {
+		return fmt.Errorf("%w: name is required and must have at most 255 characters", ErrInvalidSchedule)
+	}
+	schedule.Mode = strings.TrimSpace(schedule.Mode)
+	if schedule.Mode == "" {
+		schedule.Mode = ScheduleModeFullDaily
+	}
+	if !validScheduleMode(schedule.Mode) {
+		return fmt.Errorf("%w: mode is invalid", ErrInvalidSchedule)
+	}
 	if strings.TrimSpace(schedule.RunTime) == "" {
 		schedule.RunTime = "08:00"
 	}
-	schedule.Timezone = scheduleTimezone(schedule.Timezone)
-	if strings.TrimSpace(schedule.DaysOfWeek) == "" {
-		schedule.DaysOfWeek = defaultDaysOfWeek
+	parsedRunTime, err := time.Parse("15:04", schedule.RunTime)
+	if err != nil || parsedRunTime.Format("15:04") != schedule.RunTime {
+		return fmt.Errorf("%w: run_time must use HH:MM", ErrInvalidSchedule)
 	}
+	schedule.Timezone = scheduleTimezone(schedule.Timezone)
+	if _, err := time.LoadLocation(schedule.Timezone); err != nil {
+		return fmt.Errorf("%w: timezone is invalid", ErrInvalidSchedule)
+	}
+	normalizedDays, err := normalizeDaysOfWeek(schedule.DaysOfWeek)
+	if err != nil {
+		return err
+	}
+	schedule.DaysOfWeek = normalizedDays
 	if schedule.CreatedAt.IsZero() {
 		schedule.CreatedAt = time.Now()
 	}
 	schedule.UpdatedAt = time.Now()
+	return nil
 }
 
-func normalizeMode(mode string) string {
-	switch strings.TrimSpace(mode) {
+func validScheduleMode(mode string) bool {
+	switch mode {
 	case ScheduleModeFullDaily, ScheduleModeRecalculate, ScheduleModeAlmostThere, ScheduleModeAchieved, ScheduleModeInactive:
-		return strings.TrimSpace(mode)
+		return true
 	default:
-		return ScheduleModeFullDaily
+		return false
 	}
+}
+
+func normalizeDaysOfWeek(days string) (string, error) {
+	if strings.TrimSpace(days) == "" {
+		return defaultDaysOfWeek, nil
+	}
+	seen := make(map[int]bool)
+	for _, part := range strings.Split(days, ",") {
+		day, err := strconv.Atoi(strings.TrimSpace(part))
+		if err != nil || day < 0 || day > 6 {
+			return "", fmt.Errorf("%w: days_of_week must contain values from 0 to 6", ErrInvalidSchedule)
+		}
+		seen[day] = true
+	}
+	values := make([]int, 0, len(seen))
+	for day := range seen {
+		values = append(values, day)
+	}
+	sort.Ints(values)
+	parts := make([]string, 0, len(values))
+	for _, day := range values {
+		parts = append(parts, fmt.Sprintf("%d", day))
+	}
+	return strings.Join(parts, ","), nil
 }
 
 func scheduleTimezone(timezone string) string {
@@ -316,4 +451,25 @@ func dayAllowed(days string, weekday int) bool {
 		}
 	}
 	return false
+}
+
+func startAutomationRun(ctx context.Context, repository repositories.AutomationRepository, run *domain.AutomationRun) (*domain.AutomationRun, bool, error) {
+	if run.ExecutionKey != "" {
+		existing, err := repository.FindRunByExecutionKey(ctx, run.BoxID, run.ExecutionKey)
+		if err == nil {
+			return existing, true, nil
+		}
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, false, err
+		}
+	}
+	if err := repository.SaveRun(ctx, run); err != nil {
+		if run.ExecutionKey != "" {
+			if existing, findErr := repository.FindRunByExecutionKey(ctx, run.BoxID, run.ExecutionKey); findErr == nil {
+				return existing, true, nil
+			}
+		}
+		return nil, false, err
+	}
+	return run, false, nil
 }

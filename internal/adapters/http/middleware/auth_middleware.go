@@ -2,34 +2,38 @@ package middleware
 
 import (
 	"net/http"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 
+	"boxengage/backend/internal/adapters/http/apiresponse"
+	"boxengage/backend/internal/ports/repositories"
 	"boxengage/backend/internal/ports/services"
 )
 
-func Auth(tokens services.TokenService) gin.HandlerFunc {
+func Auth(tokens services.TokenService, users repositories.UserRepository, sessionConfig ...SessionConfig) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		header := c.GetHeader("Authorization")
-		if header == "" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"message": "missing authorization header"})
+		config := SessionConfig{}
+		if len(sessionConfig) > 0 {
+			config = sessionConfig[0]
+		}
+		token, transport := tokenFromRequest(c, config)
+		if token == "" {
+			apiresponse.AbortError(c, http.StatusUnauthorized, "session_missing", "missing session")
 			return
 		}
-
-		parts := strings.SplitN(header, " ", 2)
-		if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"message": "invalid authorization header"})
-			return
-		}
-
-		claims, err := tokens.Validate(c.Request.Context(), parts[1])
+		claims, err := tokens.Validate(c.Request.Context(), token)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"message": "invalid token"})
+			apiresponse.AbortError(c, http.StatusUnauthorized, "session_invalid", "invalid session")
+			return
+		}
+		user, err := users.FindByID(c.Request.Context(), claims.UserID)
+		if err != nil || claims.AuthVersion < 1 || user.AuthVersion != claims.AuthVersion || user.Role != claims.Role || user.BoxID != claims.BoxID {
+			apiresponse.AbortError(c, http.StatusUnauthorized, "session_invalid", "invalid session")
 			return
 		}
 
-		SetAuthContext(c, claims.UserID, claims.BoxID, claims.Role)
+		SetAuthContext(c, user.ID, user.BoxID, user.Role)
+		c.Set(authTransportKey, transport)
 		c.Next()
 	}
 }

@@ -14,7 +14,8 @@ const (
 type UserRole string
 
 const (
-	UserRoleOwner UserRole = "OWNER"
+	UserRoleOwner         UserRole = "OWNER"
+	UserRolePlatformAdmin UserRole = "PLATFORM_ADMIN"
 )
 
 type StudentRiskStatus string
@@ -34,6 +35,23 @@ const (
 	MessageAudienceAchieved    MessageAudience = "achieved"
 	MessageAudienceInactive    MessageAudience = "inactive"
 	MessageAudienceAll         MessageAudience = "all"
+)
+
+type MessageTemplateType string
+
+const (
+	MessageTemplateAlmostThere MessageTemplateType = "ALMOST_THERE"
+	MessageTemplateGoalReached MessageTemplateType = "GOAL_REACHED"
+	MessageTemplateWeMissYou   MessageTemplateType = "WE_MISS_YOU"
+)
+
+type MessageTemplateApprovalStatus string
+
+const (
+	MessageTemplateNotConfigured MessageTemplateApprovalStatus = "NOT_CONFIGURED"
+	MessageTemplatePending       MessageTemplateApprovalStatus = "PENDING"
+	MessageTemplateApproved      MessageTemplateApprovalStatus = "APPROVED"
+	MessageTemplateRejected      MessageTemplateApprovalStatus = "REJECTED"
 )
 
 type MessageRecipientStatus string

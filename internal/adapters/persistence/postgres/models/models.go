@@ -12,28 +12,33 @@ type BoxModel struct {
 }
 
 type UserModel struct {
-	ID           string `gorm:"primaryKey"`
-	BoxID        string `gorm:"index"`
+	ID           string  `gorm:"primaryKey"`
+	BoxID        *string `gorm:"index"`
 	Name         string
 	Email        string `gorm:"uniqueIndex"`
 	PasswordHash string
+	AuthVersion  int
 	Role         string
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 }
 
 type StudentModel struct {
-	ID                string `gorm:"primaryKey"`
-	BoxID             string `gorm:"index"`
-	Name              string
-	Email             string
-	Phone             string
-	Source            string `gorm:"index"`
-	ExternalID        string `gorm:"index"`
-	RiskStatus        string
-	RiskLastMessageAt *time.Time
-	CreatedAt         time.Time
-	UpdatedAt         time.Time
+	ID                     string `gorm:"primaryKey"`
+	BoxID                  string `gorm:"index"`
+	Name                   string
+	Email                  string
+	Phone                  string
+	Source                 string `gorm:"index"`
+	ExternalID             string `gorm:"index"`
+	RiskStatus             string
+	RiskLastMessageAt      *time.Time
+	ContactStatus          string
+	ContactStatusUpdatedAt *time.Time
+	ContactStatusSource    string
+	AnonymizedAt           *time.Time
+	CreatedAt              time.Time
+	UpdatedAt              time.Time
 }
 
 type ImportHistoryModel struct {
@@ -113,6 +118,7 @@ type RewardDeliveryModel struct {
 type WhatsappSettingsModel struct {
 	ID              string `gorm:"primaryKey"`
 	BoxID           string `gorm:"uniqueIndex"`
+	ConnectionMode  string
 	Provider        string
 	BaseURL         string
 	InstanceName    string
@@ -123,35 +129,43 @@ type WhatsappSettingsModel struct {
 }
 
 type MessageTemplateModel struct {
-	ID         string `gorm:"primaryKey"`
-	BoxID      string `gorm:"index"`
-	Name       string
-	Content    string
-	ContentSID string `gorm:"column:content_sid"`
-	CreatedAt  time.Time
-	UpdatedAt  time.Time
+	ID             string `gorm:"primaryKey"`
+	BoxID          string `gorm:"index"`
+	Name           string
+	Content        string
+	ContentSID     string `gorm:"column:content_sid"`
+	TemplateType   string `gorm:"column:template_type"`
+	Provider       string
+	ApprovalStatus string
+	Language       string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
 }
 
 type MessageCampaignModel struct {
-	ID         string `gorm:"primaryKey"`
-	BoxID      string `gorm:"index"`
-	CampaignID string `gorm:"index"`
-	Name       string
-	Audience   string
-	TemplateID string
-	SentAt     *time.Time
-	CreatedAt  time.Time
+	ID           string `gorm:"primaryKey"`
+	BoxID        string `gorm:"index"`
+	CampaignID   string `gorm:"index"`
+	Name         string
+	Audience     string
+	TemplateID   string
+	TemplateType string `gorm:"column:template_type"`
+	SentAt       *time.Time
+	CreatedAt    time.Time
 }
 
 type MessageRecipientModel struct {
-	ID                string `gorm:"primaryKey"`
-	MessageCampaignID string `gorm:"index"`
-	StudentID         string
-	Phone             string
-	Status            string
-	ErrorMessage      string
-	SentAt            *time.Time
-	CreatedAt         time.Time
+	ID                 string `gorm:"primaryKey"`
+	MessageCampaignID  string `gorm:"index"`
+	StudentID          string
+	Phone              string
+	Status             string
+	ErrorMessage       string
+	ProviderMessageSID *string `gorm:"column:provider_message_sid"`
+	ProviderStatus     string
+	DispatchID         *string
+	SentAt             *time.Time
+	CreatedAt          time.Time
 }
 
 type EmailSettingsModel struct {
@@ -204,6 +218,9 @@ type EmailRecipientModel struct {
 type AutomationRunModel struct {
 	ID                      string `gorm:"primaryKey"`
 	BoxID                   string `gorm:"index"`
+	ScheduleID              *string
+	ExecutionKey            string
+	ScheduledFor            *time.Time
 	Status                  string `gorm:"index"`
 	Source                  string
 	Filename                string
@@ -269,6 +286,9 @@ type WorkoutMessageRecipientModel struct {
 	Phone                 string
 	Status                string `gorm:"index"`
 	ErrorMessage          string
+	ProviderMessageSID    *string `gorm:"column:provider_message_sid"`
+	ProviderStatus        string
+	DispatchID            *string
 	SentAt                *time.Time
 	CreatedAt             time.Time
 }

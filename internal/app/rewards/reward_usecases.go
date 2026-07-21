@@ -8,7 +8,8 @@ import (
 )
 
 type CreateRewardUseCase struct {
-	rewards repositories.RewardRepository
+	rewards   repositories.RewardRepository
+	campaigns repositories.CampaignRepository
 }
 
 type UpdateRewardUseCase struct {
@@ -19,8 +20,8 @@ func NewUpdateRewardUseCase(rewards repositories.RewardRepository) UpdateRewardU
 	return UpdateRewardUseCase{rewards: rewards}
 }
 
-func (uc UpdateRewardUseCase) Execute(ctx context.Context, reward domain.Reward) error {
-	return uc.rewards.Update(ctx, reward)
+func (uc UpdateRewardUseCase) Execute(ctx context.Context, boxID domain.ID, reward domain.Reward) error {
+	return uc.rewards.Update(ctx, boxID, reward)
 }
 
 type DeleteRewardUseCase struct {
@@ -31,20 +32,24 @@ func NewDeleteRewardUseCase(rewards repositories.RewardRepository) DeleteRewardU
 	return DeleteRewardUseCase{rewards: rewards}
 }
 
-func (uc DeleteRewardUseCase) Execute(ctx context.Context, rewardID domain.ID) error {
-	return uc.rewards.Delete(ctx, rewardID)
+func (uc DeleteRewardUseCase) Execute(ctx context.Context, boxID, rewardID domain.ID) error {
+	return uc.rewards.Delete(ctx, boxID, rewardID)
 }
 
-func NewCreateRewardUseCase(rewards repositories.RewardRepository) CreateRewardUseCase {
-	return CreateRewardUseCase{rewards: rewards}
+func NewCreateRewardUseCase(rewards repositories.RewardRepository, campaigns repositories.CampaignRepository) CreateRewardUseCase {
+	return CreateRewardUseCase{rewards: rewards, campaigns: campaigns}
 }
 
-func (uc CreateRewardUseCase) Execute(ctx context.Context, reward *domain.Reward) error {
+func (uc CreateRewardUseCase) Execute(ctx context.Context, boxID domain.ID, reward *domain.Reward) error {
+	if _, err := uc.campaigns.FindByID(ctx, boxID, reward.CampaignID); err != nil {
+		return err
+	}
 	return uc.rewards.Save(ctx, reward)
 }
 
 type ListRewardsUseCase struct {
-	rewards repositories.RewardRepository
+	rewards   repositories.RewardRepository
+	campaigns repositories.CampaignRepository
 }
 
 type GetRewardUseCase struct {
@@ -55,16 +60,19 @@ func NewGetRewardUseCase(rewards repositories.RewardRepository) GetRewardUseCase
 	return GetRewardUseCase{rewards: rewards}
 }
 
-func (uc GetRewardUseCase) Execute(ctx context.Context, rewardID domain.ID) (*domain.Reward, error) {
-	return uc.rewards.FindByID(ctx, rewardID)
+func (uc GetRewardUseCase) Execute(ctx context.Context, boxID, rewardID domain.ID) (*domain.Reward, error) {
+	return uc.rewards.FindByID(ctx, boxID, rewardID)
 }
 
-func NewListRewardsUseCase(rewards repositories.RewardRepository) ListRewardsUseCase {
-	return ListRewardsUseCase{rewards: rewards}
+func NewListRewardsUseCase(rewards repositories.RewardRepository, campaigns repositories.CampaignRepository) ListRewardsUseCase {
+	return ListRewardsUseCase{rewards: rewards, campaigns: campaigns}
 }
 
-func (uc ListRewardsUseCase) Execute(ctx context.Context, campaignID domain.ID) ([]domain.Reward, error) {
-	return uc.rewards.ListByCampaign(ctx, campaignID)
+func (uc ListRewardsUseCase) Execute(ctx context.Context, boxID, campaignID domain.ID) ([]domain.Reward, error) {
+	if _, err := uc.campaigns.FindByID(ctx, boxID, campaignID); err != nil {
+		return nil, err
+	}
+	return uc.rewards.ListByCampaign(ctx, boxID, campaignID)
 }
 
 type ListPendingRewardDeliveriesUseCase struct {

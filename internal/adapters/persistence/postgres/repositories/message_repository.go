@@ -30,6 +30,16 @@ func (r MessageGormRepository) FindTemplateByID(ctx context.Context, boxID, id d
 	return &template, nil
 }
 
+func (r MessageGormRepository) FindTemplateByType(ctx context.Context, boxID domain.ID, templateType domain.MessageTemplateType) (*domain.MessageTemplate, error) {
+	var model models.MessageTemplateModel
+	if err := r.db.WithContext(ctx).Where("box_id = ? AND template_type = ?", stringID(boxID), string(templateType)).First(&model).Error; err != nil {
+		return nil, err
+	}
+
+	template := messageTemplateToDomain(model)
+	return &template, nil
+}
+
 func (r MessageGormRepository) SaveTemplate(ctx context.Context, template *domain.MessageTemplate) error {
 	if err := ensureID(&template.ID); err != nil {
 		return err

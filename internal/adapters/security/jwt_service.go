@@ -26,11 +26,12 @@ func (s JWTService) Generate(ctx context.Context, claims services.AuthClaims) (s
 	now := time.Now()
 	header := jwtHeader{Algorithm: "HS256", Type: "JWT"}
 	payload := jwtPayload{
-		UserID:    string(claims.UserID),
-		BoxID:     string(claims.BoxID),
-		Role:      string(claims.Role),
-		IssuedAt:  now.Unix(),
-		ExpiresAt: now.Add(24 * time.Hour).Unix(),
+		UserID:      string(claims.UserID),
+		BoxID:       string(claims.BoxID),
+		Role:        string(claims.Role),
+		AuthVersion: claims.AuthVersion,
+		IssuedAt:    now.Unix(),
+		ExpiresAt:   now.Add(24 * time.Hour).Unix(),
 	}
 
 	headerPart, err := encodeJSON(header)
@@ -74,9 +75,10 @@ func (s JWTService) Validate(ctx context.Context, token string) (*services.AuthC
 	}
 
 	return &services.AuthClaims{
-		UserID: domain.ID(payload.UserID),
-		BoxID:  domain.ID(payload.BoxID),
-		Role:   domain.UserRole(payload.Role),
+		UserID:      domain.ID(payload.UserID),
+		BoxID:       domain.ID(payload.BoxID),
+		Role:        domain.UserRole(payload.Role),
+		AuthVersion: payload.AuthVersion,
 	}, nil
 }
 
@@ -86,11 +88,12 @@ type jwtHeader struct {
 }
 
 type jwtPayload struct {
-	UserID    string `json:"sub"`
-	BoxID     string `json:"box_id"`
-	Role      string `json:"role"`
-	IssuedAt  int64  `json:"iat"`
-	ExpiresAt int64  `json:"exp"`
+	UserID      string `json:"sub"`
+	BoxID       string `json:"box_id"`
+	Role        string `json:"role"`
+	AuthVersion int    `json:"auth_version"`
+	IssuedAt    int64  `json:"iat"`
+	ExpiresAt   int64  `json:"exp"`
 }
 
 func encodeJSON(value any) (string, error) {

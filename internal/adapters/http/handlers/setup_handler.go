@@ -20,7 +20,7 @@ func NewSetupHandler(createBox boxes.CreateBoxUseCase) SetupHandler {
 func (h SetupHandler) CreateOwner(c *gin.Context) {
 	var request dto.CreateOwnerRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "invalid request"})
+		respondPublicError(c, http.StatusBadRequest, "invalid_request", "invalid request")
 		return
 	}
 
@@ -31,7 +31,7 @@ func (h SetupHandler) CreateOwner(c *gin.Context) {
 		Password:   request.Password,
 	})
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "could not create owner"})
+		respondPublicError(c, http.StatusBadRequest, "owner_creation_failed", "could not create owner")
 		return
 	}
 

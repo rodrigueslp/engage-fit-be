@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"log"
 	"net/http"
 	"time"
@@ -177,7 +178,7 @@ func (h WorkoutsHandler) GenerateDraft(c *gin.Context) {
 	draft, err := h.generateDraft.Execute(c.Request.Context(), boxID, domain.ID(c.Param("id")), domain.MessageAudience(request.Audience), domain.ID(request.CampaignID), studentIDs)
 	if err != nil {
 		log.Printf("workout draft generation failed: box_id=%s workout_id=%s error=%v", boxID, c.Param("id"), err)
-		c.JSON(http.StatusBadGateway, gin.H{"message": err.Error()})
+		respondPublicError(c, http.StatusBadGateway, "llm_generation_failed", "message generation failed")
 		return
 	}
 	c.JSON(http.StatusCreated, workoutDraftResponse(*draft))
@@ -226,24 +227,35 @@ func (h WorkoutsHandler) SendDraft(c *gin.Context) {
 		respondUnauthorized(c)
 		return
 	}
-	output, err := h.sendDraft.Execute(c.Request.Context(), boxID, domain.ID(c.Param("id")))
+	userID, _ := middleware.UserID(c)
+	output, err := h.sendDraft.ExecuteAs(c.Request.Context(), boxID, domain.ID(c.Param("id")), userID)
 	if err != nil {
 		log.Printf("workout draft send failed: box_id=%s draft_id=%s error=%v", boxID, c.Param("id"), err)
-		c.JSON(http.StatusBadGateway, gin.H{"message": err.Error()})
+		var limitError domain.MessagingLimitError
+		if errors.As(err, &limitError) {
+			respondPublicError(c, http.StatusTooManyRequests, "messaging_limit_exceeded", err.Error())
+			return
+		}
+		respondPublicError(c, http.StatusBadGateway, "whatsapp_send_failed", "WhatsApp provider request failed")
 		return
 	}
 	c.JSON(http.StatusOK, dto.SendWorkoutDraftResponse{Total: output.Total, Sent: output.Sent, Failed: output.Failed})
 }
 
 func (h WorkoutsHandler) ListRecipients(c *gin.Context) {
-	result, err := h.listRecipients.Execute(c.Request.Context(), domain.ID(c.Param("id")))
+	boxID, err := middleware.BoxID(c)
+	if err != nil {
+		respondUnauthorized(c)
+		return
+	}
+	result, err := h.listRecipients.Execute(c.Request.Context(), boxID, domain.ID(c.Param("id")))
 	if err != nil {
 		respondError(c, err)
 		return
 	}
 	response := make([]dto.WorkoutRecipientResponse, 0, len(result))
 	for _, recipient := range result {
-		item := dto.WorkoutRecipientResponse{ID: string(recipient.ID), WorkoutMessageDraftID: string(recipient.WorkoutMessageDraftID), StudentID: string(recipient.StudentID), Phone: recipient.Phone, Status: string(recipient.Status), ErrorMessage: recipient.ErrorMessage, CreatedAt: recipient.CreatedAt.Format("2006-01-02T15:04:05Z07:00")}
+		item := dto.WorkoutRecipientResponse{ID: string(recipient.ID), WorkoutMessageDraftID: string(recipient.WorkoutMessageDraftID), StudentID: string(recipient.StudentID), Phone: recipient.Phone, Status: string(recipient.Status), ErrorMessage: recipient.ErrorMessage, ProviderMessageSID: recipient.ProviderMessageSID, ProviderStatus: recipient.ProviderStatus, DispatchID: string(recipient.DispatchID), CreatedAt: recipient.CreatedAt.Format("2006-01-02T15:04:05Z07:00")}
 		if recipient.SentAt != nil {
 			item.SentAt = recipient.SentAt.Format("2006-01-02T15:04:05Z07:00")
 		}

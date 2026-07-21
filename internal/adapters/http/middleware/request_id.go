@@ -4,17 +4,21 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"log/slog"
+	"regexp"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"go.opentelemetry.io/otel/trace"
 )
 
 const RequestIDKey = "request_id"
 
+var validRequestID = regexp.MustCompile(`^[A-Za-z0-9._:-]{1,128}$`)
+
 func RequestID() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		requestID := c.GetHeader("X-Request-ID")
-		if requestID == "" {
+		if !validRequestID.MatchString(requestID) {
 			requestID = generateRequestID()
 		}
 
@@ -33,14 +37,16 @@ func Logger() gin.HandlerFunc {
 		attrs := []any{
 			"request_id", requestID,
 			"method", c.Request.Method,
-			"path", c.Request.URL.Path,
 			"route", c.FullPath(),
 			"status", c.Writer.Status(),
 			"latency_ms", time.Since(startedAt).Milliseconds(),
-			"client_ip", c.ClientIP(),
+		}
+		spanContext := trace.SpanContextFromContext(c.Request.Context())
+		if spanContext.IsValid() {
+			attrs = append(attrs, "trace_id", spanContext.TraceID().String(), "span_id", spanContext.SpanID().String())
 		}
 		if len(c.Errors) > 0 {
-			attrs = append(attrs, "error", c.Errors.String())
+			attrs = append(attrs, "error_count", len(c.Errors))
 		}
 
 		switch status := c.Writer.Status(); {

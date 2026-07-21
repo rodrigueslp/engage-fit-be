@@ -9,6 +9,16 @@ type LoginResponse struct {
 	AccessToken string `json:"access_token"`
 }
 
+type ChangePasswordRequest struct {
+	CurrentPassword string `json:"current_password"`
+	NewPassword     string `json:"new_password"`
+}
+
+type ResetOwnerPasswordRequest struct {
+	NewPassword string `json:"new_password"`
+	Reason      string `json:"reason"`
+}
+
 type CurrentUserResponse struct {
 	ID    string `json:"id"`
 	BoxID string `json:"box_id"`

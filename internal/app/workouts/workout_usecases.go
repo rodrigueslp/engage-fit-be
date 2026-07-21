@@ -238,7 +238,9 @@ func (uc GenerateWorkoutDraftUseCase) resolveRecipients(ctx context.Context, box
 			if err != nil {
 				return nil, err
 			}
-			students = append(students, *student)
+			if student.CanContact() {
+				students = append(students, *student)
+			}
 		}
 		return students, nil
 	}
@@ -253,20 +255,29 @@ type SendWorkoutDraftOutput struct {
 }
 
 type SendWorkoutDraftUseCase struct {
-	workouts  repositories.WorkoutRepository
-	boxes     repositories.BoxRepository
-	students  repositories.StudentRepository
-	checkins  repositories.CheckinRepository
-	campaigns repositories.CampaignRepository
-	settings  repositories.WhatsappSettingsRepository
-	gateway   services.WhatsappGateway
+	workouts   repositories.WorkoutRepository
+	boxes      repositories.BoxRepository
+	students   repositories.StudentRepository
+	checkins   repositories.CheckinRepository
+	campaigns  repositories.CampaignRepository
+	settings   services.WhatsappSettingsResolver
+	gateway    services.WhatsappGateway
+	governance services.MessagingGovernance
 }
 
-func NewSendWorkoutDraftUseCase(workouts repositories.WorkoutRepository, boxes repositories.BoxRepository, students repositories.StudentRepository, checkins repositories.CheckinRepository, campaigns repositories.CampaignRepository, settings repositories.WhatsappSettingsRepository, gateway services.WhatsappGateway) SendWorkoutDraftUseCase {
-	return SendWorkoutDraftUseCase{workouts: workouts, boxes: boxes, students: students, checkins: checkins, campaigns: campaigns, settings: settings, gateway: gateway}
+func NewSendWorkoutDraftUseCase(workouts repositories.WorkoutRepository, boxes repositories.BoxRepository, students repositories.StudentRepository, checkins repositories.CheckinRepository, campaigns repositories.CampaignRepository, settings services.WhatsappSettingsResolver, gateway services.WhatsappGateway, governance ...services.MessagingGovernance) SendWorkoutDraftUseCase {
+	uc := SendWorkoutDraftUseCase{workouts: workouts, boxes: boxes, students: students, checkins: checkins, campaigns: campaigns, settings: settings, gateway: gateway}
+	if len(governance) > 0 {
+		uc.governance = governance[0]
+	}
+	return uc
 }
 
 func (uc SendWorkoutDraftUseCase) Execute(ctx context.Context, boxID, draftID domain.ID) (*SendWorkoutDraftOutput, error) {
+	return uc.ExecuteAs(ctx, boxID, draftID, "")
+}
+
+func (uc SendWorkoutDraftUseCase) ExecuteAs(ctx context.Context, boxID, draftID, requestedByUserID domain.ID) (*SendWorkoutDraftOutput, error) {
 	draft, err := uc.workouts.FindDraftByID(ctx, boxID, draftID)
 	if err != nil {
 		return nil, err
@@ -278,7 +289,7 @@ func (uc SendWorkoutDraftUseCase) Execute(ctx context.Context, boxID, draftID do
 	if body == "" {
 		return nil, errors.New("approved body is required")
 	}
-	whatsappSettings, err := uc.settings.FindByBoxID(ctx, boxID)
+	whatsappSettings, err := uc.settings.Resolve(ctx, boxID)
 	if err != nil {
 		return nil, err
 	}
@@ -287,8 +298,26 @@ func (uc SendWorkoutDraftUseCase) Execute(ctx context.Context, boxID, draftID do
 	if err != nil {
 		return nil, err
 	}
+	contactableRecipients := recipients[:0]
+	for _, recipient := range recipients {
+		student, findErr := uc.students.FindByID(ctx, boxID, recipient.StudentID)
+		if findErr == nil && student.CanContact() {
+			contactableRecipients = append(contactableRecipients, recipient)
+		}
+	}
+	recipients = contactableRecipients
 	if len(recipients) == 0 {
 		return nil, errors.New("no workout recipients selected")
+	}
+	var dispatch *domain.MessageDispatch
+	if uc.governance != nil {
+		dispatch, err = uc.governance.Reserve(ctx, services.MessagingReservationRequest{BoxID: boxID, RequestedByUserID: requestedByUserID, SourceType: "workout_draft", SourceID: draftID, ConnectionMode: whatsappSettings.ConnectionMode, Recipients: len(recipients)})
+		if err != nil {
+			return nil, err
+		}
+		for index := range recipients {
+			recipients[index].DispatchID = dispatch.ID
+		}
 	}
 	output := &SendWorkoutDraftOutput{Total: len(recipients)}
 	for _, recipient := range recipients {
@@ -299,15 +328,23 @@ func (uc SendWorkoutDraftUseCase) Execute(ctx context.Context, boxID, draftID do
 		messageBody := personalizeWorkoutMessage(body, *student)
 		sentAt := time.Now()
 		recipient.SentAt = &sentAt
-		if err := uc.gateway.Send(ctx, *whatsappSettings, services.WhatsappMessage{Phone: recipient.Phone, Body: messageBody}); err != nil {
+		sendResult, sendErr := uc.gateway.Send(ctx, *whatsappSettings, services.WhatsappMessage{Phone: recipient.Phone, Body: messageBody})
+		if sendErr != nil {
 			recipient.Status = domain.MessageRecipientFailed
-			recipient.ErrorMessage = err.Error()
+			recipient.ErrorMessage = sendErr.Error()
 			output.Failed++
 		} else {
 			recipient.Status = domain.MessageRecipientSent
+			if sendResult != nil {
+				recipient.ProviderMessageSID = sendResult.ProviderMessageID
+				recipient.ProviderStatus = sendResult.InitialStatus
+			}
 			output.Sent++
 		}
 		if err := uc.workouts.UpdateRecipient(ctx, recipient); err != nil {
+			if dispatch != nil {
+				_ = uc.governance.Complete(ctx, dispatch.ID, output.Sent, len(recipients)-output.Sent)
+			}
 			return nil, err
 		}
 	}
@@ -317,7 +354,15 @@ func (uc SendWorkoutDraftUseCase) Execute(ctx context.Context, boxID, draftID do
 	draft.SentRecipients = output.Sent
 	draft.FailedRecipients = output.Failed
 	if err := uc.workouts.UpdateDraft(ctx, *draft); err != nil {
+		if dispatch != nil {
+			_ = uc.governance.Complete(ctx, dispatch.ID, output.Sent, output.Failed)
+		}
 		return nil, err
+	}
+	if dispatch != nil {
+		if err := uc.governance.Complete(ctx, dispatch.ID, output.Sent, output.Failed); err != nil {
+			return nil, err
+		}
 	}
 	return output, nil
 }
@@ -329,7 +374,10 @@ type ListWorkoutRecipientsUseCase struct {
 func NewListWorkoutRecipientsUseCase(workouts repositories.WorkoutRepository) ListWorkoutRecipientsUseCase {
 	return ListWorkoutRecipientsUseCase{workouts: workouts}
 }
-func (uc ListWorkoutRecipientsUseCase) Execute(ctx context.Context, draftID domain.ID) ([]domain.WorkoutMessageRecipient, error) {
+func (uc ListWorkoutRecipientsUseCase) Execute(ctx context.Context, boxID, draftID domain.ID) ([]domain.WorkoutMessageRecipient, error) {
+	if _, err := uc.workouts.FindDraftByID(ctx, boxID, draftID); err != nil {
+		return nil, err
+	}
 	return uc.workouts.ListRecipients(ctx, draftID)
 }
 
@@ -343,7 +391,7 @@ type audienceResolver struct {
 func (r audienceResolver) resolve(ctx context.Context, boxID domain.ID, audience domain.MessageAudience, campaignID domain.ID) ([]domain.Student, error) {
 	switch audience {
 	case domain.MessageAudienceAll:
-		return r.students.List(ctx, boxID, repositories.StudentFilters{})
+		return r.students.List(ctx, boxID, repositories.StudentFilters{ContactableOnly: true})
 	case domain.MessageAudienceInactive:
 		return r.inactiveStudents(ctx, boxID)
 	case domain.MessageAudienceAlmostThere:
@@ -356,7 +404,7 @@ func (r audienceResolver) resolve(ctx context.Context, boxID domain.ID, audience
 }
 
 func (r audienceResolver) inactiveStudents(ctx context.Context, boxID domain.ID) ([]domain.Student, error) {
-	students, err := r.students.List(ctx, boxID, repositories.StudentFilters{})
+	students, err := r.students.List(ctx, boxID, repositories.StudentFilters{ContactableOnly: true})
 	if err != nil {
 		return nil, err
 	}
@@ -388,7 +436,7 @@ func (r audienceResolver) progressAudience(ctx context.Context, boxID, campaignI
 	if err != nil {
 		return nil, err
 	}
-	filters := repositories.StudentFilters{CampaignID: &campaign.ID}
+	filters := repositories.StudentFilters{CampaignID: &campaign.ID, ContactableOnly: true}
 	if audience == domain.MessageAudienceNearGoal {
 		value := true
 		filters.NearGoal = &value
@@ -419,7 +467,7 @@ func (r audienceResolver) almostThereStudents(ctx context.Context, boxID, campai
 			continue
 		}
 		student, err := r.students.FindByID(ctx, boxID, progress.StudentID)
-		if err == nil {
+		if err == nil && student.CanContact() {
 			result = append(result, *student)
 		}
 	}

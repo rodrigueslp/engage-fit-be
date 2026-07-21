@@ -60,6 +60,9 @@ type WorkoutRecipientResponse struct {
 	Phone                 string `json:"phone"`
 	Status                string `json:"status"`
 	ErrorMessage          string `json:"error_message,omitempty"`
+	ProviderMessageSID    string `json:"provider_message_sid,omitempty"`
+	ProviderStatus        string `json:"provider_status,omitempty"`
+	DispatchID            string `json:"dispatch_id,omitempty"`
 	SentAt                string `json:"sent_at,omitempty"`
 	CreatedAt             string `json:"created_at"`
 }

@@ -27,7 +27,12 @@ func NewRewardsHandler(listRewards rewards.ListRewardsUseCase, createReward rewa
 }
 
 func (h RewardsHandler) ListByCampaign(c *gin.Context) {
-	result, err := h.listRewards.Execute(c.Request.Context(), domain.ID(c.Param("id")))
+	boxID, err := middleware.BoxID(c)
+	if err != nil {
+		respondUnauthorized(c)
+		return
+	}
+	result, err := h.listRewards.Execute(c.Request.Context(), boxID, domain.ID(c.Param("id")))
 	if err != nil {
 		respondError(c, err)
 		return
@@ -41,6 +46,11 @@ func (h RewardsHandler) ListByCampaign(c *gin.Context) {
 }
 
 func (h RewardsHandler) Create(c *gin.Context) {
+	boxID, err := middleware.BoxID(c)
+	if err != nil {
+		respondUnauthorized(c)
+		return
+	}
 	var request dto.RewardRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
 		respondBadRequest(c)
@@ -53,7 +63,7 @@ func (h RewardsHandler) Create(c *gin.Context) {
 		Description: request.Description,
 		Quantity:    request.Quantity,
 	}
-	if err := h.createReward.Execute(c.Request.Context(), &reward); err != nil {
+	if err := h.createReward.Execute(c.Request.Context(), boxID, &reward); err != nil {
 		respondError(c, err)
 		return
 	}
@@ -62,7 +72,12 @@ func (h RewardsHandler) Create(c *gin.Context) {
 }
 
 func (h RewardsHandler) Update(c *gin.Context) {
-	existing, err := h.getReward.Execute(c.Request.Context(), domain.ID(c.Param("id")))
+	boxID, err := middleware.BoxID(c)
+	if err != nil {
+		respondUnauthorized(c)
+		return
+	}
+	existing, err := h.getReward.Execute(c.Request.Context(), boxID, domain.ID(c.Param("id")))
 	if err != nil {
 		respondError(c, err)
 		return
@@ -77,7 +92,7 @@ func (h RewardsHandler) Update(c *gin.Context) {
 	existing.Name = request.Name
 	existing.Description = request.Description
 	existing.Quantity = request.Quantity
-	if err := h.updateReward.Execute(c.Request.Context(), *existing); err != nil {
+	if err := h.updateReward.Execute(c.Request.Context(), boxID, *existing); err != nil {
 		respondError(c, err)
 		return
 	}
@@ -86,7 +101,12 @@ func (h RewardsHandler) Update(c *gin.Context) {
 }
 
 func (h RewardsHandler) Delete(c *gin.Context) {
-	if err := h.deleteReward.Execute(c.Request.Context(), domain.ID(c.Param("id"))); err != nil {
+	boxID, err := middleware.BoxID(c)
+	if err != nil {
+		respondUnauthorized(c)
+		return
+	}
+	if err := h.deleteReward.Execute(c.Request.Context(), boxID, domain.ID(c.Param("id"))); err != nil {
 		respondError(c, err)
 		return
 	}

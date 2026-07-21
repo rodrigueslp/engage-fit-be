@@ -2,11 +2,14 @@ package boxes
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"time"
 
 	"boxengage/backend/internal/domain"
 	"boxengage/backend/internal/ports/repositories"
 	"boxengage/backend/internal/ports/services"
+	"gorm.io/gorm"
 )
 
 type CreateBoxInput struct {
@@ -32,6 +35,18 @@ func NewCreateBoxUseCase(boxes repositories.BoxRepository, users repositories.Us
 }
 
 func (uc CreateBoxUseCase) Execute(ctx context.Context, input CreateBoxInput) (*CreateBoxOutput, error) {
+	input.Name = strings.TrimSpace(input.Name)
+	input.OwnerName = strings.TrimSpace(input.OwnerName)
+	input.OwnerEmail = strings.ToLower(strings.TrimSpace(input.OwnerEmail))
+	if input.Name == "" || input.OwnerName == "" || input.OwnerEmail == "" || len(input.Password) < 8 {
+		return nil, errors.New("dados de onboarding invalidos")
+	}
+	if _, err := uc.users.FindByEmail(ctx, input.OwnerEmail); err == nil {
+		return nil, errors.New("email de owner ja cadastrado")
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, err
+	}
+
 	passwordHash, err := uc.passwords.Hash(ctx, input.Password)
 	if err != nil {
 		return nil, err
@@ -43,20 +58,16 @@ func (uc CreateBoxUseCase) Execute(ctx context.Context, input CreateBoxInput) (*
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
-	if err := uc.boxes.Save(ctx, &box); err != nil {
-		return nil, err
-	}
-
 	user := domain.User{
-		BoxID:        box.ID,
 		Name:         input.OwnerName,
 		Email:        input.OwnerEmail,
 		PasswordHash: passwordHash,
+		AuthVersion:  1,
 		Role:         domain.UserRoleOwner,
 		CreatedAt:    now,
 		UpdatedAt:    now,
 	}
-	if err := uc.users.Save(ctx, &user); err != nil {
+	if err := uc.boxes.SaveWithOwner(ctx, &box, &user); err != nil {
 		return nil, err
 	}
 

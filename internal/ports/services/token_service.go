@@ -7,9 +7,10 @@ import (
 )
 
 type AuthClaims struct {
-	UserID domain.ID
-	BoxID  domain.ID
-	Role   domain.UserRole
+	UserID      domain.ID
+	BoxID       domain.ID
+	Role        domain.UserRole
+	AuthVersion int
 }
 
 type TokenService interface {

@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+
 	"boxengage/backend/internal/domain"
 	"boxengage/backend/internal/ports/services"
 )
@@ -21,7 +23,7 @@ type TwilioClient struct {
 
 func NewTwilioClient() TwilioClient {
 	return TwilioClient{
-		httpClient: &http.Client{Timeout: 15 * time.Second},
+		httpClient: &http.Client{Timeout: 15 * time.Second, Transport: otelhttp.NewTransport(http.DefaultTransport)},
 	}
 }
 
@@ -49,10 +51,10 @@ func (c TwilioClient) Test(ctx context.Context, settings domain.WhatsappSettings
 	return nil
 }
 
-func (c TwilioClient) Send(ctx context.Context, settings domain.WhatsappSettings, message services.WhatsappMessage) error {
+func (c TwilioClient) Send(ctx context.Context, settings domain.WhatsappSettings, message services.WhatsappMessage) (*services.WhatsappSendResult, error) {
 	accountSID, authToken, err := twilioCredentials(settings)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	form := url.Values{}
@@ -68,7 +70,7 @@ func (c TwilioClient) Send(ctx context.Context, settings domain.WhatsappSettings
 		if len(message.ContentVariables) > 0 {
 			contentVariables, err := json.Marshal(message.ContentVariables)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			form.Set("ContentVariables", string(contentVariables))
 		}
@@ -78,21 +80,28 @@ func (c TwilioClient) Send(ctx context.Context, settings domain.WhatsappSettings
 
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, c.url(settings, "2010-04-01/Accounts/"+accountSID+"/Messages.json"), strings.NewReader(form.Encode()))
 	if err != nil {
-		return err
+		return nil, err
 	}
 	request.SetBasicAuth(accountSID, authToken)
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	response, err := c.httpClient.Do(request)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer response.Body.Close()
 
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return fmt.Errorf("twilio api send failed with status %d: %s", response.StatusCode, readErrorBody(response.Body))
+		return nil, fmt.Errorf("twilio api send failed with status %d: %s", response.StatusCode, readErrorBody(response.Body))
 	}
-	return nil
+	var payload struct {
+		SID    string `json:"sid"`
+		Status string `json:"status"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
+		return nil, fmt.Errorf("decode twilio send response: %w", err)
+	}
+	return &services.WhatsappSendResult{ProviderMessageID: payload.SID, InitialStatus: payload.Status}, nil
 }
 
 func (c TwilioClient) url(settings domain.WhatsappSettings, path string) string {

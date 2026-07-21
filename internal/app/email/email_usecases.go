@@ -121,7 +121,10 @@ type ListEmailRecipientsUseCase struct{ email repositories.EmailRepository }
 func NewListEmailRecipientsUseCase(email repositories.EmailRepository) ListEmailRecipientsUseCase {
 	return ListEmailRecipientsUseCase{email: email}
 }
-func (uc ListEmailRecipientsUseCase) Execute(ctx context.Context, emailCampaignID domain.ID) ([]domain.EmailRecipient, error) {
+func (uc ListEmailRecipientsUseCase) Execute(ctx context.Context, boxID, emailCampaignID domain.ID) ([]domain.EmailRecipient, error) {
+	if _, err := uc.email.FindCampaignByID(ctx, boxID, emailCampaignID); err != nil {
+		return nil, err
+	}
 	return uc.email.ListRecipients(ctx, emailCampaignID)
 }
 
@@ -197,7 +200,7 @@ func (uc SendEmailCampaignUseCase) Execute(ctx context.Context, boxID, campaignI
 			recipient.Status = domain.MessageRecipientFailed
 			recipient.ErrorMessage = err.Error()
 			output.Failed++
-			slog.WarnContext(ctx, "email_recipient_send_failed", "box_id", string(boxID), "email_campaign_id", string(campaignID), "student_id", string(recipient.StudentID), "to_email", recipient.Email, "provider", settings.Provider, "smtp_host", settings.SMTPHost, "error", err.Error())
+			slog.WarnContext(ctx, "email_recipient_send_failed", "box_id", string(boxID), "email_campaign_id", string(campaignID), "student_id", string(recipient.StudentID), "provider", settings.Provider, "error_type", fmt.Sprintf("%T", err))
 		} else {
 			recipient.Status = domain.MessageRecipientSent
 			output.Sent++
@@ -253,7 +256,7 @@ func firstPreviewStudent(students []domain.Student) domain.Student {
 func (uc SendEmailCampaignUseCase) resolveAudience(ctx context.Context, boxID domain.ID, emailCampaign domain.EmailCampaign) ([]domain.Student, error) {
 	switch emailCampaign.Audience {
 	case domain.MessageAudienceAll:
-		return uc.students.List(ctx, boxID, repositories.StudentFilters{})
+		return uc.students.List(ctx, boxID, repositories.StudentFilters{ContactableOnly: true})
 	case domain.MessageAudienceInactive:
 		return uc.inactiveStudents(ctx, boxID)
 	case domain.MessageAudienceAlmostThere:
@@ -266,7 +269,7 @@ func (uc SendEmailCampaignUseCase) resolveAudience(ctx context.Context, boxID do
 }
 
 func (uc SendEmailCampaignUseCase) inactiveStudents(ctx context.Context, boxID domain.ID) ([]domain.Student, error) {
-	students, err := uc.students.List(ctx, boxID, repositories.StudentFilters{})
+	students, err := uc.students.List(ctx, boxID, repositories.StudentFilters{ContactableOnly: true})
 	if err != nil {
 		return nil, err
 	}
@@ -299,7 +302,7 @@ func (uc SendEmailCampaignUseCase) progressAudience(ctx context.Context, boxID, 
 	}
 	unique := map[domain.ID]domain.Student{}
 	for _, campaign := range campaigns {
-		filters := repositories.StudentFilters{CampaignID: &campaign.ID}
+		filters := repositories.StudentFilters{CampaignID: &campaign.ID, ContactableOnly: true}
 		if audience == domain.MessageAudienceNearGoal {
 			value := true
 			filters.NearGoal = &value
@@ -343,7 +346,7 @@ func (uc SendEmailCampaignUseCase) almostThereStudents(ctx context.Context, boxI
 				continue
 			}
 			student, err := uc.students.FindByID(ctx, boxID, progress.StudentID)
-			if err == nil {
+			if err == nil && student.CanContact() {
 				unique[student.ID] = *student
 			}
 		}
@@ -449,7 +452,7 @@ func (uc SendEmailCampaignUseCase) templateContext(ctx context.Context, boxID do
 			if context.remainingCheckins < 0 {
 				context.remainingCheckins = 0
 			}
-			if rewards, err := uc.rewards.ListByCampaign(ctx, campaign.ID); err == nil && len(rewards) > 0 {
+			if rewards, err := uc.rewards.ListByCampaign(ctx, boxID, campaign.ID); err == nil && len(rewards) > 0 {
 				context.rewardName = rewards[0].Name
 			}
 			return context

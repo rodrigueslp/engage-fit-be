@@ -1,0 +1,42 @@
+groups:
+  - name: engagefit-application
+    rules:
+      - alert: EngageFitApplicationSignalsMissing
+        expr: absent_over_time(engagefit_application_info[2m])
+        for: 1m
+        labels: {severity: critical}
+        annotations:
+          summary: "Sinais da API EngageFit ausentes"
+          description: "A aplicacao deixou de exportar seu heartbeat por mais de dois minutos."
+      - alert: EngageFitHighHTTP5xxRate
+        expr: sum(rate(engagefit_http_server_requests_total{http_response_status_code=~"5.."}[5m])) / clamp_min(sum(rate(engagefit_http_server_requests_total[5m])), 0.001) > 0.05
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: "Taxa elevada de erros HTTP 5xx"
+      - alert: EngageFitReadinessFailing
+        expr: increase(engagefit_http_server_requests_total{http_route="/health/ready",http_response_status_code="503"}[5m]) > 0
+        for: 1m
+        labels: {severity: critical}
+        annotations:
+          summary: "Readiness da API falhou"
+      - alert: EngageFitAutomationFailed
+        expr: increase(engagefit_automation_runs_total{automation_status="failed"}[10m]) > 0
+        labels: {severity: warning}
+        annotations:
+          summary: "Automacao falhou"
+      - alert: EngageFitAutomationStale
+        expr: increase(engagefit_automation_stale_runs_total[10m]) > 0
+        labels: {severity: warning}
+        annotations:
+          summary: "Automacao stale detectada"
+      - alert: EngageFitImportFailed
+        expr: increase(engagefit_imports_operations_total{import_status="failed"}[10m]) > 0
+        labels: {severity: warning}
+        annotations:
+          summary: "Importacao falhou"
+      - alert: EngageFitGatewayFailures
+        expr: increase(engagefit_gateway_calls_total{gateway_status="error"}[10m]) > 2
+        labels: {severity: warning}
+        annotations:
+          summary: "Falhas repetidas em gateway externo"

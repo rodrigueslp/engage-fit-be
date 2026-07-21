@@ -13,9 +13,10 @@ func TestJWTServiceGenerateAndValidate(t *testing.T) {
 	service := NewJWTService("test-secret")
 
 	token, err := service.Generate(context.Background(), services.AuthClaims{
-		UserID: domain.ID("user-id"),
-		BoxID:  domain.ID("box-id"),
-		Role:   domain.UserRoleOwner,
+		UserID:      domain.ID("user-id"),
+		BoxID:       domain.ID("box-id"),
+		Role:        domain.UserRoleOwner,
+		AuthVersion: 3,
 	})
 	if err != nil {
 		t.Fatalf("expected token generation to succeed: %v", err)
@@ -35,15 +36,19 @@ func TestJWTServiceGenerateAndValidate(t *testing.T) {
 	if claims.Role != domain.UserRoleOwner {
 		t.Fatalf("expected OWNER, got %q", claims.Role)
 	}
+	if claims.AuthVersion != 3 {
+		t.Fatalf("expected auth version 3, got %d", claims.AuthVersion)
+	}
 }
 
 func TestJWTServiceRejectsTamperedToken(t *testing.T) {
 	service := NewJWTService("test-secret")
 
 	token, err := service.Generate(context.Background(), services.AuthClaims{
-		UserID: domain.ID("user-id"),
-		BoxID:  domain.ID("box-id"),
-		Role:   domain.UserRoleOwner,
+		UserID:      domain.ID("user-id"),
+		BoxID:       domain.ID("box-id"),
+		Role:        domain.UserRoleOwner,
+		AuthVersion: 1,
 	})
 	if err != nil {
 		t.Fatalf("expected token generation to succeed: %v", err)

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -36,6 +37,11 @@ func (h ImportsHandler) Create(c *gin.Context) {
 
 	fileHeader, err := c.FormFile("file")
 	if err != nil {
+		var maxBytesError *http.MaxBytesError
+		if errors.As(err, &maxBytesError) {
+			respondPublicError(c, http.StatusRequestEntityTooLarge, "upload_too_large", "upload too large")
+			return
+		}
 		respondBadRequest(c)
 		return
 	}

@@ -34,6 +34,9 @@ func (r StudentGormRepository) FindByExternalID(ctx context.Context, boxID domai
 
 func (r StudentGormRepository) List(ctx context.Context, boxID domain.ID, filters portrepo.StudentFilters) ([]domain.Student, error) {
 	query := r.db.WithContext(ctx).Model(&models.StudentModel{}).Where("box_id = ?", stringID(boxID))
+	if filters.ContactableOnly {
+		query = query.Where("contact_status <> ? AND anonymized_at IS NULL", string(domain.ContactStatusOptedOut))
+	}
 
 	if filters.Source != nil {
 		query = query.Where("source = ?", string(*filters.Source))
@@ -69,6 +72,18 @@ func (r StudentGormRepository) List(ctx context.Context, boxID domain.ID, filter
 		students = append(students, studentToDomain(model))
 	}
 	return students, nil
+}
+
+func (r StudentGormRepository) UpdateContactPreference(ctx context.Context, boxID, id domain.ID, status domain.ContactStatus, source string, updatedAt time.Time) error {
+	return r.db.WithContext(ctx).
+		Model(&models.StudentModel{}).
+		Where("box_id = ? AND id = ? AND anonymized_at IS NULL", stringID(boxID), stringID(id)).
+		Updates(map[string]any{
+			"contact_status":            string(status),
+			"contact_status_source":     source,
+			"contact_status_updated_at": updatedAt,
+			"updated_at":                updatedAt,
+		}).Error
 }
 
 func (r StudentGormRepository) Save(ctx context.Context, student *domain.Student) error {

@@ -1,6 +1,9 @@
 package repositories
 
-import "gorm.io/gorm"
+import (
+	"boxengage/backend/internal/ports/services"
+	"gorm.io/gorm"
+)
 
 type BoxGormRepository struct {
 	db *gorm.DB
@@ -20,6 +23,14 @@ func NewUserGormRepository(db *gorm.DB) UserGormRepository {
 
 type StudentGormRepository struct {
 	db *gorm.DB
+}
+
+type PrivacyGormRepository struct {
+	db *gorm.DB
+}
+
+func NewPrivacyGormRepository(db *gorm.DB) PrivacyGormRepository {
+	return PrivacyGormRepository{db: db}
 }
 
 func NewStudentGormRepository(db *gorm.DB) StudentGormRepository {
@@ -59,11 +70,12 @@ func NewRewardGormRepository(db *gorm.DB) RewardGormRepository {
 }
 
 type WhatsappSettingsGormRepository struct {
-	db *gorm.DB
+	db     *gorm.DB
+	cipher services.SecretCipher
 }
 
-func NewWhatsappSettingsGormRepository(db *gorm.DB) WhatsappSettingsGormRepository {
-	return WhatsappSettingsGormRepository{db: db}
+func NewWhatsappSettingsGormRepository(db *gorm.DB, cipher services.SecretCipher) WhatsappSettingsGormRepository {
+	return WhatsappSettingsGormRepository{db: db, cipher: cipher}
 }
 
 type MessageGormRepository struct {
@@ -75,11 +87,12 @@ func NewMessageGormRepository(db *gorm.DB) MessageGormRepository {
 }
 
 type EmailSettingsGormRepository struct {
-	db *gorm.DB
+	db     *gorm.DB
+	cipher services.SecretCipher
 }
 
-func NewEmailSettingsGormRepository(db *gorm.DB) EmailSettingsGormRepository {
-	return EmailSettingsGormRepository{db: db}
+func NewEmailSettingsGormRepository(db *gorm.DB, cipher services.SecretCipher) EmailSettingsGormRepository {
+	return EmailSettingsGormRepository{db: db, cipher: cipher}
 }
 
 type EmailGormRepository struct {
@@ -100,6 +113,14 @@ func NewAutomationGormRepository(db *gorm.DB) AutomationGormRepository {
 
 type WorkoutGormRepository struct {
 	db *gorm.DB
+}
+
+type MessagingGovernanceGormRepository struct {
+	db *gorm.DB
+}
+
+func NewMessagingGovernanceGormRepository(db *gorm.DB) MessagingGovernanceGormRepository {
+	return MessagingGovernanceGormRepository{db: db}
 }
 
 func NewWorkoutGormRepository(db *gorm.DB) WorkoutGormRepository {

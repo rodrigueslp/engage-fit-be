@@ -1,9 +1,12 @@
 package http
 
 import (
+	"context"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 
 	"boxengage/backend/internal/adapters/http/handlers"
 	"boxengage/backend/internal/adapters/http/middleware"
@@ -15,26 +18,36 @@ import (
 	"boxengage/backend/internal/app/email"
 	"boxengage/backend/internal/app/imports"
 	"boxengage/backend/internal/app/messages"
+	"boxengage/backend/internal/app/platformadmin"
 	"boxengage/backend/internal/app/reports"
 	"boxengage/backend/internal/app/rewards"
 	"boxengage/backend/internal/app/students"
 	"boxengage/backend/internal/app/whatsapp"
 	"boxengage/backend/internal/app/workouts"
+	"boxengage/backend/internal/ports/repositories"
 	"boxengage/backend/internal/ports/services"
 )
 
 type RouterDependencies struct {
-	TokenService       services.TokenService
-	LoginUseCase       auth.LoginUseCase
-	CurrentUserUseCase auth.GetCurrentUserUseCase
-	CreateBoxUseCase   boxes.CreateBoxUseCase
-	GetBoxUseCase      boxes.GetBoxUseCase
-	UpdateBoxUseCase   boxes.UpdateBoxUseCase
+	AppEnv                    string
+	TokenService              services.TokenService
+	UserRepository            repositories.UserRepository
+	LoginUseCase              auth.LoginUseCase
+	CurrentUserUseCase        auth.GetCurrentUserUseCase
+	ChangePasswordUseCase     auth.ChangePasswordUseCase
+	LogoutUseCase             auth.LogoutUseCase
+	ResetOwnerPasswordUseCase platformadmin.ResetOwnerPasswordUseCase
+	CreateBoxUseCase          boxes.CreateBoxUseCase
+	GetBoxUseCase             boxes.GetBoxUseCase
+	UpdateBoxUseCase          boxes.UpdateBoxUseCase
 
 	ListStudentsUseCase            students.ListStudentsUseCase
 	GetStudentUseCase              students.GetStudentUseCase
 	ListStudentCheckinsUseCase     students.ListStudentCheckinsUseCase
 	UpdateStudentRiskStatusUseCase students.UpdateStudentRiskStatusUseCase
+	ExportStudentDataUseCase       students.ExportStudentDataUseCase
+	UpdateContactPreferenceUseCase students.UpdateContactPreferenceUseCase
+	AnonymizeStudentUseCase        students.AnonymizeStudentUseCase
 
 	ListImportsUseCase    imports.ListImportsUseCase
 	GetImportUseCase      imports.GetImportUseCase
@@ -123,31 +136,102 @@ type RouterDependencies struct {
 	PendingRewardsReportUseCase   reports.PendingRewardsReportUseCase
 	MonthlyFrequencyReportUseCase reports.MonthlyFrequencyReportUseCase
 	ReportExporter                services.ReportExporter
+	MessagingAdminUseCases        platformadmin.MessagingAdminUseCases
+	TenantMessagingUsageUseCase   platformadmin.GetTenantMessagingUsageUseCase
+	OwnerSetupEnabled             bool
+	OwnerSetupToken               string
+	HTTPMaxBodyBytes              int64
+	ImportMaxUploadBytes          int64
+	LoginRateLimitRequests        int
+	LoginRateLimitWindowSeconds   int
+	SetupRateLimitRequests        int
+	SetupRateLimitWindowSeconds   int
+	TrustedProxies                []string
+	ReadinessCheck                func(context.Context) error
+	MetricsHandler                http.Handler
+	MetricsBearerToken            string
+	ObservabilityService          string
+	SessionConfig                 middleware.SessionConfig
+	CORSAllowedOrigins            []string
+	Capabilities                  middleware.Capabilities
+	BuildVersion                  string
+	BuildCommit                   string
+	BuildTime                     string
 }
 
 func NewRouter(deps RouterDependencies) *gin.Engine {
+	if deps.AppEnv == "production" {
+		gin.SetMode(gin.ReleaseMode)
+	}
 	router := gin.New()
+	if err := router.SetTrustedProxies(deps.TrustedProxies); err != nil {
+		panic("invalid TRUSTED_PROXIES: " + err.Error())
+	}
+	router.Use(middleware.BodySizeLimit(deps.HTTPMaxBodyBytes, deps.ImportMaxUploadBytes))
+	router.Use(middleware.SecurityHeaders())
+	router.Use(middleware.CORS(deps.CORSAllowedOrigins))
 	router.Use(middleware.RequestID())
+	if deps.ObservabilityService != "" {
+		router.Use(otelgin.Middleware(deps.ObservabilityService))
+	}
+	router.Use(middleware.HTTPMetrics())
 	router.Use(middleware.Logger())
 	router.Use(gin.Recovery())
 
-	router.GET("/health", func(c *gin.Context) {
+	liveness := func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	}
+	router.GET("/health", liveness)
+	router.GET("/health/live", liveness)
+	router.GET("/health/ready", func(c *gin.Context) {
+		if deps.ReadinessCheck != nil {
+			if err := deps.ReadinessCheck(c.Request.Context()); err != nil {
+				c.JSON(http.StatusServiceUnavailable, gin.H{"status": "not_ready"})
+				return
+			}
+		}
+		c.JSON(http.StatusOK, gin.H{"status": "ready"})
 	})
+	router.GET("/health/build", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"version": deps.BuildVersion, "commit": deps.BuildCommit, "build_time": deps.BuildTime})
+	})
+	if deps.MetricsHandler != nil {
+		router.GET("/metrics", middleware.MetricsAccess(deps.MetricsBearerToken), gin.WrapH(deps.MetricsHandler))
+	}
 
 	api := router.Group("/api/v1")
+	api.GET("/capabilities", func(c *gin.Context) { c.JSON(http.StatusOK, deps.Capabilities) })
+	api.Use(middleware.FeatureGates(deps.Capabilities))
 
-	authHandler := handlers.NewAuthHandler(deps.LoginUseCase, deps.CurrentUserUseCase)
-	api.POST("/auth/login", authHandler.Login)
+	authHandler := handlers.NewAuthHandler(deps.LoginUseCase, deps.CurrentUserUseCase, deps.ChangePasswordUseCase, deps.LogoutUseCase, deps.SessionConfig)
+	loginLimiter := middleware.NewWindowRateLimiter(deps.LoginRateLimitRequests, time.Duration(deps.LoginRateLimitWindowSeconds)*time.Second)
+	api.POST("/auth/login", middleware.JSONRateLimit(loginLimiter, "email"), authHandler.Login)
 
 	setupHandler := handlers.NewSetupHandler(deps.CreateBoxUseCase)
-	api.POST("/setup/owner", setupHandler.CreateOwner)
+	setupLimiter := middleware.NewWindowRateLimiter(deps.SetupRateLimitRequests, time.Duration(deps.SetupRateLimitWindowSeconds)*time.Second)
+	api.POST("/setup/owner", middleware.JSONRateLimit(setupLimiter, "owner_email"), middleware.OwnerSetupAccess(deps.OwnerSetupEnabled, deps.OwnerSetupToken), setupHandler.CreateOwner)
 
-	protected := api.Group("")
-	protected.Use(middleware.Auth(deps.TokenService), middleware.Tenant())
+	authenticated := api.Group("")
+	authenticated.Use(middleware.Auth(deps.TokenService, deps.UserRepository, deps.SessionConfig), middleware.CSRF(deps.SessionConfig))
+	authenticated.POST("/auth/logout", authHandler.Logout)
+	authenticated.GET("/auth/me", authHandler.Me)
+	authenticated.PUT("/auth/password", authHandler.ChangePassword)
 
-	protected.POST("/auth/logout", authHandler.Logout)
-	protected.GET("/auth/me", authHandler.Me)
+	protected := authenticated.Group("")
+	protected.Use(middleware.Tenant())
+
+	governanceHandler := handlers.NewMessagingGovernanceHandler(deps.MessagingAdminUseCases, deps.TenantMessagingUsageUseCase)
+	protected.GET("/messaging/usage", governanceHandler.TenantUsage)
+
+	admin := authenticated.Group("/admin")
+	admin.Use(middleware.PlatformAdmin())
+	admin.GET("/messaging/boxes", governanceHandler.ListBoxes)
+	admin.GET("/messaging/boxes/:id/policy", governanceHandler.GetBoxPolicy)
+	admin.PUT("/messaging/boxes/:id/policy", governanceHandler.UpdateBoxPolicy)
+	admin.GET("/messaging/platform/policy", governanceHandler.GetPlatformPolicy)
+	admin.PUT("/messaging/platform/policy", governanceHandler.UpdatePlatformPolicy)
+	adminAccessHandler := handlers.NewPlatformAdminAccessHandler(deps.ResetOwnerPasswordUseCase)
+	admin.PUT("/boxes/:id/owner-password", adminAccessHandler.ResetOwnerPassword)
 
 	boxesHandler := handlers.NewBoxesHandler(deps.GetBoxUseCase, deps.UpdateBoxUseCase)
 	protected.GET("/box", boxesHandler.Get)
@@ -160,17 +244,22 @@ func NewRouter(deps RouterDependencies) *gin.Engine {
 	protected.GET("/dashboard/at-risk-students", dashboardHandler.AtRiskStudents)
 	protected.GET("/dashboard/pending-rewards", dashboardHandler.PendingRewards)
 
-	studentsHandler := handlers.NewStudentsHandler(deps.ListStudentsUseCase, deps.GetStudentUseCase, deps.ListStudentCheckinsUseCase, deps.UpdateStudentRiskStatusUseCase)
+	studentsHandler := handlers.NewStudentsHandler(deps.ListStudentsUseCase, deps.GetStudentUseCase, deps.ListStudentCheckinsUseCase, deps.UpdateStudentRiskStatusUseCase, deps.ExportStudentDataUseCase, deps.UpdateContactPreferenceUseCase, deps.AnonymizeStudentUseCase)
 	protected.GET("/students", studentsHandler.List)
 	protected.GET("/students/:id", studentsHandler.Get)
 	protected.PATCH("/students/:id/risk-status", studentsHandler.UpdateRiskStatus)
 	protected.GET("/students/:id/checkins", studentsHandler.Checkins)
 	protected.GET("/students/:id/campaign-progress", studentsHandler.CampaignProgress)
+	protected.GET("/students/:id/privacy-export", studentsHandler.ExportData)
+	protected.PATCH("/students/:id/contact-preference", studentsHandler.UpdateContactPreference)
+	protected.POST("/students/:id/anonymize", studentsHandler.Anonymize)
 
 	importsHandler := handlers.NewImportsHandler(deps.ImportCheckinsUseCase, deps.ListImportsUseCase, deps.GetImportUseCase)
 	protected.POST("/imports", importsHandler.Create)
 	protected.GET("/imports", importsHandler.List)
 	protected.GET("/imports/:id", importsHandler.Get)
+
+	messagesHandler := handlers.NewMessagesHandler(deps.ListMessageTemplatesUseCase, deps.CreateMessageTemplateUseCase, deps.GetMessageTemplateUseCase, deps.UpdateMessageTemplateUseCase, deps.DeleteMessageTemplateUseCase, deps.ListMessageCampaignsUseCase, deps.CreateMessageCampaignUseCase, deps.GetMessageCampaignUseCase, deps.SendMessageCampaignUseCase, deps.ListMessageRecipientsUseCase)
 
 	campaignsHandler := handlers.NewCampaignsHandler(deps.ListCampaignsUseCase, deps.CreateCampaignUseCase, deps.GetCampaignUseCase, deps.UpdateCampaignUseCase, deps.CloseCampaignUseCase, deps.DeleteCampaignUseCase, deps.ListCampaignGoalsUseCase, deps.UpsertCampaignGoalUseCase, deps.DeleteCampaignGoalUseCase, deps.ListCampaignProgressUseCase, deps.RecalculateCampaignProgressUseCase, deps.GetStudentUseCase)
 	protected.GET("/campaigns", campaignsHandler.List)
@@ -187,6 +276,7 @@ func NewRouter(deps RouterDependencies) *gin.Engine {
 	protected.POST("/campaigns/:id/recalculate-progress", campaignsHandler.RecalculateProgress)
 	protected.GET("/campaigns/:id/eligible-students", campaignsHandler.EligibleStudents)
 	protected.GET("/campaigns/:id/near-goal-students", campaignsHandler.NearGoalStudents)
+	protected.GET("/campaigns/:id/whatsapp-templates/preview", messagesHandler.PreviewOfficialTemplates)
 
 	rewardsHandler := handlers.NewRewardsHandler(deps.ListRewardsUseCase, deps.CreateRewardUseCase, deps.GetRewardUseCase, deps.UpdateRewardUseCase, deps.DeleteRewardUseCase, deps.ListRewardDeliveriesUseCase, deps.ListPendingRewardDeliveriesUseCase, deps.MarkRewardDeliveredUseCase)
 	protected.GET("/campaigns/:id/rewards", rewardsHandler.ListByCampaign)
@@ -199,10 +289,11 @@ func NewRouter(deps RouterDependencies) *gin.Engine {
 
 	whatsappHandler := handlers.NewWhatsappHandler(deps.GetWhatsappSettingsUseCase, deps.UpdateWhatsappSettingsUseCase, deps.TestWhatsappSettingsUseCase)
 	protected.GET("/whatsapp/settings", whatsappHandler.GetSettings)
-	protected.PUT("/whatsapp/settings", whatsappHandler.UpdateSettings)
 	protected.POST("/whatsapp/settings/test", whatsappHandler.TestSettings)
+	admin.GET("/messaging/boxes/:id/whatsapp-settings", whatsappHandler.AdminGetSettings)
+	admin.PUT("/messaging/boxes/:id/whatsapp-settings", whatsappHandler.AdminUpdateSettings)
+	admin.POST("/messaging/boxes/:id/whatsapp-settings/test", whatsappHandler.AdminTestSettings)
 
-	messagesHandler := handlers.NewMessagesHandler(deps.ListMessageTemplatesUseCase, deps.CreateMessageTemplateUseCase, deps.GetMessageTemplateUseCase, deps.UpdateMessageTemplateUseCase, deps.DeleteMessageTemplateUseCase, deps.ListMessageCampaignsUseCase, deps.CreateMessageCampaignUseCase, deps.GetMessageCampaignUseCase, deps.SendMessageCampaignUseCase, deps.ListMessageRecipientsUseCase)
 	protected.GET("/message-templates", messagesHandler.ListTemplates)
 	protected.POST("/message-templates", messagesHandler.CreateTemplate)
 	protected.GET("/message-templates/:id", messagesHandler.GetTemplate)

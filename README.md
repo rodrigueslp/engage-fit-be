@@ -1,5 +1,9 @@
 # EngageFit Backend
 
+Guia consolidado de segurança, operação, testes, observabilidade, privacidade e preparação para produção: [`docs/application-readiness-guide.md`](docs/application-readiness-guide.md).
+
+Documentação da governança de limites e custos do WhatsApp: [`.ai/messaging-governance.md`](.ai/messaging-governance.md).
+
 Backend Go do EngageFit seguindo Arquitetura Hexagonal.
 
 Este repositorio concentra o codigo da API e tambem a infraestrutura local do projeto (Docker, Makefile, scripts de demo e dados de teste). A pasta `.ai/` documenta o planejamento do produto completo — backend e frontend — para manter o contexto unificado enquanto os deploys continuam separados.
@@ -59,6 +63,51 @@ No diretorio do backend:
 docker-compose up -d postgres
 make migrate-up
 ```
+
+O comando usa o migrator versionado embutido no binario. Ele mantem a tabela
+`schema_migrations`, valida checksum, aplica cada arquivo uma unica vez dentro
+de transacao e usa advisory lock do PostgreSQL para impedir execucao concorrente.
+
+```bash
+make migrate-status
+```
+
+Para um banco preexistente que recebeu os SQLs pelo processo antigo, verifique
+primeiro o schema e adote explicitamente o historico ate a versao confirmada:
+
+```bash
+make migrate-baseline VERSION=30
+```
+
+Nunca use `baseline` em banco vazio ou sem confirmar a versao real. Em release,
+execute `/usr/local/bin/engagefit-migrate up` como comando separado antes de
+iniciar `/usr/local/bin/engagefit-api`; a API nao altera o schema no startup.
+
+## Criptografia de credenciais
+
+Credenciais dedicadas do WhatsApp e senhas SMTP sao persistidas em envelopes
+AES-256-GCM. Configure uma chave ativa e o keyring fora do PostgreSQL:
+
+```bash
+openssl rand -base64 32
+
+DATA_ENCRYPTION_ACTIVE_KEY_ID=primary
+DATA_ENCRYPTION_KEYS=primary:<base64-de-32-bytes>
+```
+
+Em `production` essas variaveis sao obrigatorias. Com chave configurada, a API
+recusa valores legados em plaintext. Para adotar um banco antigo, configure as
+variaveis e execute o comando de rotacao antes de iniciar a API:
+
+```bash
+make rotate-secrets
+```
+
+Para trocar a chave, inclua a nova e a antiga no keyring, marque a nova como
+ativa, execute `make rotate-secrets` e mantenha ambas durante a atualizacao de
+todas as instancias. Apos a rotacao confirmar zero pendencias, a chave antiga
+pode ser removida. O ciphertext e vinculado ao tenant e ao campo por associated
+data, portanto nao pode ser copiado validamente para outro registro.
 
 As migrations ficam em:
 
@@ -162,7 +211,25 @@ Se esses arquivos nao existirem, ele usa CSV sintético.
 
 Para um MVP comercial, prefira Twilio WhatsApp em vez de uma conexao por QR Code/WhatsApp Web. A Twilio usa a WhatsApp Business Platform por baixo e reduz o atrito operacional de onboarding, sender, envio e templates.
 
-Configuracao em `Configuracoes`:
+O sistema oferece duas origens de conexão por academia:
+
+- `Número do EngageFit` (padrão): usa a conta Twilio e o remetente compartilhado configurados no ambiente do backend.
+- `Número próprio da academia`: armazena e usa o provedor, remetente e credenciais dedicados daquele tenant.
+
+Configure a conexão compartilhada do EngageFit no `.env` do backend:
+
+```env
+WHATSAPP_PLATFORM_ENABLED=true
+WHATSAPP_PLATFORM_BASE_URL=https://api.twilio.com
+WHATSAPP_PLATFORM_TWILIO_SENDER=whatsapp:+5511000000000
+WHATSAPP_PLATFORM_TWILIO_ACCOUNT_SID=AC...
+WHATSAPP_PLATFORM_TWILIO_AUTH_TOKEN=...
+WHATSAPP_PLATFORM_TWILIO_CONTENT_SID_ALMOST_THERE=HX...
+WHATSAPP_PLATFORM_TWILIO_CONTENT_SID_GOAL_REACHED=HX...
+WHATSAPP_PLATFORM_TWILIO_CONTENT_SID_WE_MISS_YOU=HX...
+```
+
+As credenciais compartilhadas nunca são retornadas pela API nem gravadas por academia. Para uma conexão dedicada, selecione `Número próprio da academia` em `Configurações` e informe:
 
 ```txt
 Provedor: Twilio WhatsApp
@@ -171,6 +238,8 @@ Remetente WhatsApp ou Messaging Service SID: whatsapp:+14155238886 ou MG...
 Account SID:Auth Token: AC...:<auth-token>
 Ativar WhatsApp: marcado
 ```
+
+Cada conta Twilio possui seus próprios Content SIDs. Ao usar o número dedicado de uma academia, os templates oficiais também precisam ser criados/aprovados nessa conta e seus respectivos SIDs cadastrados no EngageFit.
 
 Templates:
 
@@ -252,24 +321,20 @@ Colunas reconhecidas:
 - `hora`, `time`, `checkin_time`
 - `id`, `external_id`, `matricula`, `id do wellhub`, `codigo`
 
+## Privacidade e retencao
+
+- A tela `Alunos` permite registrar preferencia de contato, exportar os dados de um aluno e anonimiza-lo com confirmacao e motivo.
+- Opt-out e anonimizacao removem o aluno das audiencias de WhatsApp, e-mail e Treino do dia; a anonimizacao tambem impede recriacao pela mesma identidade importada.
+- `make privacy-retention-dry-run` mostra o que expirou sem excluir. `make privacy-retention-apply` aplica os prazos configurados por `PRIVACY_RETENTION_*`.
+- O procedimento completo e os pontos que ainda exigem validacao juridica estao em `docs/privacy-runbook.md`.
+
 ## Estado Atual
 
-Esta estrutura inicial define:
+A aplicacao possui API e frontend completos para execucao local e preparacao do deploy: PostgreSQL com migrations versionadas, repositorios reais, importacao CSV/XLSX, campanhas/metas/brindes, dashboard/relatorios, privacidade, sessao segura, administracao, automacao opcional e observabilidade.
 
-- Entidades de dominio aprovadas
-- Contratos de repositorio e servicos
-- Casos de uso principais
-- Rotas REST finais
-- Adaptadores base
+Os gates P0/P1 e a auditoria local ficam registrados em `.ai/application-readiness-checklist.md`. O deploy e operacoes do provedor devem seguir `docs/railway-deployment-checklist.md`.
 
-Ainda nao implementa:
-
-- Migrations
-- Persistencia real dos repositorios
-- Handlers com casos de uso conectados
-- Parsers reais de XLSX/CSV
-- JWT real
-- Integracao real com Twilio WhatsApp
+Continuam deliberadamente fora da prontidao atual: StatusCallback/entrega final/custo real da Twilio, configuracao da infraestrutura Railway, backup/restore gerenciado, alertas externos e validacoes juridicas. Nenhum gateway real e chamado sem capacidade e permissao explicitas.
 
 
 ## E-mail personalizado
@@ -295,6 +360,21 @@ A tela `Automacao` permite configurar rotinas de produto com horario, dias da se
 ```bash
 AUTOMATION_WORKER_ENABLED=true
 AUTOMATION_WORKER_INTERVAL_SECONDS=60
+AUTOMATION_STALE_RUN_MINUTES=120
+AUTOMATION_CATCHUP_WINDOW_MINUTES=15
 ```
 
 Com o worker desligado, as rotinas continuam configuraveis e podem ser executadas manualmente pelo botao `Executar` na tela `Automacao`.
+
+O claim de cada agenda/minuto e atomico no PostgreSQL, portanto varias replicas
+podem manter o worker habilitado sem executar o mesmo slot duas vezes. Cada run
+possui `execution_key` unica; chamadas manuais e o frontend enviam
+`Idempotency-Key`. Runs que permanecem `running` alem do timeout sao marcadas
+como `failed` e geram log operacional.
+
+O script `daily-automation.mjs` usa por padrao a chave `daily:AAAA-MM-DD` no
+timezone configurado. Se uma execucao com essa chave ja existe, nenhuma etapa e
+repetida. Depois de uma falha parcial, revise o historico antes de tentar de
+novo e forneca conscientemente outra chave em
+`DAILY_AUTOMATION_IDEMPOTENCY_KEY`. Essa escolha privilegia nao duplicar
+mensagens quando o resultado do provedor ficou incerto.

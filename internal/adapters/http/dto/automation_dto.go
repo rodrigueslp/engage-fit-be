@@ -34,6 +34,7 @@ type AutomationRunResponse struct {
 	ErrorMessage            string `json:"error_message,omitempty"`
 	StartedAt               string `json:"started_at"`
 	FinishedAt              string `json:"finished_at,omitempty"`
+	IdempotentReplay        bool   `json:"idempotent_replay,omitempty"`
 }
 
 type AutomationScheduleRequest struct {

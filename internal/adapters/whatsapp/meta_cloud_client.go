@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+
 	"boxengage/backend/internal/domain"
 	"boxengage/backend/internal/ports/services"
 )
@@ -22,7 +24,7 @@ type MetaCloudClient struct {
 
 func NewMetaCloudClient() MetaCloudClient {
 	return MetaCloudClient{
-		httpClient: &http.Client{Timeout: 15 * time.Second},
+		httpClient: &http.Client{Timeout: 15 * time.Second, Transport: otelhttp.NewTransport(http.DefaultTransport)},
 	}
 }
 
@@ -45,7 +47,7 @@ func (c MetaCloudClient) Test(ctx context.Context, settings domain.WhatsappSetti
 	return nil
 }
 
-func (c MetaCloudClient) Send(ctx context.Context, settings domain.WhatsappSettings, message services.WhatsappMessage) error {
+func (c MetaCloudClient) Send(ctx context.Context, settings domain.WhatsappSettings, message services.WhatsappMessage) (*services.WhatsappSendResult, error) {
 	payload := map[string]any{
 		"messaging_product": "whatsapp",
 		"recipient_type":    "individual",
@@ -58,26 +60,38 @@ func (c MetaCloudClient) Send(ctx context.Context, settings domain.WhatsappSetti
 	}
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, c.url(settings, settings.InstanceName+"/messages"), bytes.NewReader(body))
 	if err != nil {
-		return err
+		return nil, err
 	}
 	c.applyHeaders(request, settings)
 	request.Header.Set("Content-Type", "application/json")
 
 	response, err := c.httpClient.Do(request)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer response.Body.Close()
 
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return fmt.Errorf("meta cloud api send failed with status %d: %s", response.StatusCode, readErrorBody(response.Body))
+		return nil, fmt.Errorf("meta cloud api send failed with status %d: %s", response.StatusCode, readErrorBody(response.Body))
 	}
-	return nil
+	var result struct {
+		Messages []struct {
+			ID string `json:"id"`
+		} `json:"messages"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decode meta cloud send response: %w", err)
+	}
+	providerID := ""
+	if len(result.Messages) > 0 {
+		providerID = result.Messages[0].ID
+	}
+	return &services.WhatsappSendResult{ProviderMessageID: providerID, InitialStatus: "accepted"}, nil
 }
 
 func (c MetaCloudClient) url(settings domain.WhatsappSettings, path string) string {

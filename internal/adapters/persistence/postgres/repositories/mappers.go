@@ -46,15 +46,42 @@ func boxToModel(box domain.Box) models.BoxModel {
 }
 
 func userToDomain(model models.UserModel) domain.User {
+	boxID := domain.ID("")
+	if model.BoxID != nil {
+		boxID = domainID(*model.BoxID)
+	}
 	return domain.User{
 		ID:           domainID(model.ID),
-		BoxID:        domainID(model.BoxID),
+		BoxID:        boxID,
 		Name:         model.Name,
 		Email:        model.Email,
 		PasswordHash: model.PasswordHash,
+		AuthVersion:  model.AuthVersion,
 		Role:         domain.UserRole(model.Role),
 		CreatedAt:    model.CreatedAt,
 		UpdatedAt:    model.UpdatedAt,
+	}
+}
+
+func userToModel(user domain.User) models.UserModel {
+	if user.AuthVersion < 1 {
+		user.AuthVersion = 1
+	}
+	var boxID *string
+	if user.BoxID != "" {
+		value := stringID(user.BoxID)
+		boxID = &value
+	}
+	return models.UserModel{
+		ID:           stringID(user.ID),
+		BoxID:        boxID,
+		Name:         user.Name,
+		Email:        user.Email,
+		PasswordHash: user.PasswordHash,
+		AuthVersion:  user.AuthVersion,
+		Role:         string(user.Role),
+		CreatedAt:    user.CreatedAt,
+		UpdatedAt:    user.UpdatedAt,
 	}
 }
 
@@ -64,17 +91,21 @@ func studentToDomain(model models.StudentModel) domain.Student {
 		riskStatus = domain.StudentRiskStatusActive
 	}
 	return domain.Student{
-		ID:                domainID(model.ID),
-		BoxID:             domainID(model.BoxID),
-		Name:              model.Name,
-		Email:             model.Email,
-		Phone:             model.Phone,
-		Source:            domain.Source(model.Source),
-		ExternalID:        model.ExternalID,
-		RiskStatus:        riskStatus,
-		RiskLastMessageAt: model.RiskLastMessageAt,
-		CreatedAt:         model.CreatedAt,
-		UpdatedAt:         model.UpdatedAt,
+		ID:                     domainID(model.ID),
+		BoxID:                  domainID(model.BoxID),
+		Name:                   model.Name,
+		Email:                  model.Email,
+		Phone:                  model.Phone,
+		Source:                 domain.Source(model.Source),
+		ExternalID:             model.ExternalID,
+		RiskStatus:             riskStatus,
+		RiskLastMessageAt:      model.RiskLastMessageAt,
+		ContactStatus:          modelContactStatus(model.ContactStatus),
+		ContactStatusUpdatedAt: model.ContactStatusUpdatedAt,
+		ContactStatusSource:    model.ContactStatusSource,
+		AnonymizedAt:           model.AnonymizedAt,
+		CreatedAt:              model.CreatedAt,
+		UpdatedAt:              model.UpdatedAt,
 	}
 }
 
@@ -84,18 +115,33 @@ func studentToModel(student domain.Student) models.StudentModel {
 		riskStatus = domain.StudentRiskStatusActive
 	}
 	return models.StudentModel{
-		ID:                stringID(student.ID),
-		BoxID:             stringID(student.BoxID),
-		Name:              student.Name,
-		Email:             student.Email,
-		Phone:             student.Phone,
-		Source:            string(student.Source),
-		ExternalID:        student.ExternalID,
-		RiskStatus:        string(riskStatus),
-		RiskLastMessageAt: student.RiskLastMessageAt,
-		CreatedAt:         student.CreatedAt,
-		UpdatedAt:         student.UpdatedAt,
+		ID:                     stringID(student.ID),
+		BoxID:                  stringID(student.BoxID),
+		Name:                   student.Name,
+		Email:                  student.Email,
+		Phone:                  student.Phone,
+		Source:                 string(student.Source),
+		ExternalID:             student.ExternalID,
+		RiskStatus:             string(riskStatus),
+		RiskLastMessageAt:      student.RiskLastMessageAt,
+		ContactStatus:          string(normalizedContactStatus(student.ContactStatus)),
+		ContactStatusUpdatedAt: student.ContactStatusUpdatedAt,
+		ContactStatusSource:    student.ContactStatusSource,
+		AnonymizedAt:           student.AnonymizedAt,
+		CreatedAt:              student.CreatedAt,
+		UpdatedAt:              student.UpdatedAt,
 	}
+}
+
+func modelContactStatus(value string) domain.ContactStatus {
+	return normalizedContactStatus(domain.ContactStatus(value))
+}
+
+func normalizedContactStatus(value domain.ContactStatus) domain.ContactStatus {
+	if value == "" {
+		return domain.ContactStatusUnknown
+	}
+	return value
 }
 
 func checkinToDomain(model models.CheckinModel) domain.Checkin {
@@ -265,6 +311,7 @@ func whatsappSettingsToDomain(model models.WhatsappSettingsModel) domain.Whatsap
 	return domain.WhatsappSettings{
 		ID:              domainID(model.ID),
 		BoxID:           domainID(model.BoxID),
+		ConnectionMode:  domain.WhatsappConnectionMode(model.ConnectionMode),
 		Provider:        model.Provider,
 		BaseURL:         model.BaseURL,
 		InstanceName:    model.InstanceName,
@@ -279,6 +326,7 @@ func whatsappSettingsToModel(settings domain.WhatsappSettings) models.WhatsappSe
 	return models.WhatsappSettingsModel{
 		ID:              stringID(settings.ID),
 		BoxID:           stringID(settings.BoxID),
+		ConnectionMode:  string(settings.ConnectionMode),
 		Provider:        settings.Provider,
 		BaseURL:         settings.BaseURL,
 		InstanceName:    settings.InstanceName,
@@ -290,44 +338,98 @@ func whatsappSettingsToModel(settings domain.WhatsappSettings) models.WhatsappSe
 }
 
 func messageTemplateToDomain(model models.MessageTemplateModel) domain.MessageTemplate {
-	return domain.MessageTemplate{ID: domainID(model.ID), BoxID: domainID(model.BoxID), Name: model.Name, Content: model.Content, ContentSID: model.ContentSID, CreatedAt: model.CreatedAt, UpdatedAt: model.UpdatedAt}
+	status := domain.MessageTemplateApprovalStatus(model.ApprovalStatus)
+	if status == "" {
+		status = domain.MessageTemplateNotConfigured
+	}
+	return domain.MessageTemplate{
+		ID:             domainID(model.ID),
+		BoxID:          domainID(model.BoxID),
+		Name:           model.Name,
+		Content:        model.Content,
+		ContentSID:     model.ContentSID,
+		TemplateType:   domain.MessageTemplateType(model.TemplateType),
+		Provider:       model.Provider,
+		ApprovalStatus: status,
+		Language:       model.Language,
+		CreatedAt:      model.CreatedAt,
+		UpdatedAt:      model.UpdatedAt,
+	}
 }
 
 func messageTemplateToModel(template domain.MessageTemplate) models.MessageTemplateModel {
-	return models.MessageTemplateModel{ID: stringID(template.ID), BoxID: stringID(template.BoxID), Name: template.Name, Content: template.Content, ContentSID: template.ContentSID, CreatedAt: template.CreatedAt, UpdatedAt: template.UpdatedAt}
+	status := template.ApprovalStatus
+	if status == "" {
+		status = domain.MessageTemplateNotConfigured
+	}
+	return models.MessageTemplateModel{
+		ID:             stringID(template.ID),
+		BoxID:          stringID(template.BoxID),
+		Name:           template.Name,
+		Content:        template.Content,
+		ContentSID:     template.ContentSID,
+		TemplateType:   string(template.TemplateType),
+		Provider:       template.Provider,
+		ApprovalStatus: string(status),
+		Language:       template.Language,
+		CreatedAt:      template.CreatedAt,
+		UpdatedAt:      template.UpdatedAt,
+	}
 }
 
 func messageCampaignToDomain(model models.MessageCampaignModel) domain.MessageCampaign {
-	return domain.MessageCampaign{ID: domainID(model.ID), BoxID: domainID(model.BoxID), CampaignID: domainID(model.CampaignID), Name: model.Name, Audience: domain.MessageAudience(model.Audience), TemplateID: domainID(model.TemplateID), SentAt: model.SentAt, CreatedAt: model.CreatedAt}
+	return domain.MessageCampaign{ID: domainID(model.ID), BoxID: domainID(model.BoxID), CampaignID: domainID(model.CampaignID), Name: model.Name, Audience: domain.MessageAudience(model.Audience), TemplateID: domainID(model.TemplateID), TemplateType: domain.MessageTemplateType(model.TemplateType), SentAt: model.SentAt, CreatedAt: model.CreatedAt}
 }
 
 func messageCampaignToModel(campaign domain.MessageCampaign) models.MessageCampaignModel {
-	return models.MessageCampaignModel{ID: stringID(campaign.ID), BoxID: stringID(campaign.BoxID), CampaignID: stringID(campaign.CampaignID), Name: campaign.Name, Audience: string(campaign.Audience), TemplateID: stringID(campaign.TemplateID), SentAt: campaign.SentAt, CreatedAt: campaign.CreatedAt}
+	return models.MessageCampaignModel{ID: stringID(campaign.ID), BoxID: stringID(campaign.BoxID), CampaignID: stringID(campaign.CampaignID), Name: campaign.Name, Audience: string(campaign.Audience), TemplateID: stringID(campaign.TemplateID), TemplateType: string(campaign.TemplateType), SentAt: campaign.SentAt, CreatedAt: campaign.CreatedAt}
 }
 
 func messageRecipientToDomain(model models.MessageRecipientModel) domain.MessageRecipient {
+	providerSID, dispatchID := "", ""
+	if model.ProviderMessageSID != nil {
+		providerSID = *model.ProviderMessageSID
+	}
+	if model.DispatchID != nil {
+		dispatchID = *model.DispatchID
+	}
 	return domain.MessageRecipient{
-		ID:                domainID(model.ID),
-		MessageCampaignID: domainID(model.MessageCampaignID),
-		StudentID:         domainID(model.StudentID),
-		Phone:             model.Phone,
-		Status:            domain.MessageRecipientStatus(model.Status),
-		ErrorMessage:      model.ErrorMessage,
-		SentAt:            model.SentAt,
-		CreatedAt:         model.CreatedAt,
+		ID:                 domainID(model.ID),
+		MessageCampaignID:  domainID(model.MessageCampaignID),
+		StudentID:          domainID(model.StudentID),
+		Phone:              model.Phone,
+		Status:             domain.MessageRecipientStatus(model.Status),
+		ErrorMessage:       model.ErrorMessage,
+		ProviderMessageSID: providerSID,
+		ProviderStatus:     model.ProviderStatus,
+		DispatchID:         domain.ID(dispatchID),
+		SentAt:             model.SentAt,
+		CreatedAt:          model.CreatedAt,
 	}
 }
 
 func messageRecipientToModel(recipient domain.MessageRecipient) models.MessageRecipientModel {
+	var providerSID, dispatchID *string
+	if recipient.ProviderMessageSID != "" {
+		value := recipient.ProviderMessageSID
+		providerSID = &value
+	}
+	if recipient.DispatchID != "" {
+		value := string(recipient.DispatchID)
+		dispatchID = &value
+	}
 	return models.MessageRecipientModel{
-		ID:                stringID(recipient.ID),
-		MessageCampaignID: stringID(recipient.MessageCampaignID),
-		StudentID:         stringID(recipient.StudentID),
-		Phone:             recipient.Phone,
-		Status:            string(recipient.Status),
-		ErrorMessage:      recipient.ErrorMessage,
-		SentAt:            recipient.SentAt,
-		CreatedAt:         recipient.CreatedAt,
+		ID:                 stringID(recipient.ID),
+		MessageCampaignID:  stringID(recipient.MessageCampaignID),
+		StudentID:          stringID(recipient.StudentID),
+		Phone:              recipient.Phone,
+		Status:             string(recipient.Status),
+		ErrorMessage:       recipient.ErrorMessage,
+		ProviderMessageSID: providerSID,
+		ProviderStatus:     recipient.ProviderStatus,
+		DispatchID:         dispatchID,
+		SentAt:             recipient.SentAt,
+		CreatedAt:          recipient.CreatedAt,
 	}
 }
 
@@ -408,9 +510,16 @@ func emailRecipientToModel(recipient domain.EmailRecipient) models.EmailRecipien
 }
 
 func automationRunToDomain(model models.AutomationRunModel) domain.AutomationRun {
+	scheduleID := domain.ID("")
+	if model.ScheduleID != nil {
+		scheduleID = domainID(*model.ScheduleID)
+	}
 	return domain.AutomationRun{
 		ID:                      domainID(model.ID),
 		BoxID:                   domainID(model.BoxID),
+		ScheduleID:              scheduleID,
+		ExecutionKey:            model.ExecutionKey,
+		ScheduledFor:            model.ScheduledFor,
 		Status:                  model.Status,
 		Source:                  model.Source,
 		Filename:                model.Filename,
@@ -426,9 +535,17 @@ func automationRunToDomain(model models.AutomationRunModel) domain.AutomationRun
 }
 
 func automationRunToModel(run domain.AutomationRun) models.AutomationRunModel {
+	var scheduleID *string
+	if run.ScheduleID != "" {
+		value := stringID(run.ScheduleID)
+		scheduleID = &value
+	}
 	return models.AutomationRunModel{
 		ID:                      stringID(run.ID),
 		BoxID:                   stringID(run.BoxID),
+		ScheduleID:              scheduleID,
+		ExecutionKey:            run.ExecutionKey,
+		ScheduledFor:            run.ScheduledFor,
 		Status:                  run.Status,
 		Source:                  run.Source,
 		Filename:                run.Filename,
@@ -571,6 +688,13 @@ func workoutDraftToModel(draft domain.WorkoutMessageDraft) models.WorkoutMessage
 }
 
 func workoutRecipientToDomain(model models.WorkoutMessageRecipientModel) domain.WorkoutMessageRecipient {
+	providerSID, dispatchID := "", ""
+	if model.ProviderMessageSID != nil {
+		providerSID = *model.ProviderMessageSID
+	}
+	if model.DispatchID != nil {
+		dispatchID = *model.DispatchID
+	}
 	return domain.WorkoutMessageRecipient{
 		ID:                    domainID(model.ID),
 		WorkoutMessageDraftID: domainID(model.WorkoutMessageDraftID),
@@ -578,12 +702,24 @@ func workoutRecipientToDomain(model models.WorkoutMessageRecipientModel) domain.
 		Phone:                 model.Phone,
 		Status:                domain.MessageRecipientStatus(model.Status),
 		ErrorMessage:          model.ErrorMessage,
+		ProviderMessageSID:    providerSID,
+		ProviderStatus:        model.ProviderStatus,
+		DispatchID:            domain.ID(dispatchID),
 		SentAt:                model.SentAt,
 		CreatedAt:             model.CreatedAt,
 	}
 }
 
 func workoutRecipientToModel(recipient domain.WorkoutMessageRecipient) models.WorkoutMessageRecipientModel {
+	var providerSID, dispatchID *string
+	if recipient.ProviderMessageSID != "" {
+		value := recipient.ProviderMessageSID
+		providerSID = &value
+	}
+	if recipient.DispatchID != "" {
+		value := string(recipient.DispatchID)
+		dispatchID = &value
+	}
 	return models.WorkoutMessageRecipientModel{
 		ID:                    stringID(recipient.ID),
 		WorkoutMessageDraftID: stringID(recipient.WorkoutMessageDraftID),
@@ -591,6 +727,9 @@ func workoutRecipientToModel(recipient domain.WorkoutMessageRecipient) models.Wo
 		Phone:                 recipient.Phone,
 		Status:                string(recipient.Status),
 		ErrorMessage:          recipient.ErrorMessage,
+		ProviderMessageSID:    providerSID,
+		ProviderStatus:        recipient.ProviderStatus,
+		DispatchID:            dispatchID,
 		SentAt:                recipient.SentAt,
 		CreatedAt:             recipient.CreatedAt,
 	}

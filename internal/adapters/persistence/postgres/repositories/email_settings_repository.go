@@ -15,6 +15,11 @@ func (r EmailSettingsGormRepository) FindByBoxID(ctx context.Context, boxID doma
 		return nil, err
 	}
 	settings := emailSettingsToDomain(model)
+	decrypted, err := r.cipher.Decrypt(settings.PasswordEncrypted, emailSecretAAD(settings.BoxID))
+	if err != nil {
+		return nil, err
+	}
+	settings.PasswordEncrypted = decrypted
 	return &settings, nil
 }
 
@@ -22,11 +27,21 @@ func (r EmailSettingsGormRepository) Upsert(ctx context.Context, settings *domai
 	if err := ensureID(&settings.ID); err != nil {
 		return err
 	}
-	model := emailSettingsToModel(*settings)
+	persisted := *settings
+	var err error
+	persisted.PasswordEncrypted, err = r.cipher.Encrypt(settings.PasswordEncrypted, emailSecretAAD(settings.BoxID))
+	if err != nil {
+		return err
+	}
+	model := emailSettingsToModel(persisted)
 	return r.db.WithContext(ctx).Clauses(clause.OnConflict{
 		Columns: []clause.Column{{Name: "box_id"}},
 		DoUpdates: clause.AssignmentColumns([]string{
 			"provider", "smtp_host", "smtp_port", "username", "password_encrypted", "from_email", "from_name", "enabled", "updated_at",
 		}),
 	}).Create(&model).Error
+}
+
+func emailSecretAAD(boxID domain.ID) string {
+	return "email_settings:" + string(boxID) + ":password"
 }

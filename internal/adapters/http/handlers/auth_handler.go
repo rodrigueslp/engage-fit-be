@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -13,16 +14,47 @@ import (
 type AuthHandler struct {
 	login       auth.LoginUseCase
 	currentUser auth.GetCurrentUserUseCase
+	password    auth.ChangePasswordUseCase
+	logout      auth.LogoutUseCase
+	session     middleware.SessionConfig
 }
 
-func NewAuthHandler(login auth.LoginUseCase, currentUser auth.GetCurrentUserUseCase) AuthHandler {
-	return AuthHandler{login: login, currentUser: currentUser}
+func NewAuthHandler(login auth.LoginUseCase, currentUser auth.GetCurrentUserUseCase, password auth.ChangePasswordUseCase, logout auth.LogoutUseCase, session ...middleware.SessionConfig) AuthHandler {
+	config := middleware.SessionConfig{}
+	if len(session) > 0 {
+		config = session[0]
+	}
+	return AuthHandler{login: login, currentUser: currentUser, password: password, logout: logout, session: config}
+}
+
+func (h AuthHandler) ChangePassword(c *gin.Context) {
+	userID, err := middleware.UserID(c)
+	if err != nil {
+		respondUnauthorized(c)
+		return
+	}
+	var request dto.ChangePasswordRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		respondBadRequest(c)
+		return
+	}
+	err = h.password.Execute(c.Request.Context(), auth.ChangePasswordInput{UserID: userID, CurrentPassword: request.CurrentPassword, NewPassword: request.NewPassword})
+	if errors.Is(err, auth.ErrInvalidCurrentPassword) || errors.Is(err, auth.ErrInvalidNewPassword) {
+		respondPublicError(c, http.StatusBadRequest, "password_invalid", err.Error())
+		return
+	}
+	if err != nil {
+		respondError(c, err)
+		return
+	}
+	middleware.ClearSession(c, h.session)
+	c.Status(http.StatusNoContent)
 }
 
 func (h AuthHandler) Login(c *gin.Context) {
 	var request dto.LoginRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "invalid request"})
+		respondPublicError(c, http.StatusBadRequest, "invalid_request", "invalid request")
 		return
 	}
 
@@ -31,7 +63,11 @@ func (h AuthHandler) Login(c *gin.Context) {
 		Password: request.Password,
 	})
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"message": "invalid credentials"})
+		respondPublicError(c, http.StatusUnauthorized, "invalid_credentials", "invalid credentials")
+		return
+	}
+	if err := middleware.SetSession(c, h.session, output.AccessToken); err != nil {
+		respondPublicError(c, http.StatusInternalServerError, "session_creation_failed", "could not create session")
 		return
 	}
 
@@ -39,19 +75,29 @@ func (h AuthHandler) Login(c *gin.Context) {
 }
 
 func (h AuthHandler) Logout(c *gin.Context) {
+	userID, err := middleware.UserID(c)
+	if err != nil {
+		respondUnauthorized(c)
+		return
+	}
+	if err := h.logout.Execute(c.Request.Context(), userID); err != nil {
+		respondError(c, err)
+		return
+	}
+	middleware.ClearSession(c, h.session)
 	c.Status(http.StatusNoContent)
 }
 
 func (h AuthHandler) Me(c *gin.Context) {
 	userID, err := middleware.UserID(c)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"message": "missing user context"})
+		respondPublicError(c, http.StatusUnauthorized, "user_context_missing", "missing user context")
 		return
 	}
 
 	user, err := h.currentUser.Execute(c.Request.Context(), userID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"message": "user not found"})
+		respondPublicError(c, http.StatusNotFound, "user_not_found", "user not found")
 		return
 	}
 

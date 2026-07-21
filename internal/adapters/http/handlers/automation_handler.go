@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"net/http"
 	"time"
 
@@ -72,12 +73,23 @@ func (h AutomationHandler) CreateRun(c *gin.Context) {
 		respondBadRequest(c)
 		return
 	}
-	run := domain.AutomationRun{BoxID: boxID, Status: "running", Source: request.Source, Filename: request.Filename, Imported: request.Imported, RecalculatedCampaigns: request.RecalculatedCampaigns, SkippedMessageCampaigns: request.SkippedMessageCampaigns, SentMessages: request.SentMessages, FailedMessages: request.FailedMessages, ErrorMessage: request.ErrorMessage, StartedAt: time.Now()}
-	if err := h.createRun.Execute(c.Request.Context(), &run); err != nil {
+	run := domain.AutomationRun{BoxID: boxID, ExecutionKey: c.GetHeader("Idempotency-Key"), Status: "running", Source: request.Source, Filename: request.Filename, Imported: request.Imported, RecalculatedCampaigns: request.RecalculatedCampaigns, SkippedMessageCampaigns: request.SkippedMessageCampaigns, SentMessages: request.SentMessages, FailedMessages: request.FailedMessages, ErrorMessage: request.ErrorMessage, StartedAt: time.Now()}
+	saved, existing, err := h.createRun.Execute(c.Request.Context(), &run)
+	if err != nil {
+		if errors.Is(err, automation.ErrInvalidIdempotencyKey) {
+			respondBadRequest(c)
+			return
+		}
 		respondError(c, err)
 		return
 	}
-	c.JSON(http.StatusCreated, automationRunResponse(run))
+	status := http.StatusCreated
+	if existing {
+		status = http.StatusOK
+	}
+	response := automationRunResponse(*saved)
+	response.IdempotentReplay = existing
+	c.JSON(status, response)
 }
 
 func (h AutomationHandler) UpdateRun(c *gin.Context) {
@@ -147,6 +159,10 @@ func (h AutomationHandler) CreateSchedule(c *gin.Context) {
 	now := time.Now()
 	schedule := domain.AutomationSchedule{BoxID: boxID, Name: request.Name, Mode: request.Mode, RunTime: request.RunTime, Timezone: request.Timezone, DaysOfWeek: request.DaysOfWeek, AllowResend: request.AllowResend, Enabled: request.Enabled, CreatedAt: now, UpdatedAt: now}
 	if err := h.createSchedule.Execute(c.Request.Context(), &schedule); err != nil {
+		if errors.Is(err, automation.ErrInvalidSchedule) {
+			respondBadRequest(c)
+			return
+		}
 		respondError(c, err)
 		return
 	}
@@ -178,6 +194,10 @@ func (h AutomationHandler) UpdateSchedule(c *gin.Context) {
 	schedule.Enabled = request.Enabled
 	schedule.UpdatedAt = time.Now()
 	if err := h.updateSchedule.Execute(c.Request.Context(), *schedule); err != nil {
+		if errors.Is(err, automation.ErrInvalidSchedule) {
+			respondBadRequest(c)
+			return
+		}
 		respondError(c, err)
 		return
 	}
@@ -203,8 +223,12 @@ func (h AutomationHandler) RunScheduleNow(c *gin.Context) {
 		respondUnauthorized(c)
 		return
 	}
-	run, err := h.executeSchedule.Execute(c.Request.Context(), boxID, domain.ID(c.Param("id")))
+	run, err := h.executeSchedule.ExecuteWithKey(c.Request.Context(), boxID, domain.ID(c.Param("id")), c.GetHeader("Idempotency-Key"))
 	if err != nil {
+		if errors.Is(err, automation.ErrInvalidIdempotencyKey) {
+			respondBadRequest(c)
+			return
+		}
 		respondError(c, err)
 		return
 	}

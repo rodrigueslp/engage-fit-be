@@ -13,7 +13,17 @@ type WhatsappMessage struct {
 	ContentVariables map[string]string
 }
 
+type WhatsappSendResult struct {
+	ProviderMessageID string
+	InitialStatus     string
+}
+
 type WhatsappGateway interface {
 	Test(ctx context.Context, settings domain.WhatsappSettings) error
-	Send(ctx context.Context, settings domain.WhatsappSettings, message WhatsappMessage) error
+	Send(ctx context.Context, settings domain.WhatsappSettings, message WhatsappMessage) (*WhatsappSendResult, error)
+}
+
+type WhatsappSettingsResolver interface {
+	Resolve(ctx context.Context, boxID domain.ID) (*domain.WhatsappSettings, error)
+	ResolveMetadata(ctx context.Context, boxID domain.ID) (*domain.WhatsappSettings, error)
 }
