@@ -1,5 +1,7 @@
 # EngageFit Backend
 
+Manual canônico de arquitetura, regras de negócio e manutenção: [`docs/system-design.md`](docs/system-design.md).
+
 Guia consolidado de segurança, operação, testes, observabilidade, privacidade e preparação para produção: [`docs/application-readiness-guide.md`](docs/application-readiness-guide.md).
 
 Documentação da governança de limites e custos do WhatsApp: [`.ai/messaging-governance.md`](.ai/messaging-governance.md).

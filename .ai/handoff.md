@@ -1,6 +1,8 @@
 # EngageFit - Handoff de Contexto
 
-Guia operacional consolidado para leitura humana: `docs/application-readiness-guide.md`.
+Manual canônico de arquitetura e negócio: `docs/system-design.md`.
+
+Guia operacional consolidado: `docs/application-readiness-guide.md`.
 
 Atualizado em: 2026-07-21
 
@@ -13,6 +15,7 @@ Atualizado em: 2026-07-21
 - Todos os gates P0/P1 foram concluidos: sessao HttpOnly/CSRF, CSP/headers, kill switches, metricas/alertas, erros com `request_id`, Playwright e integracoes PostgreSQL adicionais.
 - Playwright passou contra API/PostgreSQL reais com gateways externos desligados: owner percorreu importacao, campanha, recalculo, dashboard, brinde, privacidade, troca de senha e logout; PLATFORM_ADMIN percorreu administracao e reset de senha.
 - O teste de destinatarios encontrou e corrigiu o mapeamento GORM de `provider_message_sid`; a regressao esta coberta em PostgreSQL real.
+- A revisão do manual encontrou e corrigiu a permissão de efeito externo: SMTP e WhatsApp reais agora exigem `*_ALLOW_REAL_SEND=true` também em production; mocks continuam liberados. Testes impedem regressão.
 - Auditoria final reconstruiu as imagens, confirmou usuarios sem privilegios, build info/health, headers do frontend, `SIGTERM`, retencao dry-run e configuracao production fail-fast.
 - O proximo trabalho e exclusivamente a fase de infraestrutura descrita em `docs/railway-deployment-checklist.md`, alem da Twilio que continua fora deste escopo.
 

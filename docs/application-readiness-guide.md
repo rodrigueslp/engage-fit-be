@@ -2,7 +2,7 @@
 
 Atualizado em: 2026-07-20
 
-Este é o documento principal para entender a preparação do EngageFit no nível da aplicação. Ele explica as decisões, os comandos operacionais e os cuidados necessários. O `.ai/handoff.md` continua sendo o histórico técnico detalhado.
+Este é o guia operacional da preparação do EngageFit no nível da aplicação. O modelo completo de arquitetura e negócio está em `docs/system-design.md`; o `.ai/handoff.md` continua sendo o histórico técnico detalhado.
 
 ## O que você precisa saber primeiro
 
@@ -257,7 +257,7 @@ Backend CI executa:
 - build dos quatro binários operacionais;
 - validação dos scripts Node.
 
-Frontend CI executa `npm ci` e build TypeScript/Vite.
+Frontend CI executa `npm ci`, build TypeScript/Vite, Playwright mockado e Playwright real contra API/PostgreSQL com gateways externos desligados.
 
 O smoke cobre:
 
@@ -467,6 +467,7 @@ Evoluções de aplicação recomendadas depois desta fase:
 
 ## Onde encontrar mais detalhes
 
+- Manual canônico de engenharia: `docs/system-design.md`.
 - Histórico técnico completo: `.ai/handoff.md`.
 - Checklist separado da infraestrutura: `docs/railway-deployment-checklist.md`.
 - Governança WhatsApp: `.ai/messaging-governance.md`.
