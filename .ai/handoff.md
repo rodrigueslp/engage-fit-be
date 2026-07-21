@@ -19,7 +19,17 @@ Atualizado em: 2026-07-21
 - Auditoria final reconstruiu as imagens, confirmou usuarios sem privilegios, build info/health, headers do frontend, `SIGTERM`, retencao dry-run e configuracao production fail-fast.
 - O proximo trabalho e exclusivamente a fase de infraestrutura descrita em `docs/railway-deployment-checklist.md`, alem da Twilio que continua fora deste escopo.
 
-## Direcao atual - prontidao da aplicacao antes do deploy
+## Checkpoint de transferencia de conhecimento em 2026-07-21
+
+- `docs/system-design.md` foi criado como manual canonico para o proprietario tecnico e deve ser atualizado no mesmo pull request que alterar arquitetura, regra de negocio, seguranca, tenancy, privacidade, efeitos externos ou operacao.
+- O manual documenta atores, arquitetura, pipeline HTTP, sessao, capabilities, modelo de dados, importacao, campanhas, progresso, brindes, risco, comunicacao, automacao, privacidade, criptografia, migrations, runtime, observabilidade, configuracao, API, testes, trade-offs e dividas conhecidas.
+- A secao 26 contem uma trilha pratica de estudo e exercicios locais; a secao 27 funciona como verificacao de dominio do sistema; a secao 29 aponta os arquivos-fonte de cada assunto.
+- A revisao cruzada entre documentacao e implementacao encontrou uma falha nos kill switches: production liberava SMTP e WhatsApp reais mesmo com as flags desligadas. Isso foi corrigido e coberto por testes.
+- Commits deste fechamento: `b3245a2` (`fix: require explicit permission for real sends`) e `eb87a9f` (`docs: add canonical system engineering manual`).
+- Validacao final: `go test ./...`, `go vet ./...`, `git diff --check` e conferencia dos links locais do manual passaram; os dois repositorios ficaram limpos.
+- Nenhum push ou deploy foi executado. O proximo passo recomendado e percorrer a trilha de conhecimento localmente e depois executar o checklist do Railway, mantendo a integracao efetiva com Twilio fora do escopo por enquanto.
+
+## Direcao concluida - prontidao da aplicacao antes do deploy
 
 Decisao registrada em: 2026-07-20
 
@@ -986,6 +996,9 @@ Prioridade media:
 
 Docs:
 
+- `docs/system-design.md` (fonte canonica de arquitetura, negocio e manutencao)
+- `docs/application-readiness-guide.md` (guia operacional da aplicacao)
+- `docs/railway-deployment-checklist.md` (proxima fase de infraestrutura)
 - `.ai/product-vision.md`
 - `.ai/domain.md`
 - `.ai/database.md`
@@ -1044,5 +1057,5 @@ Infra/dev:
 Mensagem sugerida:
 
 ```txt
-Leia `.ai/handoff.md` e continue a partir dele. WhatsApp ja tem preview renderizado, campanhas de mensagem vinculadas a `campaign_id`, edicao de campanhas/metas/brindes na UI, Evolution API removida (Twilio + Meta Cloud), e-mail personalizado implementado, automacao diaria implementada com `automation_runs`, `automation_schedules`, worker interno e alternativa operacional via `make daily-automation`, e Treino do dia implementado com OpenAI, rascunhos aprovaveis e envio WhatsApp auditado. Próximo foco sugerido: operacionalizar automacao em ambiente real, definir fonte automatica de check-ins do dia anterior, adicionar alertas para falhas, evoluir relatorios/filtros server-side e amadurecer o fluxo comercial do Treino do dia com templates aprovados/opt-in.
+Leia `.ai/handoff.md` e use `docs/system-design.md` como fonte canonica da arquitetura e das regras de negocio. A prontidao da aplicacao foi concluida e validada localmente; os commits finais sao `05719a4`, `b3245a2` e `eb87a9f` no backend e `9bff064` no frontend. Nenhum push ou deploy foi feito. Proximo foco: percorrer a trilha de transferencia de conhecimento da secao 26 do manual e, depois, preparar o Railway conforme `docs/railway-deployment-checklist.md`. Deixe a integracao efetiva com Twilio fora do escopo ate decisao explicita.
 ```
