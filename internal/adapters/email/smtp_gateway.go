@@ -56,11 +56,11 @@ func (g SMTPGateway) Send(ctx context.Context, settings domain.EmailSettings, me
 	if provider == "mock" || strings.HasPrefix(strings.ToLower(settings.SMTPHost), "mock://") {
 		return nil
 	}
-	if g.appEnv == "development" && !g.allowRealSend {
-		return fmt.Errorf("real email sending is blocked in development; set EMAIL_ALLOW_REAL_SEND=true or use provider mock")
+	if !g.allowRealSend {
+		return fmt.Errorf("real email sending is disabled in %s; set EMAIL_ALLOW_REAL_SEND=true only after provider approval", g.appEnv)
 	}
 	toEmail := strings.TrimSpace(message.ToEmail)
-	if g.appEnv == "development" && strings.TrimSpace(g.devRecipientEmail) != "" {
+	if g.appEnv != "production" && strings.TrimSpace(g.devRecipientEmail) != "" {
 		toEmail = strings.TrimSpace(g.devRecipientEmail)
 	}
 	if err := g.Test(ctx, settings); err != nil {

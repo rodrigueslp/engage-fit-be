@@ -32,12 +32,16 @@ func (g SafeGateway) Test(ctx context.Context, settings domain.WhatsappSettings)
 }
 
 func (g SafeGateway) Send(ctx context.Context, settings domain.WhatsappSettings, message services.WhatsappMessage) (*services.WhatsappSendResult, error) {
-	if isMock(settings) || g.appEnv == "production" {
+	if isMock(settings) {
 		return g.next.Send(ctx, settings, message)
 	}
 
 	if !g.allowRealSend {
-		return nil, fmt.Errorf("real WhatsApp send is disabled in %s; set WHATSAPP_ALLOW_REAL_SEND=true and configure WHATSAPP_DEV_ALLOWED_RECIPIENT_PHONES or WHATSAPP_DEV_RECIPIENT_PHONE to test locally", g.appEnv)
+		return nil, fmt.Errorf("real WhatsApp send is disabled in %s; set WHATSAPP_ALLOW_REAL_SEND=true only after provider approval", g.appEnv)
+	}
+
+	if g.appEnv == "production" {
+		return g.next.Send(ctx, settings, message)
 	}
 
 	if len(g.devAllowedRecipientPhones) > 0 {
