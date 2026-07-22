@@ -17,6 +17,7 @@ Atualizado em: 2026-07-22 (revisão completa de UX do frontend)
 - Importações ganhou upload por seleção/arrastar, origem explícita, retorno da última importação e histórico com data/status. WhatsApp ganhou indicadores de consumo, confirmação de envio e menos detalhes técnicos expostos.
 - Automação, E-mail e Treino do dia passaram a separar configuração/operação de histórico; execuções de automação ficaram compactas e expansíveis. A arquitetura já segmentada de Configurações e Administração foi preservada.
 - O fluxo E2E real foi atualizado para os novos controles. Após a primeira esteira apontar seletores ambíguos entre as versões mobile e desktop no DOM, os seletores foram tornados explícitos para os elementos visíveis. Validações executadas: TypeScript/build Vite, Playwright mockado, `git diff --check`, revisão visual desktop/mobile e os dois fluxos Playwright reais contra API/PostgreSQL temporários; owner e PLATFORM_ADMIN passaram.
+- A correção dos seletores foi publicada no frontend pelo commit `3623924` (`test: target visible responsive elements in real e2e`). A execução `Frontend CI #6` (`29923876178`) concluiu com sucesso, incluindo o step `Real browser E2E with PostgreSQL`; o banco local temporário `boxengage_ux_e2e_20260722` usado na reprodução foi removido depois dos testes.
 - Nenhuma migration é necessária para esta entrega.
 
 ## Checkpoint de campanhas e consulta de check-ins em 2026-07-21
