@@ -44,7 +44,8 @@ jobs:
       - name: Apply migrations on fresh PostgreSQL
         run: go run ./cmd/migrate up
       - name: Verify migration idempotency
-        run: test "$(go run ./cmd/migrate up)" = "migration complete: 0 applied"
+        run: |
+          test "$(go run ./cmd/migrate up)" = "migration complete: 0 applied"
       - name: Test with race detector and PostgreSQL integration
         run: go test -race -count=1 ./...
       - name: API smoke test
@@ -58,12 +59,16 @@ jobs:
           go run ./cmd/api > api-smoke.log 2>&1 &
           API_PID=$!
           trap 'kill "$API_PID" 2>/dev/null || true; cat api-smoke.log' EXIT
-          for attempt in $(seq 1 30); do
-            curl --fail --silent http://localhost:18080/health/ready && break
+          for attempt in $(seq 1 90); do
+            curl --fail --silent http://127.0.0.1:18080/health/ready && break
+            if ! kill -0 "$API_PID" 2>/dev/null; then
+              echo "API process exited before becoming ready"
+              exit 1
+            fi
             sleep 1
           done
-          curl --fail --silent http://localhost:18080/health/ready
-          API_BASE_URL=http://localhost:18080 node scripts/smoke-api.mjs
+          curl --fail --silent http://127.0.0.1:18080/health/ready
+          API_BASE_URL=http://127.0.0.1:18080 node scripts/smoke-api.mjs
       - name: Build release binaries
         run: |
           go build ./cmd/api
