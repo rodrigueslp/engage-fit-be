@@ -30,20 +30,25 @@ func TestOperationalReportsRewardsAndRecipients(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now().UTC().Truncate(time.Second)
 	boxID, studentID := uuid.NewString(), uuid.NewString()
+	staleStudentID, staleProgressID := uuid.NewString(), uuid.NewString()
 	importID, checkinID := uuid.NewString(), uuid.NewString()
 	campaignID, progressID := uuid.NewString(), uuid.NewString()
 	rewardID, deliveryID := uuid.NewString(), uuid.NewString()
+	staleDeliveryID := uuid.NewString()
 	templateID, messageCampaignID := uuid.NewString(), uuid.NewString()
 
 	fixtures := []any{
 		&models.BoxModel{ID: boxID, Name: "operational-flow", RiskInactiveDays: 7, RiskMessageCooldownDays: 14, CreatedAt: now, UpdatedAt: now},
 		&models.StudentModel{ID: studentID, BoxID: boxID, Name: "Student Reports", Phone: "+5511999999999", Source: "totalpass", ExternalID: uuid.NewString(), RiskStatus: "active", ContactStatus: "unknown", CreatedAt: now, UpdatedAt: now},
+		&models.StudentModel{ID: staleStudentID, BoxID: boxID, Name: "Outside Campaign", Source: "totalpass", ExternalID: uuid.NewString(), RiskStatus: "active", ContactStatus: "unknown", CreatedAt: now, UpdatedAt: now},
 		&models.ImportHistoryModel{ID: importID, BoxID: boxID, Filename: "report.csv", Source: "totalpass", TotalRecords: 1, ImportedAt: now},
 		&models.CheckinModel{ID: checkinID, BoxID: boxID, StudentID: studentID, CheckinDate: now, Source: "totalpass", ImportHistoryID: importID, CreatedAt: now},
 		&models.CampaignModel{ID: campaignID, BoxID: boxID, Name: "Report Campaign", StartDate: now.AddDate(0, 0, -1), EndDate: now.AddDate(0, 0, 1), Active: true, CreatedAt: now, UpdatedAt: now},
 		&models.CampaignProgressModel{ID: progressID, CampaignID: campaignID, StudentID: studentID, CurrentCheckins: 1, TargetCheckins: 1, ProgressPercentage: 100, Achieved: true, UpdatedAt: now},
+		&models.CampaignProgressModel{ID: staleProgressID, CampaignID: campaignID, StudentID: staleStudentID, CurrentCheckins: 0, TargetCheckins: 10, ProgressPercentage: 0, UpdatedAt: now},
 		&models.RewardModel{ID: rewardID, CampaignID: campaignID, Name: "Report Reward", Quantity: 1},
 		&models.RewardDeliveryModel{ID: deliveryID, RewardID: rewardID, StudentID: studentID, Delivered: false},
+		&models.RewardDeliveryModel{ID: staleDeliveryID, RewardID: rewardID, StudentID: staleStudentID, Delivered: false},
 		&models.MessageTemplateModel{ID: templateID, BoxID: boxID, Name: "Operational Template", Content: "Hello", TemplateType: "manual", Provider: "twilio", ApprovalStatus: "approved", Language: "pt_BR", CreatedAt: now, UpdatedAt: now},
 		&models.MessageCampaignModel{ID: messageCampaignID, BoxID: boxID, CampaignID: campaignID, Name: "Operational Message", Audience: "all", TemplateID: templateID, TemplateType: "manual", CreatedAt: now},
 	}
@@ -62,6 +67,18 @@ func TestOperationalReportsRewardsAndRecipients(t *testing.T) {
 	if len(eligible) != 1 || eligible[0].StudentID != domain.ID(studentID) || eligible[0].RewardName != "Report Reward" || eligible[0].RemainingCheckins != 0 {
 		t.Fatalf("unexpected eligible report: %+v", eligible)
 	}
+	if err := campaigns.ReplaceProgress(ctx, domain.ID(campaignID), []domain.CampaignProgress{
+		domain.NewCampaignProgress(domain.ID(campaignID), domain.ID(studentID), 2, 3),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	replaced, err := campaigns.ListProgress(ctx, domain.ID(campaignID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(replaced) != 1 || replaced[0].StudentID != domain.ID(studentID) || replaced[0].CurrentCheckins != 2 {
+		t.Fatalf("campaign progress was not replaced: %+v", replaced)
+	}
 
 	checkins := NewCheckinGormRepository(db)
 	frequency, err := checkins.ListMonthlyFrequency(ctx, domain.ID(boxID), domain.TimeRange{Start: now.AddDate(0, 0, -1), End: now.AddDate(0, 0, 1)})
@@ -73,6 +90,9 @@ func TestOperationalReportsRewardsAndRecipients(t *testing.T) {
 	}
 
 	rewards := NewRewardGormRepository(db)
+	if err := rewards.SyncPendingDeliveries(ctx, domain.ID(rewardID), []domain.ID{domain.ID(studentID)}); err != nil {
+		t.Fatal(err)
+	}
 	pending, err := rewards.ListPendingDeliveries(ctx, domain.ID(boxID))
 	if err != nil {
 		t.Fatal(err)

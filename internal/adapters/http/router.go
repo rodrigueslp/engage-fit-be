@@ -350,6 +350,7 @@ func NewRouter(deps RouterDependencies) *gin.Engine {
 	protected.GET("/reports/eligible-students", reportsHandler.EligibleStudents)
 	protected.GET("/reports/pending-rewards", reportsHandler.PendingRewards)
 	protected.GET("/reports/monthly-frequency", reportsHandler.MonthlyFrequency)
+	protected.GET("/checkins/summary", reportsHandler.CheckinSummary)
 
 	return router
 }

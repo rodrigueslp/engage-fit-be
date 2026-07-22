@@ -26,6 +26,32 @@ func NewCampaignProgress(campaignID, studentID ID, currentCheckins, targetChecki
 	return progress
 }
 
+func BuildCampaignProgress(campaignID ID, students []Student, checkins []Checkin, goals []CampaignGoal) []CampaignProgress {
+	targetsBySource := make(map[Source]int, len(goals))
+	for _, goal := range goals {
+		targetsBySource[goal.Source] = goal.TargetCheckins
+	}
+
+	checkinsByStudent := make(map[ID]int)
+	for _, checkin := range checkins {
+		checkinsByStudent[checkin.StudentID]++
+	}
+
+	progress := make([]CampaignProgress, 0, len(checkinsByStudent))
+	for _, student := range students {
+		currentCheckins := checkinsByStudent[student.ID]
+		if currentCheckins == 0 {
+			continue
+		}
+		target, ok := targetsBySource[student.Source]
+		if !ok {
+			continue
+		}
+		progress = append(progress, NewCampaignProgress(campaignID, student.ID, currentCheckins, target))
+	}
+	return progress
+}
+
 func (p *CampaignProgress) Recalculate() {
 	if p.TargetCheckins <= 0 {
 		p.ProgressPercentage = 0

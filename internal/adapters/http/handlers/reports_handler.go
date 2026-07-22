@@ -120,19 +120,27 @@ func (h ReportsHandler) MonthlyFrequency(c *gin.Context) {
 		return
 	}
 
-	response := make([]gin.H, 0, len(rows))
-	for _, row := range rows {
-		response = append(response, gin.H{
-			"student_id":    string(row.StudentID),
-			"student_name":  row.StudentName,
-			"student_phone": row.StudentPhone,
-			"source":        string(row.Source),
-			"checkins":      row.Checkins,
-			"first_checkin": formatReportTime(row.FirstCheckin),
-			"last_checkin":  formatReportTime(row.LastCheckin),
-		})
+	c.JSON(http.StatusOK, frequencyResponse(rows))
+}
+
+func (h ReportsHandler) CheckinSummary(c *gin.Context) {
+	boxID, ok := reportBoxID(c)
+	if !ok {
+		return
 	}
-	c.JSON(http.StatusOK, response)
+
+	period, ok := checkinPeriod(c)
+	if !ok {
+		return
+	}
+
+	rows, err := h.monthlyFrequency.Execute(c.Request.Context(), boxID, period)
+	if err != nil {
+		respondError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, frequencyResponse(rows))
 }
 
 func (h ReportsHandler) writeCSV(c *gin.Context, filename string, headers []string, rows [][]string) {
@@ -170,6 +178,36 @@ func reportPeriod(c *gin.Context) (domain.TimeRange, string, bool) {
 	}
 
 	return domain.TimeRange{Start: start, End: start.AddDate(0, 1, -1)}, month, true
+}
+
+func checkinPeriod(c *gin.Context) (domain.TimeRange, bool) {
+	start, err := time.Parse("2006-01-02", c.Query("start_date"))
+	if err != nil {
+		respondBadRequest(c)
+		return domain.TimeRange{}, false
+	}
+	end, err := time.Parse("2006-01-02", c.Query("end_date"))
+	if err != nil || end.Before(start) {
+		respondBadRequest(c)
+		return domain.TimeRange{}, false
+	}
+	return domain.TimeRange{Start: start, End: end}, true
+}
+
+func frequencyResponse(rows []domain.MonthlyFrequencyReportRow) []gin.H {
+	response := make([]gin.H, 0, len(rows))
+	for _, row := range rows {
+		response = append(response, gin.H{
+			"student_id":    string(row.StudentID),
+			"student_name":  row.StudentName,
+			"student_phone": row.StudentPhone,
+			"source":        string(row.Source),
+			"checkins":      row.Checkins,
+			"first_checkin": formatReportTime(row.FirstCheckin),
+			"last_checkin":  formatReportTime(row.LastCheckin),
+		})
+	}
+	return response
 }
 
 func formatReportTime(value *time.Time) string {

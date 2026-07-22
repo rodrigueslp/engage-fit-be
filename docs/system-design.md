@@ -410,6 +410,8 @@ Cada campanha pode ter uma meta diferente para Wellhub e TotalPass. Um aluno só
 
 `campaign_progresses` é um snapshot, não uma view calculada a cada leitura.
 
+Um aluno só faz parte da campanha quando possui ao menos um check-in entre as datas inclusivas de início e fim e existe uma meta para sua origem. Alunos da academia sem presença no período não recebem um snapshot `0/meta`.
+
 Para cada aluno abrangido:
 
 ```text
@@ -419,6 +421,10 @@ near_goal            = progress_percentage >= 80
 ```
 
 Importações recalculam automaticamente todas as campanhas ativas. Também existe recálculo manual e por automação.
+
+Cada recálculo substitui logicamente o conjunto de snapshots da campanha em uma transação: atualiza participantes ainda válidos e remove progressos de alunos que deixaram de ter check-in no período. Isso é necessário principalmente quando as datas da campanha mudam.
+
+As entregas pendentes de brinde são sincronizadas com os alunos que continuam elegíveis. Pendências que perderam elegibilidade são removidas; entregas já realizadas permanecem como histórico operacional.
 
 Consequências:
 
@@ -481,6 +487,7 @@ O fluxo de e-mail inativo exclui paused/not interested e opt-out, mas atualmente
 - elegíveis: progressos `achieved`, campanha, aluno, meta e reward;
 - brindes pendentes: deliveries não entregues;
 - frequência mensal: contagem e primeira/última visita por aluno;
+- consulta de check-ins por intervalo: contagem e primeira/última visita por aluno, com busca, plataforma, ordenação e paginação locais na tela `Check-ins`;
 - exportação: CSV gerado no backend ou arquivo preparado pela interface, conforme a tela.
 
 ## 13. Comunicação e públicos
@@ -836,7 +843,7 @@ O contrato definitivo está em `internal/adapters/http/router.go`. Mapa resumido
 | `/health*`, `/metrics` | público/controlado | runtime e observabilidade |
 | `/api/v1/capabilities` | público | booleans de disponibilidade |
 | `/api/v1/auth`, `/setup/owner` | público/autenticado | sessão e onboarding |
-| `/api/v1/box`, `/students`, `/imports` | OWNER | tenant, alunos e ingestão |
+| `/api/v1/box`, `/students`, `/imports`, `/checkins` | OWNER | tenant, alunos, ingestão e frequência por intervalo |
 | `/api/v1/campaigns`, `/rewards` | OWNER | campanha, meta, progresso e brinde |
 | `/api/v1/message-*`, `/whatsapp` | OWNER + capability | comunicação WhatsApp |
 | `/api/v1/email*` | OWNER + capability | e-mail |
@@ -1119,6 +1126,7 @@ Você domina o núcleo quando consegue explicar:
 | Domínio | `internal/domain` |
 | Importação | `internal/app/imports/import_checkins_usecase.go` |
 | Campanhas/progresso | `internal/app/campaigns/campaign_usecases.go` |
+| Frequência/check-ins | `internal/adapters/persistence/postgres/repositories/checkin_repository.go`, `engage-fit-fe/src/pages/checkins/CheckinsPage.tsx` |
 | Risco/dashboard | `internal/app/dashboard/dashboard_usecases.go` |
 | WhatsApp/audiência | `internal/app/messages/message_usecases.go` |
 | Governança | `internal/adapters/persistence/postgres/repositories/messaging_governance_repository.go` |

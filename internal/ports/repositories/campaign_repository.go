@@ -20,5 +20,5 @@ type CampaignRepository interface {
 
 	ListProgress(ctx context.Context, campaignID domain.ID) ([]domain.CampaignProgress, error)
 	ListEligibleReportRows(ctx context.Context, boxID domain.ID) ([]domain.EligibleStudentReportRow, error)
-	SaveProgressMany(ctx context.Context, progress []domain.CampaignProgress) error
+	ReplaceProgress(ctx context.Context, campaignID domain.ID, progress []domain.CampaignProgress) error
 }

@@ -6,6 +6,14 @@ Guia operacional consolidado: `docs/application-readiness-guide.md`.
 
 Atualizado em: 2026-07-21 (deploy Railway e validacao de producao)
 
+## Checkpoint de campanhas e consulta de check-ins em 2026-07-21
+
+- A lista de progresso da campanha deixou de cortar silenciosamente em 8 alunos e passou a ter paginacao local de 10 itens.
+- Um aluno agora participa do progresso somente quando possui ao menos um check-in dentro das datas inclusivas da campanha e existe meta para sua origem.
+- O recálculo substitui logicamente os snapshots em transacao, removendo progressos obsoletos; entregas pendentes de brinde tambem sao sincronizadas, sem apagar entregas ja realizadas.
+- Nova tela `Check-ins` consulta um intervalo de datas e mostra quantidade, primeira e ultima presenca por aluno, com busca, plataforma, ordenacao e paginacao no frontend.
+- Novo endpoint: `GET /api/v1/checkins/summary?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD`; a agregacao ocorre no PostgreSQL e a API continua sem paginacao neste primeiro momento.
+
 ## Checkpoint de deploy no Railway em 2026-07-21
 
 ### Estado implantado

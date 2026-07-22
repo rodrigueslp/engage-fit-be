@@ -16,6 +16,6 @@ type RewardRepository interface {
 	ListDeliveries(ctx context.Context, boxID domain.ID) ([]domain.RewardDelivery, error)
 	ListPendingDeliveries(ctx context.Context, boxID domain.ID) ([]domain.RewardDelivery, error)
 	CountDeliveries(ctx context.Context, boxID domain.ID, delivered bool) (int, error)
-	CreatePendingDeliveries(ctx context.Context, rewardID domain.ID, studentIDs []domain.ID) error
+	SyncPendingDeliveries(ctx context.Context, rewardID domain.ID, studentIDs []domain.ID) error
 	MarkDelivered(ctx context.Context, boxID domain.ID, deliveryID domain.ID) error
 }

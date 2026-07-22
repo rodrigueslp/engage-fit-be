@@ -149,32 +149,14 @@ func (uc ImportCheckinsUseCase) recalculateActiveCampaigns(ctx context.Context, 
 		if err != nil {
 			return err
 		}
-		goalsBySource := map[domain.Source]int{}
-		for _, goal := range goals {
-			goalsBySource[goal.Source] = goal.TargetCheckins
-		}
-
 		campaignCheckins, err := uc.checkins.ListByRange(ctx, boxID, domain.TimeRange{Start: campaign.StartDate, End: campaign.EndDate})
 		if err != nil {
 			return err
 		}
 
-		countsByStudent := map[domain.ID]int{}
-		for _, checkin := range campaignCheckins {
-			countsByStudent[checkin.StudentID]++
-		}
+		progress := domain.BuildCampaignProgress(campaign.ID, allStudents, campaignCheckins, goals)
 
-		progress := make([]domain.CampaignProgress, 0, len(allStudents))
-		for _, student := range allStudents {
-			target, ok := goalsBySource[student.Source]
-			if !ok {
-				continue
-			}
-			item := domain.NewCampaignProgress(campaign.ID, student.ID, countsByStudent[student.ID], target)
-			progress = append(progress, item)
-		}
-
-		if err := uc.campaigns.SaveProgressMany(ctx, progress); err != nil {
+		if err := uc.campaigns.ReplaceProgress(ctx, campaign.ID, progress); err != nil {
 			return err
 		}
 
@@ -190,7 +172,7 @@ func (uc ImportCheckinsUseCase) recalculateActiveCampaigns(ctx context.Context, 
 			return err
 		}
 		for _, reward := range rewards {
-			if err := uc.rewards.CreatePendingDeliveries(ctx, reward.ID, eligibleStudentIDs); err != nil {
+			if err := uc.rewards.SyncPendingDeliveries(ctx, reward.ID, eligibleStudentIDs); err != nil {
 				return err
 			}
 		}

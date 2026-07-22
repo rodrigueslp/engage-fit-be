@@ -152,8 +152,9 @@ func (r RewardGormRepository) CountDeliveries(ctx context.Context, boxID domain.
 	return int(count), nil
 }
 
-func (r RewardGormRepository) CreatePendingDeliveries(ctx context.Context, rewardID domain.ID, studentIDs []domain.ID) error {
+func (r RewardGormRepository) SyncPendingDeliveries(ctx context.Context, rewardID domain.ID, studentIDs []domain.ID) error {
 	deliveries := make([]models.RewardDeliveryModel, 0, len(studentIDs))
+	storedStudentIDs := make([]string, 0, len(studentIDs))
 	for _, studentID := range studentIDs {
 		id, err := newID()
 		if err != nil {
@@ -165,15 +166,26 @@ func (r RewardGormRepository) CreatePendingDeliveries(ctx context.Context, rewar
 			StudentID: stringID(studentID),
 			Delivered: false,
 		})
-	}
-	if len(deliveries) == 0 {
-		return nil
+		storedStudentIDs = append(storedStudentIDs, stringID(studentID))
 	}
 
-	return r.db.WithContext(ctx).Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "reward_id"}, {Name: "student_id"}},
-		DoNothing: true,
-	}).Create(&deliveries).Error
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		stale := tx.Where("reward_id = ? AND delivered = ?", stringID(rewardID), false)
+		if len(storedStudentIDs) > 0 {
+			stale = stale.Where("student_id NOT IN ?", storedStudentIDs)
+		}
+		if err := stale.Delete(&models.RewardDeliveryModel{}).Error; err != nil {
+			return err
+		}
+		if len(deliveries) == 0 {
+			return nil
+		}
+
+		return tx.Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "reward_id"}, {Name: "student_id"}},
+			DoNothing: true,
+		}).Create(&deliveries).Error
+	})
 }
 
 func (r RewardGormRepository) MarkDelivered(ctx context.Context, boxID domain.ID, deliveryID domain.ID) error {

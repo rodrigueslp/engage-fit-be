@@ -3,6 +3,7 @@ package repositories
 import (
 	"context"
 
+	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
 	"boxengage/backend/internal/adapters/persistence/postgres/models"
@@ -88,7 +89,7 @@ func (r CampaignGormRepository) DeleteGoal(ctx context.Context, campaignID, goal
 
 func (r CampaignGormRepository) ListProgress(ctx context.Context, campaignID domain.ID) ([]domain.CampaignProgress, error) {
 	var modelsList []models.CampaignProgressModel
-	if err := r.db.WithContext(ctx).Where("campaign_id = ?", stringID(campaignID)).Order("progress_percentage DESC").Find(&modelsList).Error; err != nil {
+	if err := r.db.WithContext(ctx).Where("campaign_id = ?", stringID(campaignID)).Order("progress_percentage DESC, current_checkins DESC, student_id ASC").Find(&modelsList).Error; err != nil {
 		return nil, err
 	}
 
@@ -159,30 +160,41 @@ func (r CampaignGormRepository) ListEligibleReportRows(ctx context.Context, boxI
 	return result, nil
 }
 
-func (r CampaignGormRepository) SaveProgressMany(ctx context.Context, progress []domain.CampaignProgress) error {
+func (r CampaignGormRepository) ReplaceProgress(ctx context.Context, campaignID domain.ID, progress []domain.CampaignProgress) error {
 	modelsList := make([]models.CampaignProgressModel, 0, len(progress))
+	studentIDs := make([]string, 0, len(progress))
 	for i := range progress {
 		if err := ensureID(&progress[i].ID); err != nil {
 			return err
 		}
 		modelsList = append(modelsList, campaignProgressToModel(progress[i]))
+		studentIDs = append(studentIDs, stringID(progress[i].StudentID))
 	}
 
-	if len(modelsList) == 0 {
-		return nil
-	}
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		stale := tx.Where("campaign_id = ?", stringID(campaignID))
+		if len(studentIDs) > 0 {
+			stale = stale.Where("student_id NOT IN ?", studentIDs)
+		}
+		if err := stale.Delete(&models.CampaignProgressModel{}).Error; err != nil {
+			return err
+		}
+		if len(modelsList) == 0 {
+			return nil
+		}
 
-	return r.db.WithContext(ctx).Clauses(clause.OnConflict{
-		Columns: []clause.Column{{Name: "campaign_id"}, {Name: "student_id"}},
-		DoUpdates: clause.AssignmentColumns([]string{
-			"current_checkins",
-			"target_checkins",
-			"progress_percentage",
-			"achieved",
-			"near_goal",
-			"updated_at",
-		}),
-	}).Create(&modelsList).Error
+		return tx.Clauses(clause.OnConflict{
+			Columns: []clause.Column{{Name: "campaign_id"}, {Name: "student_id"}},
+			DoUpdates: clause.AssignmentColumns([]string{
+				"current_checkins",
+				"target_checkins",
+				"progress_percentage",
+				"achieved",
+				"near_goal",
+				"updated_at",
+			}),
+		}).Create(&modelsList).Error
+	})
 }
 
 func campaignsToDomain(modelsList []models.CampaignModel) []domain.Campaign {
