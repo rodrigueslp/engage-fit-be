@@ -4,7 +4,66 @@ Manual canônico de arquitetura e negócio: `docs/system-design.md`.
 
 Guia operacional consolidado: `docs/application-readiness-guide.md`.
 
-Atualizado em: 2026-07-21
+Atualizado em: 2026-07-21 (deploy Railway e validacao de producao)
+
+## Checkpoint de deploy no Railway em 2026-07-21
+
+### Estado implantado
+
+- Backend, frontend e PostgreSQL foram criados no projeto Railway exibido como `motivated-playfulness`, no mesmo ambiente `production`.
+- Servicos usados: `engage-fit-api`, `engage-fit-web` e `Postgres`.
+- Arquitetura efetiva: navegador -> `engage-fit-web` publico -> `/api` via Nginx/rede privada -> `engage-fit-api` privado -> `Postgres` privado.
+- Dominio publico validado: `https://engage-fit-web-production.up.railway.app`.
+- API e PostgreSQL permanecem sem dominio HTTP publico; a API e acessada pelo frontend usando `BACKEND_URL=http://${{engage-fit-api.RAILWAY_PRIVATE_DOMAIN}}:8080`.
+- Frontend usa `PORT=8080`, nao define `VITE_API_BASE_URL` e usa `VITE_CSRF_COOKIE_NAME=engagefit_session_csrf`.
+- Backend usa `PORT=8080`, `HTTP_HOST=0.0.0.0` e `DATABASE_URL=${{Postgres.DATABASE_URL}}`; segredos production foram configurados diretamente no Railway e nao foram registrados no Git.
+- Healthcheck efetivo dos dois servicos ficou em `/health`, com timeout de 300 segundos. O backend atual tambem implementa `/health/live` e `/health/ready`, mas `/health` foi mantido como rota compativel entre revisoes.
+- Features opcionais e efeitos externos permaneceram desligados durante a homologacao: WhatsApp, e-mail, automacao, treinos, LLM e envios reais.
+
+### Migrations e release
+
+- O pre-deploy `/usr/local/bin/engagefit-migrate up` falhou repetidamente antes de iniciar o container, sem stdout/stderr. O diagnostico automatico do Railway classificou a falha como erro transitorio de infraestrutura, mas chegou a afirmar incorretamente que as migrations ja haviam sido aplicadas.
+- A evidencia real apareceu no startup da API: `relation "users" does not exist`, confirmando que o banco ainda estava vazio.
+- Para inicializar o banco, foi usado temporariamente como Custom Start Command: `sh -c '/usr/local/bin/engagefit-migrate up && exec /usr/local/bin/engagefit-api'`.
+- As 32 migrations foram aplicadas e a API passou a iniciar com o schema completo. O migrator e idempotente e usa historico/checksum/advisory lock.
+- Estado operacional a conferir no Railway: deixar o Custom Start Command vazio depois da inicializacao e restaurar o pre-deploy quando o agendamento de containers estiver estavel. Enquanto o pre-deploy estiver desativado, nenhuma release com migration nova deve ser publicada sem executar explicitamente o migrator.
+
+### Incidentes encontrados e correcoes
+
+- O primeiro backend ativo era uma revisao antiga porque quatro commits locais ainda nao estavam no GitHub. Isso explicava `/api/v1/capabilities` ausente, `/health/live` ausente e comportamento antigo do setup. O backend foi enviado de `9170a69` ate `a562871` e depois recebeu os ajustes de CI/formato descritos abaixo.
+- `GET /api/v1/setup/owner` retorna 404 por desenho; o onboarding usa `POST`. Na revisao nova, production tambem exige `OWNER_SETUP_ENABLED=true` e `X-Setup-Token` valido.
+- O Nginx do frontend resolvia o dominio privado da API somente no startup. Cada redeploy do backend alterava seus IPs privados; o frontend continuava chamando IPs antigos e passava a responder 502/504 depois de esperas de 10/20 segundos.
+- Correcao permanente no frontend, commit `d4650db`: resolver interno `[fd12::10]`, cache DNS de 10 segundos, `ipv6=off` e `proxy_pass` por variavel para forcar resolucao em runtime. A imagem Docker foi reconstruida e `nginx -t` passou.
+- Depois da correcao, novos IPs privados do backend deixam de exigir restart/redeploy manual do frontend.
+- Se `Serverless/App Sleeping` estiver habilitado na API, deve ser desabilitado para resposta previsivel em producao; confirmar esse toggle no Railway.
+
+### CI corrigido e validado
+
+- Frontend commit `81cee85`: readiness do E2E real passou de 30 para 90 segundos, usa `127.0.0.1` e detecta encerramento antecipado da API. A falha anterior era `curl` exit code 7 enquanto o segundo `go run` ainda compilava no runner frio.
+- Backend commit `4172508`: corrigiu YAML invalido causado pelo `:` no comando inline de idempotencia das migrations e aplicou o mesmo readiness robusto ao smoke da API.
+- Backend commit `8b5443b`: aplicou `gofmt` em `internal/adapters/whatsapp/provider_gateway.go`.
+- CI do frontend passou no run `29884280635`: build, Playwright mockado e Playwright real com PostgreSQL/API.
+- CI do backend passou no run `29884561040`: modulos, formato, vet, 32 migrations, idempotencia, PostgreSQL/race detector, smoke HTTP, binarios e scripts.
+- Estado do codigo homologado antes desta atualizacao documental: backend `8b5443b`; frontend `81cee85`; ambos estavam sincronizados com `origin/main` e sem alteracoes pendentes.
+
+### Homologacao funcional em producao
+
+- `/health` do frontend respondeu `200` com `{"status":"ok"}`.
+- O proxy publico `/api/v1/capabilities` chegou corretamente a API privada depois do deploy da revisao atual.
+- A primeira academia e a conta owner foram criadas pelo onboarding protegido e o fluxo do owner foi testado manualmente no dominio de producao.
+- A conta `PLATFORM_ADMIN`, criada/atualizada no startup a partir de `PLATFORM_ADMIN_EMAIL` e `PLATFORM_ADMIN_PASSWORD`, foi autenticada pelo mesmo formulario de login e redirecionada para `#admin-messaging`; o fluxo administrativo tambem foi testado manualmente.
+- Credenciais do owner, setup token, JWT, chave de criptografia e credenciais administrativas permanecem somente nas variaveis/controle do operador e nao devem entrar neste handoff.
+- Acao de seguranca a confirmar imediatamente: depois do onboarding, definir `OWNER_SETUP_ENABLED=false` e remover ou selar `OWNER_SETUP_TOKEN`. Repetir o POST deve retornar 404. A confirmacao dessa desativacao nao apareceu nesta sessao.
+
+### Proximos passos operacionais
+
+1. Confirmar no Railway `OWNER_SETUP_ENABLED=false` e setup token removido/selado.
+2. Confirmar `Serverless/App Sleeping` desligado em `engage-fit-api`.
+3. Confirmar Custom Start Command vazio. Se ainda estiver executando migration + API, pode permanecer apenas como contingencia curta, pois e idempotente, mas nao e o desenho final.
+4. Restaurar `/usr/local/bin/engagefit-migrate up` no pre-deploy quando o Railway voltar a iniciar o container de release de forma confiavel; validar `migration complete: 0 applied`.
+5. Configurar backup/PITR do PostgreSQL e executar restore real em ambiente isolado antes de dados de clientes.
+6. Manter todas as integracoes e envios reais desligados ate homologacao individual dos provedores.
+7. Configurar observabilidade/alertas e limites de custo do Railway antes do piloto.
 
 ## Checkpoint de prontidao final da aplicacao em 2026-07-21
 
@@ -1057,5 +1116,5 @@ Infra/dev:
 Mensagem sugerida:
 
 ```txt
-Leia `.ai/handoff.md` e use `docs/system-design.md` como fonte canonica da arquitetura e das regras de negocio. A prontidao da aplicacao foi concluida e validada localmente; os commits finais sao `05719a4`, `b3245a2` e `eb87a9f` no backend e `9bff064` no frontend. Nenhum push ou deploy foi feito. Proximo foco: percorrer a trilha de transferencia de conhecimento da secao 26 do manual e, depois, preparar o Railway conforme `docs/railway-deployment-checklist.md`. Deixe a integracao efetiva com Twilio fora do escopo ate decisao explicita.
+Leia `.ai/handoff.md` e use `docs/system-design.md` como fonte canonica da arquitetura e das regras de negocio. Backend, frontend e PostgreSQL ja estao implantados no Railway production. Codigo homologado: backend `8b5443b` e frontend `81cee85`, com CI verde; pode haver commit documental posterior somente para este handoff. Dominio publico: `https://engage-fit-web-production.up.railway.app`; API e banco usam rede privada. Owner e PLATFORM_ADMIN foram homologados. Antes de nova evolucao, confirme no Railway: `OWNER_SETUP_ENABLED=false`, setup token removido/selado, Serverless desligado na API, Custom Start vazio e estrategia de pre-deploy restaurada/validada. Nao publique migrations novas enquanto o pre-deploy estiver desativado. Mantenha integracoes e envios reais desligados ate homologacao explicita.
 ```
