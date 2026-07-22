@@ -5,6 +5,10 @@ import "time"
 type BoxModel struct {
 	ID                      string `gorm:"primaryKey"`
 	Name                    string
+	Status                  string `gorm:"default:active"`
+	StatusReason            string
+	StatusChangedAt         *time.Time
+	StatusChangedBy         *string
 	RiskInactiveDays        int
 	RiskMessageCooldownDays int
 	CreatedAt               time.Time

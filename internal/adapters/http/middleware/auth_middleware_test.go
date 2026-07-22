@@ -29,6 +29,24 @@ type authUserRepositoryStub struct {
 	err  error
 }
 
+type authBoxRepositoryStub struct {
+	box *domain.Box
+	err error
+}
+
+func (s authBoxRepositoryStub) FindByID(context.Context, domain.ID) (*domain.Box, error) {
+	if s.box == nil && s.err == nil {
+		return &domain.Box{Status: domain.BoxStatusActive}, nil
+	}
+	return s.box, s.err
+}
+func (authBoxRepositoryStub) ListAll(context.Context) ([]domain.Box, error) { return nil, nil }
+func (authBoxRepositoryStub) Save(context.Context, *domain.Box) error       { return nil }
+func (authBoxRepositoryStub) SaveWithOwner(context.Context, *domain.Box, *domain.User) error {
+	return nil
+}
+func (authBoxRepositoryStub) Update(context.Context, domain.Box) error { return nil }
+
 func (s authUserRepositoryStub) FindByID(context.Context, domain.ID) (*domain.User, error) {
 	return s.user, s.err
 }
@@ -52,7 +70,7 @@ func TestAuthAndTenantAcceptMatchingOwnerSession(t *testing.T) {
 	claims := &services.AuthClaims{UserID: "user-1", BoxID: "box-1", Role: domain.UserRoleOwner, AuthVersion: 2}
 	user := &domain.User{ID: "user-1", BoxID: "box-1", Role: domain.UserRoleOwner, AuthVersion: 2}
 	router := gin.New()
-	router.Use(Auth(authTokenStub{claims: claims}, authUserRepositoryStub{user: user}), Tenant())
+	router.Use(Auth(authTokenStub{claims: claims}, authUserRepositoryStub{user: user}, authBoxRepositoryStub{}), Tenant())
 	router.GET("/protected", func(c *gin.Context) { c.Status(http.StatusNoContent) })
 
 	response := httptest.NewRecorder()
@@ -77,7 +95,7 @@ func TestAuthRejectsTenantOrVersionMismatch(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			gin.SetMode(gin.TestMode)
 			router := gin.New()
-			router.Use(Auth(authTokenStub{claims: &test.claims}, authUserRepositoryStub{user: &test.user}))
+			router.Use(Auth(authTokenStub{claims: &test.claims}, authUserRepositoryStub{user: &test.user}, authBoxRepositoryStub{}))
 			router.GET("/protected", func(c *gin.Context) { c.Status(http.StatusNoContent) })
 			response := httptest.NewRecorder()
 			request := httptest.NewRequest(http.MethodGet, "/protected", nil)
@@ -87,6 +105,23 @@ func TestAuthRejectsTenantOrVersionMismatch(t *testing.T) {
 				t.Fatalf("expected 401, got %d", response.Code)
 			}
 		})
+	}
+}
+
+func TestAuthRejectsOwnerWhenBoxIsSuspended(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	claims := &services.AuthClaims{UserID: "user-1", BoxID: "box-1", Role: domain.UserRoleOwner, AuthVersion: 2}
+	user := &domain.User{ID: "user-1", BoxID: "box-1", Role: domain.UserRoleOwner, AuthVersion: 2}
+	router := gin.New()
+	router.Use(Auth(authTokenStub{claims: claims}, authUserRepositoryStub{user: user}, authBoxRepositoryStub{box: &domain.Box{ID: "box-1", Status: domain.BoxStatusSuspended}}))
+	router.GET("/protected", func(c *gin.Context) { c.Status(http.StatusNoContent) })
+
+	response := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	request.Header.Set("Authorization", "Bearer valid")
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", response.Code)
 	}
 }
 

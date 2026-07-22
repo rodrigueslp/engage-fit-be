@@ -32,11 +32,13 @@ type RouterDependencies struct {
 	AppEnv                    string
 	TokenService              services.TokenService
 	UserRepository            repositories.UserRepository
+	BoxRepository             repositories.BoxRepository
 	LoginUseCase              auth.LoginUseCase
 	CurrentUserUseCase        auth.GetCurrentUserUseCase
 	ChangePasswordUseCase     auth.ChangePasswordUseCase
 	LogoutUseCase             auth.LogoutUseCase
 	ResetOwnerPasswordUseCase platformadmin.ResetOwnerPasswordUseCase
+	BoxAdminUseCases          platformadmin.BoxAdminUseCases
 	CreateBoxUseCase          boxes.CreateBoxUseCase
 	GetBoxUseCase             boxes.GetBoxUseCase
 	UpdateBoxUseCase          boxes.UpdateBoxUseCase
@@ -212,7 +214,7 @@ func NewRouter(deps RouterDependencies) *gin.Engine {
 	api.POST("/setup/owner", middleware.JSONRateLimit(setupLimiter, "owner_email"), middleware.OwnerSetupAccess(deps.OwnerSetupEnabled, deps.OwnerSetupToken), setupHandler.CreateOwner)
 
 	authenticated := api.Group("")
-	authenticated.Use(middleware.Auth(deps.TokenService, deps.UserRepository, deps.SessionConfig), middleware.CSRF(deps.SessionConfig))
+	authenticated.Use(middleware.Auth(deps.TokenService, deps.UserRepository, deps.BoxRepository, deps.SessionConfig), middleware.CSRF(deps.SessionConfig))
 	authenticated.POST("/auth/logout", authHandler.Logout)
 	authenticated.GET("/auth/me", authHandler.Me)
 	authenticated.PUT("/auth/password", authHandler.ChangePassword)
@@ -232,6 +234,13 @@ func NewRouter(deps RouterDependencies) *gin.Engine {
 	admin.PUT("/messaging/platform/policy", governanceHandler.UpdatePlatformPolicy)
 	adminAccessHandler := handlers.NewPlatformAdminAccessHandler(deps.ResetOwnerPasswordUseCase)
 	admin.PUT("/boxes/:id/owner-password", adminAccessHandler.ResetOwnerPassword)
+	adminBoxesHandler := handlers.NewAdminBoxesHandler(deps.BoxAdminUseCases)
+	admin.GET("/boxes", adminBoxesHandler.List)
+	admin.POST("/boxes", adminBoxesHandler.Create)
+	admin.PATCH("/boxes/:id", adminBoxesHandler.Update)
+	admin.POST("/boxes/:id/suspend", adminBoxesHandler.Suspend)
+	admin.POST("/boxes/:id/reactivate", adminBoxesHandler.Reactivate)
+	admin.POST("/boxes/:id/archive", adminBoxesHandler.Archive)
 
 	boxesHandler := handlers.NewBoxesHandler(deps.GetBoxUseCase, deps.UpdateBoxUseCase)
 	protected.GET("/box", boxesHandler.Get)

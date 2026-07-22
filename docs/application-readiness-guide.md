@@ -24,6 +24,8 @@ Este é o guia operacional da preparação do EngageFit no nível da aplicação
 ### Segurança e acesso
 
 - Criação de academia e owner em uma única transação.
+- Gestão autenticada de academias pelo administrador da plataforma, com criação, edição, suspensão, reativação e arquivamento.
+- Suspensão e arquivamento revogam sessões do owner e retiram a academia do worker de automação; dados permanecem preservados.
 - Endpoint de onboarding controlado por `OWNER_SETUP_ENABLED` e `OWNER_SETUP_TOKEN`.
 - Rate limit de login e onboarding por IP e identidade normalizada.
 - Limites de body, upload, linhas, colunas e conteúdo descomprimido de XLSX.

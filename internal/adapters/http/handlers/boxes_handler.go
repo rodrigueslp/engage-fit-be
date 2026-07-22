@@ -70,6 +70,7 @@ func boxResponse(box domain.Box) dto.BoxResponse {
 	return dto.BoxResponse{
 		ID:                      string(box.ID),
 		Name:                    box.Name,
+		Status:                  string(box.EffectiveStatus()),
 		RiskInactiveDays:        box.RiskInactiveDays,
 		RiskMessageCooldownDays: box.RiskMessageCooldownDays,
 	}

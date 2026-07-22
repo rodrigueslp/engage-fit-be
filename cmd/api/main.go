@@ -159,12 +159,13 @@ func main() {
 	llmGenerator := llm.NewOpenAIGenerator(cfg.OpenAIAPIKey, cfg.OpenAIModel, cfg.OpenAITimeoutSeconds)
 	checkinParser := parsers.NewCheckinParser()
 
-	loginUseCase := auth.NewLoginUseCase(userRepository, passwordService, tokenService)
+	loginUseCase := auth.NewLoginUseCase(userRepository, boxRepository, passwordService, tokenService)
 	currentUserUseCase := auth.NewGetCurrentUserUseCase(userRepository)
 	changePasswordUseCase := auth.NewChangePasswordUseCase(userRepository, passwordService)
 	logoutUseCase := auth.NewLogoutUseCase(userRepository)
 	resetOwnerPasswordUseCase := platformadmin.NewResetOwnerPasswordUseCase(userRepository, passwordService, messagingGovernanceRepository)
 	createBoxUseCase := boxes.NewCreateBoxUseCase(boxRepository, userRepository, passwordService)
+	boxAdminUseCases := platformadmin.NewBoxAdminUseCases(boxRepository, userRepository, createBoxUseCase, messagingGovernanceRepository)
 	getBoxUseCase := boxes.NewGetBoxUseCase(boxRepository)
 	updateBoxUseCase := boxes.NewUpdateBoxUseCase(boxRepository)
 
@@ -268,11 +269,13 @@ func main() {
 		AppEnv:                    cfg.AppEnv,
 		TokenService:              tokenService,
 		UserRepository:            userRepository,
+		BoxRepository:             boxRepository,
 		LoginUseCase:              loginUseCase,
 		CurrentUserUseCase:        currentUserUseCase,
 		ChangePasswordUseCase:     changePasswordUseCase,
 		LogoutUseCase:             logoutUseCase,
 		ResetOwnerPasswordUseCase: resetOwnerPasswordUseCase,
+		BoxAdminUseCases:          boxAdminUseCases,
 		CreateBoxUseCase:          createBoxUseCase,
 		GetBoxUseCase:             getBoxUseCase,
 		UpdateBoxUseCase:          updateBoxUseCase,

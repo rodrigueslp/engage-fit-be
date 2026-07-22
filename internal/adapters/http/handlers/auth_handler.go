@@ -62,6 +62,10 @@ func (h AuthHandler) Login(c *gin.Context) {
 		Email:    request.Email,
 		Password: request.Password,
 	})
+	if errors.Is(err, auth.ErrBoxAccessInactive) {
+		respondPublicError(c, http.StatusForbidden, "box_inactive", "academia suspensa ou arquivada; procure o suporte")
+		return
+	}
 	if err != nil {
 		respondPublicError(c, http.StatusUnauthorized, "invalid_credentials", "invalid credentials")
 		return

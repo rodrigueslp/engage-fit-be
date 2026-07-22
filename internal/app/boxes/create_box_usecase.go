@@ -12,6 +12,11 @@ import (
 	"gorm.io/gorm"
 )
 
+var (
+	ErrInvalidBoxOnboarding        = errors.New("dados de onboarding invalidos")
+	ErrOwnerEmailAlreadyRegistered = errors.New("email de owner ja cadastrado")
+)
+
 type CreateBoxInput struct {
 	Name       string
 	OwnerName  string
@@ -39,10 +44,10 @@ func (uc CreateBoxUseCase) Execute(ctx context.Context, input CreateBoxInput) (*
 	input.OwnerName = strings.TrimSpace(input.OwnerName)
 	input.OwnerEmail = strings.ToLower(strings.TrimSpace(input.OwnerEmail))
 	if input.Name == "" || input.OwnerName == "" || input.OwnerEmail == "" || len(input.Password) < 8 {
-		return nil, errors.New("dados de onboarding invalidos")
+		return nil, ErrInvalidBoxOnboarding
 	}
 	if _, err := uc.users.FindByEmail(ctx, input.OwnerEmail); err == nil {
-		return nil, errors.New("email de owner ja cadastrado")
+		return nil, ErrOwnerEmailAlreadyRegistered
 	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, err
 	}
@@ -55,6 +60,7 @@ func (uc CreateBoxUseCase) Execute(ctx context.Context, input CreateBoxInput) (*
 	now := time.Now()
 	box := domain.Box{
 		Name:      input.Name,
+		Status:    domain.BoxStatusActive,
 		CreatedAt: now,
 		UpdatedAt: now,
 	}

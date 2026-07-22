@@ -18,6 +18,14 @@ const (
 	UserRolePlatformAdmin UserRole = "PLATFORM_ADMIN"
 )
 
+type BoxStatus string
+
+const (
+	BoxStatusActive    BoxStatus = "active"
+	BoxStatusSuspended BoxStatus = "suspended"
+	BoxStatusArchived  BoxStatus = "archived"
+)
+
 type StudentRiskStatus string
 
 const (

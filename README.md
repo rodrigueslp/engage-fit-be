@@ -149,6 +149,16 @@ curl -X POST http://localhost:8080/api/v1/auth/login \
   }'
 ```
 
+Em operacao normal, novas academias devem ser criadas pela conta `PLATFORM_ADMIN` em `Administracao > Academias`. O endpoint `/api/v1/setup/owner` fica reservado ao bootstrap inicial e pode permanecer desabilitado em producao.
+
+O ciclo de vida administrativo usa os estados:
+
+- `active`: login, sessoes, envios e automacoes liberados;
+- `suspended`: bloqueia login e sessoes do owner e impede o worker de executar automacoes, preservando todos os dados;
+- `archived`: estado terminal no painel, destinado a encerramento com retencao e auditoria.
+
+Criacao, edicao, suspensao, reativacao, arquivamento e redefinicao de senha exigem `PLATFORM_ADMIN`; as operacoes sensiveis registram motivo, administrador, IP e valores anterior/posterior em `admin_audit_logs`.
+
 Rota protegida:
 
 ```bash

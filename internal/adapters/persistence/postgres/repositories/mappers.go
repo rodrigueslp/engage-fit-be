@@ -8,6 +8,14 @@ import (
 )
 
 func boxToDomain(model models.BoxModel) domain.Box {
+	status := domain.BoxStatus(model.Status)
+	if status == "" {
+		status = domain.BoxStatusActive
+	}
+	statusChangedBy := domain.ID("")
+	if model.StatusChangedBy != nil {
+		statusChangedBy = domainID(*model.StatusChangedBy)
+	}
 	riskInactiveDays := model.RiskInactiveDays
 	if riskInactiveDays <= 0 {
 		riskInactiveDays = 7
@@ -19,6 +27,10 @@ func boxToDomain(model models.BoxModel) domain.Box {
 	return domain.Box{
 		ID:                      domainID(model.ID),
 		Name:                    model.Name,
+		Status:                  status,
+		StatusReason:            model.StatusReason,
+		StatusChangedAt:         model.StatusChangedAt,
+		StatusChangedBy:         statusChangedBy,
 		RiskInactiveDays:        riskInactiveDays,
 		RiskMessageCooldownDays: riskMessageCooldownDays,
 		CreatedAt:               model.CreatedAt,
@@ -27,6 +39,12 @@ func boxToDomain(model models.BoxModel) domain.Box {
 }
 
 func boxToModel(box domain.Box) models.BoxModel {
+	status := box.EffectiveStatus()
+	var statusChangedBy *string
+	if box.StatusChangedBy != "" {
+		value := stringID(box.StatusChangedBy)
+		statusChangedBy = &value
+	}
 	riskInactiveDays := box.RiskInactiveDays
 	if riskInactiveDays <= 0 {
 		riskInactiveDays = 7
@@ -38,6 +56,10 @@ func boxToModel(box domain.Box) models.BoxModel {
 	return models.BoxModel{
 		ID:                      stringID(box.ID),
 		Name:                    box.Name,
+		Status:                  string(status),
+		StatusReason:            box.StatusReason,
+		StatusChangedAt:         box.StatusChangedAt,
+		StatusChangedBy:         statusChangedBy,
 		RiskInactiveDays:        riskInactiveDays,
 		RiskMessageCooldownDays: riskMessageCooldownDays,
 		CreatedAt:               box.CreatedAt,

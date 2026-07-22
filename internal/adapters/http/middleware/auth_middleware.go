@@ -6,11 +6,12 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"boxengage/backend/internal/adapters/http/apiresponse"
+	"boxengage/backend/internal/domain"
 	"boxengage/backend/internal/ports/repositories"
 	"boxengage/backend/internal/ports/services"
 )
 
-func Auth(tokens services.TokenService, users repositories.UserRepository, sessionConfig ...SessionConfig) gin.HandlerFunc {
+func Auth(tokens services.TokenService, users repositories.UserRepository, boxes repositories.BoxRepository, sessionConfig ...SessionConfig) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		config := SessionConfig{}
 		if len(sessionConfig) > 0 {
@@ -30,6 +31,17 @@ func Auth(tokens services.TokenService, users repositories.UserRepository, sessi
 		if err != nil || claims.AuthVersion < 1 || user.AuthVersion != claims.AuthVersion || user.Role != claims.Role || user.BoxID != claims.BoxID {
 			apiresponse.AbortError(c, http.StatusUnauthorized, "session_invalid", "invalid session")
 			return
+		}
+		if user.Role == domain.UserRoleOwner {
+			box, err := boxes.FindByID(c.Request.Context(), user.BoxID)
+			if err != nil {
+				apiresponse.AbortError(c, http.StatusUnauthorized, "session_invalid", "invalid session")
+				return
+			}
+			if !box.IsActive() {
+				apiresponse.AbortError(c, http.StatusForbidden, "box_inactive", "academia suspensa ou arquivada; procure o suporte")
+				return
+			}
 		}
 
 		SetAuthContext(c, user.ID, user.BoxID, user.Role)
