@@ -16,7 +16,7 @@ Atualizado em: 2026-07-22 (revisão completa de UX do frontend)
 - Brindes, Alunos, Check-ins e Relatórios ganharam visualizações responsivas que mantêm dados e ações essenciais visíveis sem depender de tabela horizontal; Alunos também recebeu filtros e paginação local.
 - Importações ganhou upload por seleção/arrastar, origem explícita, retorno da última importação e histórico com data/status. WhatsApp ganhou indicadores de consumo, confirmação de envio e menos detalhes técnicos expostos.
 - Automação, E-mail e Treino do dia passaram a separar configuração/operação de histórico; execuções de automação ficaram compactas e expansíveis. A arquitetura já segmentada de Configurações e Administração foi preservada.
-- O fluxo E2E real foi atualizado para os novos controles. Validações executadas: TypeScript/build Vite, Playwright mockado, `git diff --check` e revisão visual desktop/mobile com dados representativos. Os dois testes Playwright que exigem API/PostgreSQL reais permanecem condicionais e não foram executados nesta sessão.
+- O fluxo E2E real foi atualizado para os novos controles. Após a primeira esteira apontar seletores ambíguos entre as versões mobile e desktop no DOM, os seletores foram tornados explícitos para os elementos visíveis. Validações executadas: TypeScript/build Vite, Playwright mockado, `git diff --check`, revisão visual desktop/mobile e os dois fluxos Playwright reais contra API/PostgreSQL temporários; owner e PLATFORM_ADMIN passaram.
 - Nenhuma migration é necessária para esta entrega.
 
 ## Checkpoint de campanhas e consulta de check-ins em 2026-07-21
