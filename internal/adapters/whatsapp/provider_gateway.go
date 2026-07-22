@@ -27,7 +27,13 @@ func NewProviderGateway(metaCloud services.WhatsappGateway, twilio services.What
 
 func (g ProviderGateway) Test(ctx context.Context, settings domain.WhatsappSettings) (resultErr error) {
 	startedAt := time.Now()
-	defer func() { status := "success"; if resultErr != nil { status = "error" }; observability.RecordGateway(ctx, metricProvider(settings.Provider), "test", status, time.Since(startedAt)) }()
+	defer func() {
+		status := "success"
+		if resultErr != nil {
+			status = "error"
+		}
+		observability.RecordGateway(ctx, metricProvider(settings.Provider), "test", status, time.Since(startedAt))
+	}()
 	gateway, err := g.gateway(settings)
 	if err != nil {
 		return err
@@ -37,7 +43,13 @@ func (g ProviderGateway) Test(ctx context.Context, settings domain.WhatsappSetti
 
 func (g ProviderGateway) Send(ctx context.Context, settings domain.WhatsappSettings, message services.WhatsappMessage) (output *services.WhatsappSendResult, resultErr error) {
 	startedAt := time.Now()
-	defer func() { status := "accepted"; if resultErr != nil { status = "error" }; observability.RecordGateway(ctx, metricProvider(settings.Provider), "send", status, time.Since(startedAt)) }()
+	defer func() {
+		status := "accepted"
+		if resultErr != nil {
+			status = "error"
+		}
+		observability.RecordGateway(ctx, metricProvider(settings.Provider), "send", status, time.Since(startedAt))
+	}()
 	gateway, err := g.gateway(settings)
 	if err != nil {
 		return nil, err
@@ -47,9 +59,12 @@ func (g ProviderGateway) Send(ctx context.Context, settings domain.WhatsappSetti
 
 func metricProvider(provider string) string {
 	switch strings.TrimSpace(strings.ToLower(provider)) {
-	case ProviderMetaCloud: return ProviderMetaCloud
-	case "", ProviderTwilio: return ProviderTwilio
-	default: return "unknown"
+	case ProviderMetaCloud:
+		return ProviderMetaCloud
+	case "", ProviderTwilio:
+		return ProviderTwilio
+	default:
+		return "unknown"
 	}
 }
 
