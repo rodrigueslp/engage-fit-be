@@ -4,7 +4,20 @@ Manual canônico de arquitetura e negócio: `docs/system-design.md`.
 
 Guia operacional consolidado: `docs/application-readiness-guide.md`.
 
-Atualizado em: 2026-07-21 (deploy Railway e validacao de producao)
+Atualizado em: 2026-07-22 (revisão completa de UX do frontend)
+
+## Checkpoint de revisão completa de UX em 2026-07-22
+
+- Resultado revisado e aprovado pelo usuário após a implementação completa das etapas propostas.
+- O frontend recebeu uma revisão transversal de hierarquia visual, acessibilidade, navegação e responsividade, sem alterar contratos da API nem o schema do banco.
+- O contraste da ação principal foi corrigido, controles móveis ganharam alvos maiores, cards ficaram mais leves e a navegação passou a ser agrupada em Visão geral, Operação, Engajamento e Gestão; no mobile, o menu agora abre em drawer.
+- O Dashboard passou a priorizar o que exige atenção hoje, com resumo secundário compacto e menos blocos de mesmo peso.
+- Campanhas agora abre pela listagem e separa Visão geral, Participantes e Ajustes; participantes mantêm paginação local e apresentação própria no mobile, e toda a configuração é salva por uma única ação.
+- Brindes, Alunos, Check-ins e Relatórios ganharam visualizações responsivas que mantêm dados e ações essenciais visíveis sem depender de tabela horizontal; Alunos também recebeu filtros e paginação local.
+- Importações ganhou upload por seleção/arrastar, origem explícita, retorno da última importação e histórico com data/status. WhatsApp ganhou indicadores de consumo, confirmação de envio e menos detalhes técnicos expostos.
+- Automação, E-mail e Treino do dia passaram a separar configuração/operação de histórico; execuções de automação ficaram compactas e expansíveis. A arquitetura já segmentada de Configurações e Administração foi preservada.
+- O fluxo E2E real foi atualizado para os novos controles. Validações executadas: TypeScript/build Vite, Playwright mockado, `git diff --check` e revisão visual desktop/mobile com dados representativos. Os dois testes Playwright que exigem API/PostgreSQL reais permanecem condicionais e não foram executados nesta sessão.
+- Nenhuma migration é necessária para esta entrega.
 
 ## Checkpoint de campanhas e consulta de check-ins em 2026-07-21
 
