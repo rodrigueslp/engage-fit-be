@@ -62,6 +62,8 @@ segredo nem variável própria.
 
 1. Entre como `PLATFORM_ADMIN` e abra `Financeiro`.
 2. Confira os planos iniciais e ajuste ou crie uma nova versão.
+   Para boleto/Pix no teste, use ao menos R$ 10,00 para evitar rejeição pelos
+   limites mínimos do Asaas.
 3. Escolha uma academia e sincronize seus dados de cobrança.
 4. Crie uma assinatura com vencimento próximo e forma `Cliente escolhe`.
 5. Abra o cliente e a assinatura no Asaas sandbox e confirme que
@@ -142,9 +144,16 @@ valores em Git, logs, screenshots ou handoffs.
 | Webhook retorna 401 | token do webhook e `ASAAS_WEBHOOK_TOKEN` |
 | Webhook retorna 404 | capability desligada ou URL incorreta |
 | Cliente não é criado | chave, ambiente/base URL e CPF/CNPJ |
+| Assinatura rejeitada por valor | usar plano de ao menos R$ 10,00 no teste com boleto/Pix |
 | Pagamento não aparece | webhook, depois conciliação manual |
 | Academia continua bloqueada | status da cobrança mais recente e conciliação |
 | Assinatura duplicada | repetir com a mesma `Idempotency-Key`; a UI já faz isso |
 
 Falhas do provedor não expõem o corpo retornado pelo Asaas na resposta pública.
 Use `request_id`, logs estruturados e o espelho de eventos no PostgreSQL.
+Rejeições do Asaas geram o evento `billing_provider_request_failed`, com
+`provider`, `operation`, `provider_status`, `provider_error_code` e a primeira
+descrição normalizada e limitada. O payload bruto e as credenciais nunca são
+registrados. Erros de validação do provedor retornam `422` ao painel com uma
+mensagem segura; autenticação, limite de requisições e indisponibilidade usam
+códigos públicos distintos.

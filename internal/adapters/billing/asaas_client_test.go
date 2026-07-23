@@ -3,6 +3,7 @@ package billing
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -74,7 +75,9 @@ func TestAsaasClientMapsPaymentWithoutFloatingPointLoss(t *testing.T) {
 func TestAsaasClientRejectsProviderError(t *testing.T) {
 	t.Parallel()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.Error(w, "sensitive provider details", http.StatusUnauthorized)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"errors":[{"code":"invalid_value","description":"Valor mínimo inválido para payer@example.com e documento 12345678901.\n token=secret-value"}]}`))
 	}))
 	defer server.Close()
 
@@ -83,7 +86,37 @@ func TestAsaasClientRejectsProviderError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected provider error")
 	}
-	if got := err.Error(); got != "falha no provedor financeiro: status 401" {
-		t.Fatalf("provider body must not leak, got %q", got)
+	var providerError *services.BillingProviderError
+	if !errors.As(err, &providerError) {
+		t.Fatalf("expected structured provider error, got %T", err)
+	}
+	if providerError.StatusCode != http.StatusBadRequest || providerError.Operation != "find_customer" || providerError.Code != "invalid_value" {
+		t.Fatalf("unexpected provider error %#v", providerError)
+	}
+	expectedDescription := "Valor mínimo inválido para [redacted-email] e documento [redacted-number]. token=[redacted]"
+	if providerError.Description != expectedDescription {
+		t.Fatalf("unexpected sanitized description %q", providerError.Description)
+	}
+	if got := err.Error(); got != "falha no provedor financeiro: provider=asaas operation=find_customer status=400 code=invalid_value" {
+		t.Fatalf("provider description must not leak through error string, got %q", got)
+	}
+}
+
+func TestAsaasClientClassifiesMalformedProviderResponse(t *testing.T) {
+	t.Parallel()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`not-json`))
+	}))
+	defer server.Close()
+
+	client := NewAsaasClient(server.URL, "test-key", time.Second)
+	_, err := client.FindCustomerByExternalReference(context.Background(), "box")
+	var providerError *services.BillingProviderError
+	if !errors.As(err, &providerError) {
+		t.Fatalf("expected structured provider error, got %v", err)
+	}
+	if providerError.StatusCode != http.StatusOK || providerError.Operation != "find_customer" || providerError.Code != "malformed_response" {
+		t.Fatalf("unexpected provider error %#v", providerError)
 	}
 }

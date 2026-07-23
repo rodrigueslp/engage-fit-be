@@ -4,12 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
-	"fmt"
 	"io"
 	"math"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -19,8 +18,11 @@ import (
 )
 
 const maxProviderResponseBytes = 1 << 20
+const maxProviderErrorDescriptionBytes = 500
 
-var ErrBillingProvider = errors.New("falha no provedor financeiro")
+var providerEmailPattern = regexp.MustCompile(`(?i)[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}`)
+var providerLongNumberPattern = regexp.MustCompile(`\b[0-9]{8,}\b`)
+var providerSecretPattern = regexp.MustCompile(`(?i)\b(access_token|api[_ -]?key|token)\s*[:=]\s*\S+`)
 
 type AsaasClient struct {
 	baseURL    string
@@ -50,7 +52,7 @@ func (c *AsaasClient) CreateCustomer(ctx context.Context, input services.CreateB
 		return nil, err
 	}
 	if response.ID == "" {
-		return nil, ErrBillingProvider
+		return nil, services.ErrBillingProvider
 	}
 	return &services.BillingProviderCustomer{ID: response.ID}, nil
 }
@@ -98,7 +100,7 @@ func (c *AsaasClient) CreateSubscription(ctx context.Context, input services.Cre
 	}
 	nextDueDate, err := parseDate(response.NextDueDate)
 	if err != nil || response.ID == "" {
-		return nil, ErrBillingProvider
+		return nil, services.ErrBillingProvider
 	}
 	return &services.BillingProviderSubscription{
 		ID: response.ID, Status: response.Status, NextDueDate: nextDueDate,
@@ -122,7 +124,7 @@ func (c *AsaasClient) FindSubscriptionByExternalReference(ctx context.Context, e
 	row := response.Data[0]
 	nextDueDate, err := parseDate(row.NextDueDate)
 	if err != nil || row.ID == "" {
-		return nil, ErrBillingProvider
+		return nil, services.ErrBillingProvider
 	}
 	return &services.BillingProviderSubscription{
 		ID: row.ID, Status: row.Status, NextDueDate: nextDueDate, BillingType: domain.BillingType(row.BillingType),
@@ -160,7 +162,7 @@ func (c *AsaasClient) ListSubscriptionPayments(ctx context.Context, providerSubs
 		for _, payment := range response.Data {
 			mapped, err := payment.toService()
 			if err != nil {
-				return nil, ErrBillingProvider
+				return nil, services.ErrBillingProvider
 			}
 			result = append(result, *mapped)
 		}
@@ -197,23 +199,86 @@ func (c *AsaasClient) do(ctx context.Context, method, path string, query url.Val
 	}
 	response, err := c.httpClient.Do(request)
 	if err != nil {
-		return fmt.Errorf("%w: request failed", ErrBillingProvider)
+		return providerFailure(method, path, 0, "request_failed")
 	}
 	defer response.Body.Close()
 	responseBody, err := io.ReadAll(io.LimitReader(response.Body, maxProviderResponseBytes))
 	if err != nil {
-		return fmt.Errorf("%w: invalid response", ErrBillingProvider)
+		return providerFailure(method, path, response.StatusCode, "invalid_response")
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return fmt.Errorf("%w: status %d", ErrBillingProvider, response.StatusCode)
+		return newProviderError(method, path, response.StatusCode, responseBody)
 	}
 	if target == nil || len(responseBody) == 0 {
 		return nil
 	}
 	if err := json.Unmarshal(responseBody, target); err != nil {
-		return fmt.Errorf("%w: malformed response", ErrBillingProvider)
+		return providerFailure(method, path, response.StatusCode, "malformed_response")
 	}
 	return nil
+}
+
+func providerFailure(method, path string, statusCode int, code string) error {
+	return &services.BillingProviderError{
+		Provider: "asaas", Operation: providerOperation(method, path),
+		StatusCode: statusCode, Code: code,
+	}
+}
+
+func newProviderError(method, path string, statusCode int, responseBody []byte) error {
+	var envelope struct {
+		Errors []struct {
+			Code        string `json:"code"`
+			Description string `json:"description"`
+		} `json:"errors"`
+	}
+	_ = json.Unmarshal(responseBody, &envelope)
+
+	result := &services.BillingProviderError{
+		Provider:   "asaas",
+		Operation:  providerOperation(method, path),
+		StatusCode: statusCode,
+	}
+	if len(envelope.Errors) > 0 {
+		result.Code = sanitizeProviderText(envelope.Errors[0].Code, 100)
+		result.Description = sanitizeProviderText(envelope.Errors[0].Description, maxProviderErrorDescriptionBytes)
+	}
+	return result
+}
+
+func providerOperation(method, path string) string {
+	switch {
+	case method == http.MethodPost && path == "/customers":
+		return "create_customer"
+	case method == http.MethodGet && path == "/customers":
+		return "find_customer"
+	case method == http.MethodPut && strings.HasPrefix(path, "/customers/"):
+		return "update_customer"
+	case method == http.MethodPost && path == "/subscriptions":
+		return "create_subscription"
+	case method == http.MethodGet && path == "/subscriptions":
+		return "find_subscription"
+	case method == http.MethodDelete && strings.HasPrefix(path, "/subscriptions/"):
+		return "cancel_subscription"
+	case method == http.MethodGet && path == "/payments":
+		return "list_subscription_payments"
+	case method == http.MethodGet && strings.HasPrefix(path, "/payments/"):
+		return "get_payment"
+	default:
+		return "request"
+	}
+}
+
+func sanitizeProviderText(value string, limit int) string {
+	value = strings.Join(strings.Fields(value), " ")
+	value = providerEmailPattern.ReplaceAllString(value, "[redacted-email]")
+	value = providerLongNumberPattern.ReplaceAllString(value, "[redacted-number]")
+	value = providerSecretPattern.ReplaceAllString(value, "$1=[redacted]")
+	runes := []rune(value)
+	if len(runes) > limit {
+		value = string(runes[:limit])
+	}
+	return value
 }
 
 type asaasSubscription struct {
@@ -245,7 +310,7 @@ type asaasPayment struct {
 func (p asaasPayment) toService() (*services.BillingProviderPayment, error) {
 	dueDate, err := parseDate(p.DueDate)
 	if err != nil || p.ID == "" {
-		return nil, ErrBillingProvider
+		return nil, services.ErrBillingProvider
 	}
 	originalDueDate := optionalDate(p.OriginalDueDate)
 	confirmedAt := optionalDateTime(p.ConfirmedDate)

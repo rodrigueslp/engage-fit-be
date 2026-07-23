@@ -4,11 +4,11 @@ Manual canônico de arquitetura e negócio: `docs/system-design.md`.
 
 Guia operacional consolidado: `docs/application-readiness-guide.md`.
 
-Atualizado em: 2026-07-23 (billing Asaas implementado localmente; ativação e deploy pendentes)
+Atualizado em: 2026-07-23 (billing Asaas homologado no sandbox; produção pendente)
 
 ## Checkpoint de billing Asaas em 2026-07-23
 
-### Implementação concluída localmente
+### Implementação e homologação concluídas
 
 - Billing foi implementado como contexto isolado no backend atual, usando
   `BillingGateway` e `BillingRepository`; não há segundo servidor permanente.
@@ -40,19 +40,28 @@ Atualizado em: 2026-07-23 (billing Asaas implementado localmente; ativação e d
   `.ai/billing-design.md` e seção 14.1 de `docs/system-design.md`.
 - Configuração permanece desligada por padrão com
   `FEATURE_BILLING_ENABLED=false`.
+- Rejeições do Asaas retornam mensagem administrativa segura e geram o log
+  estruturado `billing_provider_request_failed`, correlacionado por
+  `request_id`, sem registrar payload bruto ou credenciais.
+- Backend `6604ba9` e frontend `ded9c31` foram publicados e implantados no
+  Railway. `FEATURE_BILLING_ENABLED=true` está efetivo e `/api/v1/capabilities`
+  confirmou `billing: true`.
+- A conta Sandbox possui webhook v3 ativo, fila ativa e envio sequencial para o
+  endpoint público do EngageFit, autenticado com token próprio.
+- Cliente, assinatura mensal por boleto, cobrança e confirmação de pagamento
+  foram homologados ponta a ponta. O teste inicial de R$ 1,00 foi rejeitado
+  pelo limite do Asaas; com plano de R$ 10,00 a cobrança foi criada e recebida
+  corretamente.
 
-### Antes de ativar
+### Antes de ativar em produção
 
-1. Revisar e publicar backend e frontend.
-2. Garantir a execução da migration 034 no Railway.
-3. Criar conta/chave no Asaas sandbox e um token de webhook com pelo menos 32
-   caracteres.
-4. Configurar as variáveis descritas no runbook e cadastrar o webhook para o
-   domínio público.
-5. Homologar pagamento, vencimento, tolerância, suspensão, estorno,
-   cancelamento e reconciliação no sandbox.
-6. Criar um job periódico usando o binário de conciliação.
-7. Somente depois trocar para a URL e chave de produção e pilotar com uma
+1. Homologar vencimento, tolerância, suspensão, estorno, cancelamento e
+   conciliação no sandbox.
+2. Criar um job periódico usando o binário de conciliação.
+3. Concluir a aprovação cadastral e habilitação dos meios de pagamento na conta
+   Asaas real.
+4. Criar chave e webhook exclusivos de produção.
+5. Trocar para a URL e chave de produção e pilotar com uma
    academia.
 
 ## Checkpoint de onboarding Twilio e teste produtivo em 2026-07-23

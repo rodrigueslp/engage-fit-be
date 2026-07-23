@@ -669,6 +669,10 @@ exige nova versão do plano, preservando o contrato histórico. Eventos Asaas s�
 persistidos por `(provider, provider_event_id)`, duplicatas processadas são
 ignoradas e eventos falhos podem ser reentregues. O comando
 `engagefit-billing-reconcile` é o caminho de recuperação quando o webhook falha.
+Falhas de chamadas ao Asaas preservam apenas o status, o código e a primeira
+descrição normalizada/limitada; o evento estruturado
+`billing_provider_request_failed` inclui o `request_id` para correlação sem
+registrar payload bruto ou credenciais.
 
 Detalhes operacionais e passagem sandbox/produção estão em
 `docs/asaas-billing-runbook.md`.

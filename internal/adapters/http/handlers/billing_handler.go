@@ -3,6 +3,7 @@ package handlers
 import (
 	"errors"
 	"io"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 	"boxengage/backend/internal/adapters/http/middleware"
 	billingapp "boxengage/backend/internal/app/billing"
 	"boxengage/backend/internal/domain"
+	"boxengage/backend/internal/ports/services"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -263,6 +265,11 @@ func (h BillingHandler) Reconcile(c *gin.Context) {
 }
 
 func respondBillingError(c *gin.Context, err error) {
+	var providerError *services.BillingProviderError
+	if errors.As(err, &providerError) {
+		respondBillingProviderError(c, err, providerError)
+		return
+	}
 	switch {
 	case errors.Is(err, billingapp.ErrBillingDisabled):
 		respondPublicError(c, http.StatusNotFound, "capability_disabled", "capability disabled")
@@ -277,6 +284,34 @@ func respondBillingError(c *gin.Context, err error) {
 		respondPublicError(c, http.StatusNotFound, "billing_not_found", "dados financeiros não encontrados")
 	default:
 		respondError(c, err)
+	}
+}
+
+func respondBillingProviderError(c *gin.Context, err error, providerError *services.BillingProviderError) {
+	requestID, _ := c.Get(middleware.RequestIDKey)
+	slog.Warn("billing_provider_request_failed",
+		"request_id", requestID,
+		"provider", providerError.Provider,
+		"operation", providerError.Operation,
+		"provider_status", providerError.StatusCode,
+		"provider_error_code", providerError.Code,
+		"provider_error_description", providerError.Description,
+	)
+	_ = c.Error(err)
+
+	switch {
+	case providerError.StatusCode == http.StatusUnauthorized || providerError.StatusCode == http.StatusForbidden:
+		respondPublicError(c, http.StatusBadGateway, "billing_provider_authentication_failed", "O Asaas recusou a autenticação da integração")
+	case providerError.StatusCode == http.StatusTooManyRequests:
+		respondPublicError(c, http.StatusServiceUnavailable, "billing_provider_rate_limited", "O Asaas limitou temporariamente as solicitações; tente novamente")
+	case providerError.StatusCode >= 400 && providerError.StatusCode < 500:
+		message := "O Asaas rejeitou a operação"
+		if providerError.Description != "" {
+			message += ": " + providerError.Description
+		}
+		respondPublicError(c, http.StatusUnprocessableEntity, "billing_provider_rejected", message)
+	default:
+		respondPublicError(c, http.StatusBadGateway, "billing_provider_unavailable", "Não foi possível concluir a operação no Asaas")
 	}
 }
 

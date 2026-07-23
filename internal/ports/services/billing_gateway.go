@@ -2,10 +2,33 @@ package services
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"time"
 
 	"boxengage/backend/internal/domain"
 )
+
+var ErrBillingProvider = errors.New("falha no provedor financeiro")
+
+type BillingProviderError struct {
+	Provider    string
+	Operation   string
+	StatusCode  int
+	Code        string
+	Description string
+}
+
+func (e *BillingProviderError) Error() string {
+	if e.Code != "" {
+		return fmt.Sprintf("%s: provider=%s operation=%s status=%d code=%s", ErrBillingProvider, e.Provider, e.Operation, e.StatusCode, e.Code)
+	}
+	return fmt.Sprintf("%s: provider=%s operation=%s status=%d", ErrBillingProvider, e.Provider, e.Operation, e.StatusCode)
+}
+
+func (e *BillingProviderError) Unwrap() error {
+	return ErrBillingProvider
+}
 
 type BillingProviderCustomer struct {
 	ID string
