@@ -1,7 +1,7 @@
 COMPOSE=docker compose
 DATABASE_URL=postgres://boxengage:boxengage@localhost:5432/boxengage?sslmode=disable
 
-.PHONY: up down logs ps migrate-up migrate-status migrate-baseline rotate-secrets privacy-retention-dry-run privacy-retention-apply backend-run backend-test demo-seed demo-reset demo-reset-seed daily-automation observability-up observability-down observability-logs
+.PHONY: up down logs ps migrate-up migrate-status migrate-baseline rotate-secrets privacy-retention-dry-run privacy-retention-apply billing-reconcile backend-run backend-test demo-seed demo-reset demo-reset-seed daily-automation observability-up observability-down observability-logs
 
 up:
 	$(COMPOSE) up -d postgres
@@ -34,8 +34,11 @@ privacy-retention-dry-run:
 privacy-retention-apply:
 	DATABASE_URL="$(DATABASE_URL)" go run ./cmd/privacy-retention --apply
 
+billing-reconcile:
+	DATABASE_URL="$(DATABASE_URL)" go run ./cmd/billing-reconcile
+
 backend-run:
-	DATABASE_URL="$(DATABASE_URL)" go run ./cmd/api
+	set -a; [ ! -f ./.env.billing.local ] || . ./.env.billing.local; set +a; DATABASE_URL="$(DATABASE_URL)" go run ./cmd/api
 
 backend-test:
 	go test ./...

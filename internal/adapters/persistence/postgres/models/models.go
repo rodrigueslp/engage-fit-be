@@ -9,10 +9,110 @@ type BoxModel struct {
 	StatusReason            string
 	StatusChangedAt         *time.Time
 	StatusChangedBy         *string
+	BillingAccessBlocked    bool
+	BillingAccessReason     string
+	BillingAccessChangedAt  *time.Time
 	RiskInactiveDays        int
 	RiskMessageCooldownDays int
 	CreatedAt               time.Time
 	UpdatedAt               time.Time
+}
+
+type BillingPlanModel struct {
+	ID                  string `gorm:"primaryKey"`
+	Code                string
+	Version             int
+	Name                string
+	Description         string
+	MonthlyPriceCents   int64
+	Currency            string
+	MonthlyMessageLimit int
+	DailyMessageLimit   int
+	PerDispatchLimit    int
+	WarningPercent      int
+	GracePeriodDays     int
+	Active              bool
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
+}
+
+type BillingCustomerModel struct {
+	ID                   string `gorm:"primaryKey"`
+	BoxID                string `gorm:"uniqueIndex"`
+	Provider             string
+	ProviderCustomerID   string
+	LegalName            string
+	CPFCNPJ              string `gorm:"column:cpf_cnpj"`
+	Email                string
+	Phone                string
+	PostalCode           string
+	Address              string
+	AddressNumber        string
+	Complement           string
+	Province             string
+	City                 string
+	State                string
+	NotificationDisabled bool
+	CreatedAt            time.Time
+	UpdatedAt            time.Time
+}
+
+type BillingSubscriptionModel struct {
+	ID                     string `gorm:"primaryKey"`
+	BoxID                  string `gorm:"index"`
+	BillingCustomerID      string
+	PlanID                 string
+	Provider               string
+	ProviderSubscriptionID string
+	Status                 string `gorm:"index"`
+	BillingType            string
+	NextDueDate            time.Time
+	CurrentPeriodStart     *time.Time
+	CurrentPeriodEnd       *time.Time
+	GraceUntil             *time.Time
+	StartedAt              time.Time
+	CanceledAt             *time.Time
+	CancelAtPeriodEnd      bool
+	ExternalReference      string
+	LastReconciledAt       *time.Time
+	CreatedAt              time.Time
+	UpdatedAt              time.Time
+}
+
+type BillingInvoiceModel struct {
+	ID                string `gorm:"primaryKey"`
+	BoxID             string `gorm:"index"`
+	SubscriptionID    string `gorm:"index"`
+	Provider          string
+	ProviderPaymentID string `gorm:"uniqueIndex"`
+	Status            string `gorm:"index"`
+	BillingType       string
+	ValueCents        int64
+	NetValueCents     *int64
+	DueDate           time.Time
+	OriginalDueDate   *time.Time
+	ConfirmedAt       *time.Time
+	ReceivedAt        *time.Time
+	InvoiceURL        string
+	BankSlipURL       string
+	ExternalReference string
+	Description       string
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+}
+
+type BillingWebhookEventModel struct {
+	ID                string `gorm:"primaryKey"`
+	Provider          string
+	ProviderEventID   string
+	EventType         string
+	ProviderPaymentID string
+	Payload           []byte `gorm:"type:jsonb"`
+	Status            string `gorm:"index"`
+	Attempts          int
+	ErrorMessage      string
+	ReceivedAt        time.Time
+	ProcessedAt       *time.Time
 }
 
 type UserModel struct {

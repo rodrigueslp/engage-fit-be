@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	billingadapter "boxengage/backend/internal/adapters/billing"
 	"boxengage/backend/internal/adapters/email"
 	apphttp "boxengage/backend/internal/adapters/http"
 	"boxengage/backend/internal/adapters/http/middleware"
@@ -23,6 +24,7 @@ import (
 	"boxengage/backend/internal/adapters/whatsapp"
 	"boxengage/backend/internal/app/auth"
 	"boxengage/backend/internal/app/automation"
+	billingapp "boxengage/backend/internal/app/billing"
 	"boxengage/backend/internal/app/boxes"
 	"boxengage/backend/internal/app/campaigns"
 	"boxengage/backend/internal/app/dashboard"
@@ -127,6 +129,7 @@ func main() {
 	automationRepository := pgrepo.NewAutomationGormRepository(db)
 	workoutRepository := pgrepo.NewWorkoutGormRepository(db)
 	messagingGovernanceRepository := pgrepo.NewMessagingGovernanceGormRepository(db)
+	billingRepository := pgrepo.NewBillingGormRepository(db)
 
 	passwordService := security.NewPasswordService()
 	ensureAdminUseCase := platformadmin.NewEnsureAdminUseCase(userRepository, passwordService)
@@ -158,6 +161,8 @@ func main() {
 	emailGateway := email.NewSMTPGateway(cfg.AppEnv, cfg.EmailAllowRealSend, cfg.EmailDevRecipientEmail)
 	llmGenerator := llm.NewOpenAIGenerator(cfg.OpenAIAPIKey, cfg.OpenAIModel, cfg.OpenAITimeoutSeconds)
 	checkinParser := parsers.NewCheckinParser()
+	billingGateway := billingadapter.NewAsaasClient(cfg.AsaasBaseURL, cfg.AsaasAPIKey, time.Duration(cfg.AsaasTimeoutSeconds)*time.Second)
+	billingService := billingapp.NewService(billingRepository, billingGateway, messagingGovernanceRepository, cfg.FeatureBillingEnabled, cfg.AsaasWebhookToken)
 
 	loginUseCase := auth.NewLoginUseCase(userRepository, boxRepository, passwordService, tokenService)
 	currentUserUseCase := auth.NewGetCurrentUserUseCase(userRepository)
@@ -403,10 +408,12 @@ func main() {
 		Capabilities: middleware.Capabilities{
 			Whatsapp: cfg.FeatureWhatsappEnabled, Email: cfg.FeatureEmailEnabled,
 			Automation: cfg.FeatureAutomationEnabled, Workouts: cfg.FeatureWorkoutsEnabled, LLM: cfg.FeatureLLMEnabled,
+			Billing: cfg.FeatureBillingEnabled,
 		},
-		BuildVersion: version,
-		BuildCommit:  commit,
-		BuildTime:    buildTime,
+		BillingService: billingService,
+		BuildVersion:   version,
+		BuildCommit:    commit,
+		BuildTime:      buildTime,
 	})
 
 	runContext, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

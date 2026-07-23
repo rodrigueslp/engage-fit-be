@@ -12,6 +12,7 @@ import (
 	"boxengage/backend/internal/adapters/http/middleware"
 	"boxengage/backend/internal/app/auth"
 	"boxengage/backend/internal/app/automation"
+	billingapp "boxengage/backend/internal/app/billing"
 	"boxengage/backend/internal/app/boxes"
 	"boxengage/backend/internal/app/campaigns"
 	"boxengage/backend/internal/app/dashboard"
@@ -159,6 +160,7 @@ type RouterDependencies struct {
 	BuildVersion                  string
 	BuildCommit                   string
 	BuildTime                     string
+	BillingService                *billingapp.Service
 }
 
 func NewRouter(deps RouterDependencies) *gin.Engine {
@@ -213,6 +215,11 @@ func NewRouter(deps RouterDependencies) *gin.Engine {
 	setupLimiter := middleware.NewWindowRateLimiter(deps.SetupRateLimitRequests, time.Duration(deps.SetupRateLimitWindowSeconds)*time.Second)
 	api.POST("/setup/owner", middleware.JSONRateLimit(setupLimiter, "owner_email"), middleware.OwnerSetupAccess(deps.OwnerSetupEnabled, deps.OwnerSetupToken), setupHandler.CreateOwner)
 
+	if deps.BillingService != nil {
+		billingHandler := handlers.NewBillingHandler(deps.BillingService)
+		api.POST("/webhooks/asaas", billingHandler.Webhook)
+	}
+
 	authenticated := api.Group("")
 	authenticated.Use(middleware.Auth(deps.TokenService, deps.UserRepository, deps.BoxRepository, deps.SessionConfig), middleware.CSRF(deps.SessionConfig))
 	authenticated.POST("/auth/logout", authHandler.Logout)
@@ -241,6 +248,22 @@ func NewRouter(deps RouterDependencies) *gin.Engine {
 	admin.POST("/boxes/:id/suspend", adminBoxesHandler.Suspend)
 	admin.POST("/boxes/:id/reactivate", adminBoxesHandler.Reactivate)
 	admin.POST("/boxes/:id/archive", adminBoxesHandler.Archive)
+
+	if deps.BillingService != nil {
+		billingHandler := handlers.NewBillingHandler(deps.BillingService)
+		admin.GET("/billing/summary", billingHandler.Summary)
+		admin.GET("/billing/plans", billingHandler.ListPlans)
+		admin.POST("/billing/plans", billingHandler.CreatePlan)
+		admin.PUT("/billing/plans/:id", billingHandler.UpdatePlan)
+		admin.GET("/billing/boxes", billingHandler.ListBoxes)
+		admin.GET("/billing/boxes/:id", billingHandler.GetAdminBox)
+		admin.PUT("/billing/boxes/:id/customer", billingHandler.SaveCustomer)
+		admin.POST("/billing/boxes/:id/subscription", billingHandler.CreateSubscription)
+		admin.POST("/billing/boxes/:id/subscription/cancel", billingHandler.CancelSubscription)
+		admin.POST("/billing/boxes/:id/subscription/grace", billingHandler.GrantGrace)
+		admin.POST("/billing/reconcile", billingHandler.Reconcile)
+		protected.GET("/billing", billingHandler.GetOwnerBilling)
+	}
 
 	boxesHandler := handlers.NewBoxesHandler(deps.GetBoxUseCase, deps.UpdateBoxUseCase)
 	protected.GET("/box", boxesHandler.Get)

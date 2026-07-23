@@ -70,11 +70,16 @@ type Config struct {
 	PrometheusBearerToken             string
 	DataEncryptionActiveKeyID         string
 	DataEncryptionKeys                string
+	AsaasBaseURL                      string
+	AsaasAPIKey                       string
+	AsaasWebhookToken                 string
+	AsaasTimeoutSeconds               int
 	FeatureWhatsappEnabled            bool
 	FeatureEmailEnabled               bool
 	FeatureAutomationEnabled          bool
 	FeatureWorkoutsEnabled            bool
 	FeatureLLMEnabled                 bool
+	FeatureBillingEnabled             bool
 	BuildVersion                      string
 	BuildCommit                       string
 	BuildTime                         string
@@ -144,11 +149,16 @@ func Load() Config {
 		PrometheusBearerToken:             getEnv("PROMETHEUS_BEARER_TOKEN", ""),
 		DataEncryptionActiveKeyID:         getEnv("DATA_ENCRYPTION_ACTIVE_KEY_ID", ""),
 		DataEncryptionKeys:                getEnv("DATA_ENCRYPTION_KEYS", ""),
+		AsaasBaseURL:                      getEnv("ASAAS_BASE_URL", "https://api-sandbox.asaas.com/v3"),
+		AsaasAPIKey:                       getEnv("ASAAS_API_KEY", ""),
+		AsaasWebhookToken:                 getEnv("ASAAS_WEBHOOK_TOKEN", ""),
+		AsaasTimeoutSeconds:               getEnvInt("ASAAS_TIMEOUT_SECONDS", 15),
 		FeatureWhatsappEnabled:            getEnvBool("FEATURE_WHATSAPP_ENABLED", appEnv != "production"),
 		FeatureEmailEnabled:               getEnvBool("FEATURE_EMAIL_ENABLED", appEnv != "production"),
 		FeatureAutomationEnabled:          getEnvBool("FEATURE_AUTOMATION_ENABLED", appEnv != "production"),
 		FeatureWorkoutsEnabled:            getEnvBool("FEATURE_WORKOUTS_ENABLED", appEnv != "production"),
 		FeatureLLMEnabled:                 getEnvBool("FEATURE_LLM_ENABLED", appEnv != "production"),
+		FeatureBillingEnabled:             getEnvBool("FEATURE_BILLING_ENABLED", false),
 		BuildVersion:                      getEnv("BUILD_VERSION", ""),
 		BuildCommit:                       getEnv("BUILD_COMMIT", ""),
 		BuildTime:                         getEnv("BUILD_TIME", ""),
@@ -199,6 +209,17 @@ func (c Config) Validate() error {
 	}
 	if c.AutomationStaleRunMinutes <= 0 || c.AutomationCatchupWindowMinutes <= 0 {
 		return errors.New("timeouts e janela de recuperacao da automacao devem ser maiores que zero")
+	}
+	if c.FeatureBillingEnabled && c.AsaasTimeoutSeconds <= 0 {
+		return errors.New("ASAAS_TIMEOUT_SECONDS deve ser maior que zero")
+	}
+	if c.FeatureBillingEnabled {
+		if strings.TrimSpace(c.AsaasAPIKey) == "" || len(c.AsaasWebhookToken) < 32 {
+			return errors.New("FEATURE_BILLING_ENABLED exige ASAAS_API_KEY e ASAAS_WEBHOOK_TOKEN com ao menos 32 caracteres")
+		}
+		if !strings.HasPrefix(c.AsaasBaseURL, "https://") {
+			return errors.New("ASAAS_BASE_URL deve usar HTTPS")
+		}
 	}
 	if (c.OTelEnabled && strings.TrimSpace(c.OTelServiceName) == "") || c.OTelTraceSampleRatio < 0 || c.OTelTraceSampleRatio > 1 {
 		return errors.New("configuracao OpenTelemetry e invalida")

@@ -11,6 +11,7 @@ import (
 )
 
 var ErrBoxAccessInactive = errors.New("academia inativa")
+var ErrBillingAccessBlocked = errors.New("acesso bloqueado por pendência financeira")
 
 type LoginInput struct {
 	Email    string
@@ -47,6 +48,9 @@ func (uc LoginUseCase) Execute(ctx context.Context, input LoginInput) (*LoginOut
 		}
 		if !box.IsActive() {
 			return nil, ErrBoxAccessInactive
+		}
+		if box.BillingAccessBlocked {
+			return nil, ErrBillingAccessBlocked
 		}
 	}
 

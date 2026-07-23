@@ -13,6 +13,7 @@ RUN go build -ldflags "-X main.version=${BUILD_VERSION} -X main.commit=${BUILD_C
 RUN go build -o /bin/engagefit-migrate ./cmd/migrate
 RUN go build -o /bin/engagefit-rotate-secrets ./cmd/rotate-secrets
 RUN go build -o /bin/engagefit-privacy-retention ./cmd/privacy-retention
+RUN go build -o /bin/engagefit-billing-reconcile ./cmd/billing-reconcile
 
 FROM alpine:3.20
 
@@ -26,6 +27,7 @@ COPY --from=build --chown=engagefit:engagefit /bin/boxengage-api /usr/local/bin/
 COPY --from=build --chown=engagefit:engagefit /bin/engagefit-migrate /usr/local/bin/engagefit-migrate
 COPY --from=build --chown=engagefit:engagefit /bin/engagefit-rotate-secrets /usr/local/bin/engagefit-rotate-secrets
 COPY --from=build --chown=engagefit:engagefit /bin/engagefit-privacy-retention /usr/local/bin/engagefit-privacy-retention
+COPY --from=build --chown=engagefit:engagefit /bin/engagefit-billing-reconcile /usr/local/bin/engagefit-billing-reconcile
 
 USER engagefit
 

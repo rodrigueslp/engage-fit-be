@@ -4,6 +4,12 @@ func (BoxModel) TableName() string {
 	return "boxes"
 }
 
+func (BillingPlanModel) TableName() string         { return "billing_plans" }
+func (BillingCustomerModel) TableName() string     { return "billing_customers" }
+func (BillingSubscriptionModel) TableName() string { return "billing_subscriptions" }
+func (BillingInvoiceModel) TableName() string      { return "billing_invoices" }
+func (BillingWebhookEventModel) TableName() string { return "billing_webhook_events" }
+
 func (UserModel) TableName() string {
 	return "users"
 }

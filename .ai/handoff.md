@@ -4,7 +4,56 @@ Manual canônico de arquitetura e negócio: `docs/system-design.md`.
 
 Guia operacional consolidado: `docs/application-readiness-guide.md`.
 
-Atualizado em: 2026-07-23 (onboarding Twilio do Crossfit Alados e teste produtivo pendente)
+Atualizado em: 2026-07-23 (billing Asaas implementado localmente; ativação e deploy pendentes)
+
+## Checkpoint de billing Asaas em 2026-07-23
+
+### Implementação concluída localmente
+
+- Billing foi implementado como contexto isolado no backend atual, usando
+  `BillingGateway` e `BillingRepository`; não há segundo servidor permanente.
+- Migration `034_create_billing.sql` adiciona planos versionados, clientes,
+  assinaturas, cobranças, eventos idempotentes de webhook e a projeção
+  `boxes.billing_access_blocked`.
+- Asaas é fonte de verdade financeira; o EngageFit mantém contrato, franquia,
+  histórico espelhado e acesso. Nenhum dado de cartão passa pelo sistema.
+- Webhook público autenticado:
+  `POST /api/v1/webhooks/asaas`, usando o header `asaas-access-token`.
+- Clientes usam `box_id` como referência externa. Assinaturas exigem
+  `Idempotency-Key`, evitando duplicação em retry inclusive após falha entre o
+  provedor e a persistência local.
+- Pagamento confirmado/recebido libera acesso; atraso inicia tolerância;
+  tolerância vencida, estorno, chargeback e cancelamento bloqueiam acesso,
+  revogam sessões e impedem novas automações. O estado administrativo da
+  academia permanece independente.
+- A assinatura aplica automaticamente as franquias de mensagens do plano. O
+  preço é mensal único, com WhatsApp incluído nos limites; não há cobrança
+  separada de WhatsApp.
+- Termos comerciais de plano já contratado são imutáveis. Mudanças de preço,
+  franquia ou tolerância exigem nova versão.
+- Conciliação está disponível no painel e no binário
+  `/usr/local/bin/engagefit-billing-reconcile`; deve ser agendada ao menos a
+  cada hora.
+- Frontend recebeu `Financeiro` para `PLATFORM_ADMIN` e `Plano e cobranças` para
+  owner.
+- Runbook completo: `docs/asaas-billing-runbook.md`. Arquitetura:
+  `.ai/billing-design.md` e seção 14.1 de `docs/system-design.md`.
+- Configuração permanece desligada por padrão com
+  `FEATURE_BILLING_ENABLED=false`.
+
+### Antes de ativar
+
+1. Revisar e publicar backend e frontend.
+2. Garantir a execução da migration 034 no Railway.
+3. Criar conta/chave no Asaas sandbox e um token de webhook com pelo menos 32
+   caracteres.
+4. Configurar as variáveis descritas no runbook e cadastrar o webhook para o
+   domínio público.
+5. Homologar pagamento, vencimento, tolerância, suspensão, estorno,
+   cancelamento e reconciliação no sandbox.
+6. Criar um job periódico usando o binário de conciliação.
+7. Somente depois trocar para a URL e chave de produção e pilotar com uma
+   academia.
 
 ## Checkpoint de onboarding Twilio e teste produtivo em 2026-07-23
 

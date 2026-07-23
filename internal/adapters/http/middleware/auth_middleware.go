@@ -42,6 +42,10 @@ func Auth(tokens services.TokenService, users repositories.UserRepository, boxes
 				apiresponse.AbortError(c, http.StatusForbidden, "box_inactive", "academia suspensa ou arquivada; procure o suporte")
 				return
 			}
+			if box.BillingAccessBlocked {
+				apiresponse.AbortError(c, http.StatusPaymentRequired, "billing_access_blocked", "assinatura pendente ou vencida; procure o financeiro")
+				return
+			}
 		}
 
 		SetAuthContext(c, user.ID, user.BoxID, user.Role)

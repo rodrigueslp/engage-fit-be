@@ -9,6 +9,9 @@ type Box struct {
 	StatusReason            string
 	StatusChangedAt         *time.Time
 	StatusChangedBy         ID
+	BillingAccessBlocked    bool
+	BillingAccessReason     string
+	BillingAccessChangedAt  *time.Time
 	RiskInactiveDays        int
 	RiskMessageCooldownDays int
 	CreatedAt               time.Time
@@ -24,4 +27,8 @@ func (b Box) EffectiveStatus() BoxStatus {
 
 func (b Box) IsActive() bool {
 	return b.EffectiveStatus() == BoxStatusActive
+}
+
+func (b Box) IsOperational() bool {
+	return b.IsActive() && !b.BillingAccessBlocked
 }

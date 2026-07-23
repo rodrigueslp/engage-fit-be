@@ -13,6 +13,14 @@ func NewBoxGormRepository(db *gorm.DB) BoxGormRepository {
 	return BoxGormRepository{db: db}
 }
 
+type BillingGormRepository struct {
+	db *gorm.DB
+}
+
+func NewBillingGormRepository(db *gorm.DB) BillingGormRepository {
+	return BillingGormRepository{db: db}
+}
+
 type UserGormRepository struct {
 	db *gorm.DB
 }

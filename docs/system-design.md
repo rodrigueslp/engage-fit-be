@@ -643,6 +643,36 @@ O endpoint aceita `Idempotency-Key` com 1–128 caracteres seguros. O frontend g
 
 O script `scripts/daily-automation.mjs` é outro caminho operacional e também usa chave determinística diária.
 
+### 14.1 Billing, franquias e acesso financeiro
+
+Billing é um contexto interno isolado por portas, não um segundo servidor. O
+Asaas é fonte de verdade para o movimento financeiro e meio de pagamento; o
+EngageFit é fonte de verdade para catálogo versionado, contrato, franquia de
+mensagens e autorização da academia.
+
+O fluxo administrativo é:
+
+1. sincronizar `billing_customer` pelo `box_id`;
+2. criar assinatura mensal com `Idempotency-Key`;
+3. persistir a referência externa e aplicar os limites do plano à política de
+   mensageria;
+4. projetar cobranças a partir de webhooks autenticados;
+5. reconciliar periodicamente todas as cobranças da assinatura.
+
+`boxes.status` continua representando o ciclo administrativo. A projeção
+`boxes.billing_access_blocked` é independente: pagamento nunca reativa uma
+academia suspensa administrativamente. Bloqueio financeiro revoga sessões,
+impede novo login e exclui a academia do worker de automação.
+
+Planos em uso têm preço, franquias e tolerância imutáveis. Uma mudança comercial
+exige nova versão do plano, preservando o contrato histórico. Eventos Asaas são
+persistidos por `(provider, provider_event_id)`, duplicatas processadas são
+ignoradas e eventos falhos podem ser reentregues. O comando
+`engagefit-billing-reconcile` é o caminho de recuperação quando o webhook falha.
+
+Detalhes operacionais e passagem sandbox/produção estão em
+`docs/asaas-billing-runbook.md`.
+
 ## 15. Privacidade e retenção
 
 ### 15.1 Preferência de contato
@@ -1111,6 +1141,8 @@ Você domina o núcleo quando consegue explicar:
 | Execution key | chave idempotente de run de automação |
 | Claim | aquisição atômica de um slot de schedule |
 | Stale run | execução presa cujo resultado precisa de revisão |
+| Billing plan | versão imutável dos termos comerciais depois de contratada |
+| Billing projection | estado local derivado dos eventos financeiros do Asaas |
 | Connection platform | WhatsApp compartilhado do EngageFit |
 | Connection dedicated | WhatsApp próprio da academia |
 | Suppression | hash que impede recriar aluno anonimizado |
@@ -1131,6 +1163,7 @@ Você domina o núcleo quando consegue explicar:
 | WhatsApp/audiência | `internal/app/messages/message_usecases.go` |
 | Governança | `internal/adapters/persistence/postgres/repositories/messaging_governance_repository.go` |
 | Automação | `internal/app/automation` |
+| Billing/Asaas | `internal/app/billing`, `internal/adapters/billing`, `docs/asaas-billing-runbook.md` |
 | Privacidade | `internal/app/students/privacy_usecases.go`, `privacy_repository.go` |
 | Workout/LLM | `internal/app/workouts`, `internal/adapters/llm` |
 | Sessão | `internal/adapters/http/middleware/session.go`, `auth_middleware.go` |

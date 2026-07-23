@@ -75,6 +75,7 @@ jobs:
           go build ./cmd/migrate
           go build ./cmd/rotate-secrets
           go build ./cmd/privacy-retention
+          go build ./cmd/billing-reconcile
       - name: Validate operational scripts
         run: |
           node --check scripts/demo-seed.mjs

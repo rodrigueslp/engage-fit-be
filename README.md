@@ -6,6 +6,8 @@ Guia consolidado de segurança, operação, testes, observabilidade, privacidade
 
 Documentação da governança de limites e custos do WhatsApp: [`.ai/messaging-governance.md`](.ai/messaging-governance.md).
 
+Runbook do financeiro e integração Asaas: [`docs/asaas-billing-runbook.md`](docs/asaas-billing-runbook.md).
+
 Backend Go do EngageFit seguindo Arquitetura Hexagonal.
 
 Este repositorio concentra o codigo da API e tambem a infraestrutura local do projeto (Docker, Makefile, scripts de demo e dados de teste). A pasta `.ai/` documenta o planejamento do produto completo — backend e frontend — para manter o contexto unificado enquanto os deploys continuam separados.

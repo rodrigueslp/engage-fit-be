@@ -78,7 +78,7 @@ func (r AutomationGormRepository) ListSchedules(ctx context.Context, boxID domai
 func (r AutomationGormRepository) ListEnabledSchedules(ctx context.Context) ([]domain.AutomationSchedule, error) {
 	var modelsList []models.AutomationScheduleModel
 	if err := r.db.WithContext(ctx).
-		Joins("JOIN boxes ON boxes.id = automation_schedules.box_id AND boxes.status = ?", string(domain.BoxStatusActive)).
+		Joins("JOIN boxes ON boxes.id = automation_schedules.box_id AND boxes.status = ? AND boxes.billing_access_blocked = FALSE", string(domain.BoxStatusActive)).
 		Where("automation_schedules.enabled = ?", true).
 		Order("automation_schedules.run_time ASC, automation_schedules.name ASC").Find(&modelsList).Error; err != nil {
 		return nil, err
@@ -132,7 +132,7 @@ func (r AutomationGormRepository) ClaimSchedule(ctx context.Context, boxID, sche
 	slotEnd := scheduledFor.Add(time.Minute)
 	result := r.db.WithContext(ctx).Model(&models.AutomationScheduleModel{}).
 		Where("id = ? AND box_id = ? AND enabled = ?", stringID(scheduleID), stringID(boxID), true).
-		Where("EXISTS (SELECT 1 FROM boxes WHERE boxes.id = automation_schedules.box_id AND boxes.status = ?)", string(domain.BoxStatusActive)).
+		Where("EXISTS (SELECT 1 FROM boxes WHERE boxes.id = automation_schedules.box_id AND boxes.status = ? AND boxes.billing_access_blocked = FALSE)", string(domain.BoxStatusActive)).
 		Where("last_run_at IS NULL OR last_run_at < ? OR last_run_at >= ?", scheduledFor, slotEnd).
 		Updates(map[string]any{"last_run_at": scheduledFor, "updated_at": time.Now()})
 	return result.RowsAffected == 1, result.Error

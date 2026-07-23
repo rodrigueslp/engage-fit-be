@@ -66,6 +66,10 @@ func (h AuthHandler) Login(c *gin.Context) {
 		respondPublicError(c, http.StatusForbidden, "box_inactive", "academia suspensa ou arquivada; procure o suporte")
 		return
 	}
+	if errors.Is(err, auth.ErrBillingAccessBlocked) {
+		respondPublicError(c, http.StatusPaymentRequired, "billing_access_blocked", "assinatura pendente ou vencida; procure o financeiro")
+		return
+	}
 	if err != nil {
 		respondPublicError(c, http.StatusUnauthorized, "invalid_credentials", "invalid credentials")
 		return

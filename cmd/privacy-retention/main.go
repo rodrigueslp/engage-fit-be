@@ -39,6 +39,7 @@ func main() {
 		{name: "automation runs", table: "automation_runs", column: "started_at", days: envDays("PRIVACY_RETENTION_AUTOMATION_RUN_DAYS", 180)},
 		{name: "imports and checkins", table: "import_histories", column: "imported_at", days: envDays("PRIVACY_RETENTION_CHECKIN_DAYS", 730)},
 		{name: "privacy audit", table: "privacy_audit_events", column: "created_at", days: envDays("PRIVACY_RETENTION_AUDIT_DAYS", 1825)},
+		{name: "billing webhook payloads", table: "billing_webhook_events", column: "received_at", days: envDays("PRIVACY_RETENTION_BILLING_WEBHOOK_DAYS", 365)},
 	}
 	mode := "dry-run"
 	if *apply {
