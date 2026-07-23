@@ -4,7 +4,70 @@ Manual canônico de arquitetura e negócio: `docs/system-design.md`.
 
 Guia operacional consolidado: `docs/application-readiness-guide.md`.
 
-Atualizado em: 2026-07-22 (revisão completa de UX do frontend)
+Atualizado em: 2026-07-23 (onboarding Twilio do Crossfit Alados e teste produtivo pendente)
+
+## Checkpoint de onboarding Twilio e teste produtivo em 2026-07-23
+
+### Estado concluido
+
+- O ciclo de vida de academias foi implementado e publicado: criacao pelo `PLATFORM_ADMIN`, edicao de nome, suspensao, reativacao e arquivamento, com bloqueio de login/automacoes quando inativa e auditoria administrativa.
+- Backend publicado no commit `7411e05` (`feat: add academy lifecycle management`) e frontend no commit `95fd575` (`feat: add academy lifecycle admin interface`). A migration `033_add_box_lifecycle.sql` acompanha o backend.
+- A academia Crossfit Alados foi criada como tenant e sua configuracao passou a ser administrada em `Administracao -> Academias -> Crossfit Alados -> Conexao`.
+- Foi criada a subconta Twilio `Crossfit Alados` dentro da conta principal. O sender WhatsApp `+55 18 99671-0587` foi migrado/conectado e chegou ao estado `Online` no Console da Twilio.
+- A conexao dedicada do Alados foi salva no EngageFit usando a subconta, e o botao `Testar conexao` passou. Account SID/Auth Token permanecem somente no armazenamento cifrado e nao devem ser registrados neste handoff.
+- A subconta compartilha automaticamente o saldo da conta Twilio principal; nao existe transferencia de credito. Recursos e relatorios de uso continuam separados por subconta, mas a cobranca reduz o saldo pai.
+- `FEATURE_WHATSAPP_ENABLED=true` e necessario para expor a funcionalidade. `WHATSAPP_PLATFORM_ENABLED` controla apenas o numero compartilhado do EngageFit e nao interfere em academias configuradas como `dedicated`.
+- A campanha de homologacao `Campanha do Testo` foi criada para 01/07/2026 a 31/07/2026, ativa, com meta observada de 12 check-ins.
+- Foi criado o artefato local `/home/luiz-paulo/workspace/engage-fit/alados-teste-whatsapp-totalpass.csv`, aceito pelo importador como TotalPass. Ele contem um unico aluno de teste, telefone final `4712`, identificador exclusivo e 10 check-ins entre 01/07 e 10/07. Ainda confirmar a importacao antes de considerar o cenario ativo.
+
+### Templates do Alados
+
+- Content Templates criados dentro da subconta correta:
+  - `engagefit_falta_pouco`;
+  - `engagefit_meta_atingida`;
+  - `engagefit_sentimos_sua_falta`.
+- Em 22/07/2026 os tres templates ainda apareciam como `Under Review`. A elegibilidade `WhatsApp business initiated` ainda nao estava verde.
+- Cada template possui um Content SID proprio `HX...` na subconta. Um Content SID da conta principal nao pode ser usado pela subconta.
+- Depois da aprovacao real na Twilio, cadastrar cada `HX...` no card correspondente da tela WhatsApp e mudar o status manual para `Aprovado`. Enquanto estiver `Under Review`, usar `Pendente`; nao marcar como aprovado antecipadamente.
+- Mapeamento:
+  - `engagefit_falta_pouco` -> `Falta pouco para alcancar a meta`;
+  - `engagefit_meta_atingida` -> `Voce atingiu a meta`;
+  - `engagefit_sentimos_sua_falta` -> `Sentimos sua falta`.
+
+### Passos pendentes para o primeiro envio real
+
+1. Confirmar os tres templates como `Approved` na Twilio; para o primeiro teste basta `engagefit_falta_pouco`.
+2. Cadastrar o `HX...` correspondente no EngageFit, selecionar `Aprovado` e salvar.
+3. Importar `alados-teste-whatsapp-totalpass.csv` escolhendo a origem `TotalPass`; resultado esperado na primeira importacao: 1 aluno e 10 check-ins.
+4. Abrir `Campanhas -> Campanha do Testo -> Participantes` e confirmar o aluno de teste em `10/12`, status `Proximo`.
+5. Confirmar que nenhum outro aluno esta `Proximo`. O disparo atual envia para toda a audiencia elegivel, nao apenas para o primeiro aluno.
+6. Na tela WhatsApp, clicar `Ativar mensagem` somente no template `Falta pouco`.
+7. Confirmar no Railway `WHATSAPP_ALLOW_REAL_SEND=true` apenas quando destinatario, template e limites estiverem revisados. `FEATURE_WHATSAPP_ENABLED=true` tambem deve permanecer ativo.
+8. Criar uma rotina pausada chamada `Teste manual - falta pouco`, modo `send_almost_there`, `allow_resend=false` e `enabled=false`. O botao `Executar` funciona mesmo com a rotina pausada e com `AUTOMATION_WORKER_ENABLED=false`.
+9. Executar uma unica vez e conferir: total 1, enviados 1, falhas 0, destinatario final `4712`, `provider_message_sid`/status na auditoria e mensagem recebida no aparelho.
+10. Manter `AUTOMATION_WORKER_ENABLED=false` ate revisar todas as agendas. Somente depois da homologacao alterar para `true`.
+
+### Lacuna de produto/UX identificada
+
+- A tela Automacao nao oferece uma acao independente de `Disparo manual`. Para executar manualmente hoje, o owner precisa criar antes uma rotina, mesmo que pausada, e entao usar `Executar`.
+- O fluxo manual nao mostra previamente a lista/quantidade efetiva de destinatarios. Isso e especialmente perigoso em production porque uma campanha envia para toda a audiencia elegivel.
+- Proxima melhoria recomendada: bloco `Disparo manual` com selecao de campanha e template, preview usando o endpoint de preview ja existente, total de destinatarios, telefones mascarados, bloqueio quando template/conexao estiverem indisponiveis, confirmacao explicita e link para auditoria.
+- Antes dessa melhoria, toda homologacao deve usar tenant/campanha isolados e conferir a lista de participantes manualmente antes do clique.
+
+### Configuracao de automacao recomendada durante a homologacao
+
+```env
+FEATURE_AUTOMATION_ENABLED=true
+AUTOMATION_WORKER_ENABLED=false
+AUTOMATION_WORKER_INTERVAL_SECONDS=60
+AUTOMATION_STALE_RUN_MINUTES=120
+AUTOMATION_CATCHUP_WINDOW_MINUTES=15
+```
+
+- `FEATURE_AUTOMATION_ENABLED` expoe a tela e os endpoints.
+- `AUTOMATION_WORKER_ENABLED` liga execucao agendada; deve continuar falso no primeiro teste.
+- O envio manual continua disponivel pela rotina pausada.
+- Confirmar no Railway os valores efetivos; eles nao foram lidos diretamente do ambiente nesta sessao.
 
 ## Checkpoint de revisão completa de UX em 2026-07-22
 
