@@ -667,7 +667,10 @@ impede novo login e exclui a academia do worker de automação.
 Planos em uso têm preço, franquias e tolerância imutáveis. Uma mudança comercial
 exige nova versão do plano, preservando o contrato histórico. Eventos Asaas são
 persistidos por `(provider, provider_event_id)`, duplicatas processadas são
-ignoradas e eventos falhos podem ser reentregues. O comando
+ignoradas e eventos falhos podem ser reentregues. `PAYMENT_DELETED` usa a
+projeção local existente, marca a cobrança como `DELETED` e remove seus links
+sem consultar novamente no Asaas um recurso que já foi apagado; a exclusão de
+uma cobrança isolada não cancela automaticamente a assinatura. O comando
 `engagefit-billing-reconcile` é o caminho de recuperação quando o webhook falha.
 Falhas de chamadas ao Asaas preservam apenas o status, o código e a primeira
 descrição normalizada/limitada; o evento estruturado

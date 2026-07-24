@@ -414,6 +414,13 @@ func (s *Service) ProcessWebhook(ctx context.Context, token string, raw []byte) 
 		_ = s.repository.MarkWebhookEventProcessed(ctx, event.ID, s.now())
 		return nil
 	}
+	if envelope.Event == "PAYMENT_DELETED" {
+		if err := s.applyDeletedPayment(ctx, envelope.Payment.ID); err != nil {
+			_ = s.repository.MarkWebhookEventFailed(ctx, event.ID, "payment_projection_failed")
+			return err
+		}
+		return s.repository.MarkWebhookEventProcessed(ctx, event.ID, s.now())
+	}
 	payment, err := s.gateway.GetPayment(ctx, envelope.Payment.ID)
 	if err != nil {
 		_ = s.repository.MarkWebhookEventFailed(ctx, event.ID, "provider_payment_lookup_failed")
@@ -424,6 +431,20 @@ func (s *Service) ProcessWebhook(ctx context.Context, token string, raw []byte) 
 		return err
 	}
 	return s.repository.MarkWebhookEventProcessed(ctx, event.ID, s.now())
+}
+
+func (s *Service) applyDeletedPayment(ctx context.Context, providerPaymentID string) error {
+	invoice, err := s.repository.FindInvoiceByProviderPaymentID(ctx, providerPaymentID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil
+		}
+		return err
+	}
+	invoice.Status = "DELETED"
+	invoice.InvoiceURL = ""
+	invoice.BankSlipURL = ""
+	return s.repository.UpsertInvoice(ctx, invoice)
 }
 
 func (s *Service) Reconcile(ctx context.Context) error {

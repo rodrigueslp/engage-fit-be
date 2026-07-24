@@ -10,6 +10,12 @@ Atualizado em: 2026-07-23 (billing Asaas homologado no sandbox; produção pende
 
 ### Billing Asaas
 
+- Durante a homologação em produção, a remoção manual de uma cobrança de boleto
+  revelou que `PAYMENT_DELETED` tentava consultar novamente a cobrança já
+  apagada no Asaas e deixava a projeção local como pendente. A correção passa a
+  marcar a cobrança existente como `DELETED`, limpar links inválidos e concluir
+  o webhook sem cancelar automaticamente a assinatura. Após o deploy, reentregar
+  o evento falho no Asaas para corrigir a cobrança já afetada.
 - O fluxo ponta a ponta já foi exercitado no Sandbox com boleto e Pix: criação
   de cliente, assinatura, cobrança, confirmação, atraso, tolerância manual,
   bloqueio financeiro, recuperação após pagamento e cancelamento.

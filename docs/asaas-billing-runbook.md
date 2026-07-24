@@ -148,6 +148,7 @@ valores em Git, logs, screenshots ou handoffs.
 | Pagamento não aparece | webhook, depois conciliação manual |
 | Academia continua bloqueada | status da cobrança mais recente e conciliação |
 | Assinatura duplicada | repetir com a mesma `Idempotency-Key`; a UI já faz isso |
+| Cobrança removida continua pendente | confirmar entrega de `PAYMENT_DELETED`; após a correção correspondente, reentregar o evento falho para projetar `DELETED` |
 
 Falhas do provedor não expõem o corpo retornado pelo Asaas na resposta pública.
 Use `request_id`, logs estruturados e o espelho de eventos no PostgreSQL.
