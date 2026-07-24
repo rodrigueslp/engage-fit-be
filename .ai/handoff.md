@@ -6,6 +6,72 @@ Guia operacional consolidado: `docs/application-readiness-guide.md`.
 
 Atualizado em: 2026-07-23 (billing Asaas homologado no sandbox; produção pendente)
 
+## Pendências consolidadas após a sessão de 2026-07-23
+
+### Billing Asaas
+
+- O fluxo ponta a ponta já foi exercitado no Sandbox com boleto e Pix: criação
+  de cliente, assinatura, cobrança, confirmação, atraso, tolerância manual,
+  bloqueio financeiro, recuperação após pagamento e cancelamento.
+- O teste de estorno do Pix foi solicitado com sucesso no Asaas para a cobrança
+  de homologação. Ainda falta aguardar o processamento e confirmar no EngageFit
+  o webhook `PAYMENT_REFUNDED`, a suspensão da assinatura, o bloqueio do
+  acesso financeiro e a revogação das sessões do owner. Se o Sandbox não tiver
+  saldo para devolver, criar/confirmar outra cobrança fictícia e repetir o
+  estorno; as tarifas não são devolvidas pelo provedor.
+- O cancelamento foi validado funcionalmente. A tela de login exibiu a mensagem
+  genérica de assinatura pendente/vencida; melhoria opcional: diferenciar
+  explicitamente `assinatura cancelada` de atraso ou tolerância vencida.
+- O teste inicial com plano de R$ 1,00 falhou por regra de valor mínimo do
+  Asaas. Para boleto e Pix, manter planos de homologação com pelo menos
+  R$ 10,00 por cobrança.
+- A melhoria de diagnóstico de erros do Asaas foi publicada no commit
+  `ecff296` (`fix: expose safe Asaas billing errors`) e enviada para
+  `origin/main`. O backend agora registra operação/status/código/descrição
+  sanitizada com `request_id`, sem expor credenciais ou payload bruto.
+
+### Antes do piloto real
+
+1. Concluir a conferência do estorno acima e registrar o resultado do webhook.
+2. Criar o job periódico do binário
+   `/usr/local/bin/engagefit-billing-reconcile` (recomendação: a cada hora) e
+   validar uma execução em produção.
+3. Na conta Asaas real, concluir aprovação cadastral e habilitar os meios de
+   pagamento necessários.
+4. Criar chave de API e webhook exclusivos de produção; nunca reutilizar os
+   segredos do Sandbox.
+5. Configurar no Railway a URL `https://api.asaas.com/v3`, a chave de produção,
+   o token de webhook de produção e `FEATURE_BILLING_ENABLED=true`.
+6. Fazer um piloto com uma academia real, conferindo criação de cobrança,
+   webhook, conciliação, tolerância e bloqueio antes de ampliar.
+
+### Pendências operacionais do Railway
+
+- Confirmar `OWNER_SETUP_ENABLED=false` e remover/selar o setup token.
+- Confirmar `Serverless/App Sleeping` desligado no serviço da API.
+- Confirmar Custom Start Command vazio e restaurar o pre-deploy
+  `/usr/local/bin/engagefit-migrate up` quando o Railway estiver executando o
+  container de release de forma confiável.
+- Configurar backup/PITR do PostgreSQL e executar um restore em ambiente
+  isolado.
+- Configurar observabilidade, alertas e limites de custo do Railway.
+
+### WhatsApp/Twilio - primeiro envio real ainda pendente
+
+- Confirmar aprovação dos três templates na subconta Twilio e cadastrar os
+  respectivos Content SIDs `HX...` no EngageFit.
+- Confirmar a importação de `alados-teste-whatsapp-totalpass.csv`, o participante
+  único e a campanha isolada antes de qualquer disparo.
+- Manter `AUTOMATION_WORKER_ENABLED=false` até a homologação manual; habilitar
+  o worker somente depois de revisar todas as agendas.
+- Para o primeiro envio, permitir temporariamente
+  `WHATSAPP_ALLOW_REAL_SEND=true`, executar uma única rotina pausada e validar
+  destinatário, SID/status da mensagem e recebimento no aparelho. Depois,
+  revisar e desligar a permissão se não houver necessidade operacional.
+- Melhoria recomendada antes de uso amplo: criar ação independente de
+  `Disparo manual` com preview, quantidade/telefones mascarados, confirmação
+  explícita e link para auditoria.
+
 ## Checkpoint de billing Asaas em 2026-07-23
 
 ### Implementação e homologação concluídas
