@@ -6,7 +6,7 @@ Guia operacional consolidado: `docs/application-readiness-guide.md`.
 
 Atualizado em: 2026-07-24 (pagamento Asaas homologado em produção)
 
-## Pendências consolidadas após a sessão de 2026-07-23
+## Pendências consolidadas após a sessão de 2026-07-24
 
 ### Billing Asaas
 
@@ -14,11 +14,12 @@ Atualizado em: 2026-07-24 (pagamento Asaas homologado em produção)
   criação da cobrança, pagamento, webhook, atualização financeira e liberação
   de acesso funcionaram corretamente.
 - O binário de conciliação passou a usar validação mínima própria. O serviço
-  Cron do Railway precisa apenas de PostgreSQL e das variáveis Asaas; não deve
-  receber JWT, credenciais do PLATFORM_ADMIN ou chaves de criptografia da API.
-  Ainda falta criar o serviço com
-  `/usr/local/bin/engagefit-billing-reconcile`, agenda `0 * * * *`, sem domínio
-  e sem healthcheck, e validar uma execução pelos logs.
+  Cron `engage-fit-billing-reconcile` foi criado no Railway usando somente
+  PostgreSQL e as variáveis Asaas, sem JWT, credenciais do PLATFORM_ADMIN ou
+  chaves de criptografia da API. A execução de validação iniciou o container,
+  registrou `billing reconciliation completed`, encerrou com sucesso e voltou
+  ao estado `Ready`. Confirmar que a agenda temporária `*/5 * * * *` foi
+  substituída pela agenda horária definitiva `0 * * * *`.
 - Durante a homologação em produção, a remoção manual de uma cobrança de boleto
   revelou que `PAYMENT_DELETED` tentava consultar novamente a cobrança já
   apagada no Asaas e deixava a projeção local como pendente. A correção passa a
@@ -45,20 +46,17 @@ Atualizado em: 2026-07-24 (pagamento Asaas homologado em produção)
   `origin/main`. O backend agora registra operação/status/código/descrição
   sanitizada com `request_id`, sem expor credenciais ou payload bruto.
 
-### Antes do piloto real
+### Próximos passos de billing
 
-1. Concluir a conferência do estorno acima e registrar o resultado do webhook.
-2. Criar o job periódico do binário
-   `/usr/local/bin/engagefit-billing-reconcile` (recomendação: a cada hora) e
-   validar uma execução em produção.
-3. Na conta Asaas real, concluir aprovação cadastral e habilitar os meios de
-   pagamento necessários.
-4. Criar chave de API e webhook exclusivos de produção; nunca reutilizar os
-   segredos do Sandbox.
-5. Configurar no Railway a URL `https://api.asaas.com/v3`, a chave de produção,
-   o token de webhook de produção e `FEATURE_BILLING_ENABLED=true`.
-6. Fazer um piloto com uma academia real, conferindo criação de cobrança,
-   webhook, conciliação, tolerância e bloqueio antes de ampliar.
+1. Confirmar no Railway que o Cron de conciliação ficou definitivamente em
+   `0 * * * *` depois da execução de validação.
+2. Reentregar o `PAYMENT_DELETED` da cobrança de boleto removida antes do deploy
+   da correção e confirmar a projeção local como `DELETED`.
+3. Concluir a conferência do estorno e registrar o resultado de
+   `PAYMENT_REFUNDED`, bloqueio financeiro e revogação das sessões.
+4. Monitorar logs, tempo e custo do serviço Cron durante os primeiros dias.
+5. Manter o piloto restrito à primeira academia até validar esses cenários e a
+   rotina operacional de suporte.
 
 ### Pendências operacionais do Railway
 
@@ -71,18 +69,34 @@ Atualizado em: 2026-07-24 (pagamento Asaas homologado em produção)
   isolado.
 - Configurar observabilidade, alertas e limites de custo do Railway.
 
-### WhatsApp/Twilio - primeiro envio real ainda pendente
+### WhatsApp/Twilio - envios reais homologados
 
-- Confirmar aprovação dos três templates na subconta Twilio e cadastrar os
-  respectivos Content SIDs `HX...` no EngageFit.
-- Confirmar a importação de `alados-teste-whatsapp-totalpass.csv`, o participante
-  único e a campanha isolada antes de qualquer disparo.
+- Os três templates `_2` foram aprovados na subconta Twilio `Crossfit Alados`
+  para conversas iniciadas pela empresa e pelo usuário. Mapeamento em uso:
+  - `copy_engagefit_falta_pouco_2` ->
+    `HX38b4be2ac29ab416ab94d06357280cf4`;
+  - `copy_engagefit_meta_atingida_2` ->
+    `HX75f8491a6c1e7f8446677b4ad13f493d`;
+  - `copy_engagefit_sentimos_sua_falta_2` ->
+    `HXa819f068a4fc87df4b75c1ade6be7a39`.
+- O template `Falta pouco` foi enviado pelo EngageFit e recebido com conteúdo
+  renderizado corretamente nos telefones de teste finais `4712` e `0429`.
+- O arquivo local
+  `/home/luiz-paulo/workspace/engage-fit/alados-teste-whatsapp-deborah-totalpass.csv`
+  contém somente Deborah, telefone final `0429` e 10 check-ins entre 01/07 e
+  10/07; foi validado no formato aceito pelo importador TotalPass.
+- Ainda falta homologar manualmente os templates `Meta atingida` e `Sentimos sua
+  falta`, cada um com audiência isolada, antes de habilitar rotinas automáticas.
 - Manter `AUTOMATION_WORKER_ENABLED=false` até a homologação manual; habilitar
   o worker somente depois de revisar todas as agendas.
-- Para o primeiro envio, permitir temporariamente
-  `WHATSAPP_ALLOW_REAL_SEND=true`, executar uma única rotina pausada e validar
-  destinatário, SID/status da mensagem e recebimento no aparelho. Depois,
-  revisar e desligar a permissão se não houver necessidade operacional.
+- `WHATSAPP_ALLOW_REAL_SEND=true` está sendo usado durante a homologação
+  controlada; revisar a necessidade de mantê-lo ativo depois dos testes.
+- O sender dedicado funciona, porém contatos que não salvaram o número ainda
+  veem o telefone em vez do Business Display Name. A foto do perfil está sendo
+  preparada. A verificação empresarial da Meta pediu um domínio próprio; a
+  decisão foi adiar essa frente e não criar um site apenas para satisfazer o
+  formulário. Antes de retomar, avaliar verificação por documentos/suporte
+  Twilio e Meta.
 - Melhoria recomendada antes de uso amplo: criar ação independente de
   `Disparo manual` com preview, quantidade/telefones mascarados, confirmação
   explícita e link para auditoria.
