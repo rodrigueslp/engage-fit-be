@@ -14,11 +14,8 @@ import (
 
 func main() {
 	cfg := config.Load()
-	if err := cfg.Validate(); err != nil {
+	if err := cfg.ValidateBillingReconciliation(); err != nil {
 		log.Fatalf("invalid configuration: %v", err)
-	}
-	if !cfg.FeatureBillingEnabled {
-		log.Fatal("FEATURE_BILLING_ENABLED must be true")
 	}
 	db, err := postgres.Open(cfg.DatabaseURL)
 	if err != nil {

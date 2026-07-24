@@ -95,7 +95,23 @@ eventos perdidos e divergências:
 Agende a execução pelo menos uma vez por hora. O comando é idempotente, consulta
 as cobranças das assinaturas e aplica bloqueios cuja tolerância terminou. Ele
 pode ser executado como job/cron curto usando a mesma imagem e as mesmas
-variáveis do backend; não precisa manter outro servidor permanentemente ativo.
+variáveis financeiras do backend; não precisa manter outro servidor
+permanentemente ativo. O binário usa validação dedicada e exige somente:
+
+```env
+APP_ENV=production
+DATABASE_URL=<postgresql-privado>
+FEATURE_BILLING_ENABLED=true
+ASAAS_BASE_URL=https://api.asaas.com/v3
+ASAAS_API_KEY=<chave-de-producao>
+ASAAS_WEBHOOK_TOKEN=<token-de-producao>
+ASAAS_TIMEOUT_SECONDS=15
+```
+
+No Railway, use um serviço Cron sem domínio e sem healthcheck, com Start Command
+`/usr/local/bin/engagefit-billing-reconcile` e agenda horária `0 * * * *`. JWT,
+credenciais administrativas e chaves de criptografia da API não são necessários
+nesse serviço.
 
 Também existe a ação manual `Reconciliar Asaas` no painel administrativo.
 

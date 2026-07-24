@@ -672,6 +672,9 @@ projeção local existente, marca a cobrança como `DELETED` e remove seus links
 sem consultar novamente no Asaas um recurso que já foi apagado; a exclusão de
 uma cobrança isolada não cancela automaticamente a assinatura. O comando
 `engagefit-billing-reconcile` é o caminho de recuperação quando o webhook falha.
+Como job isolado, ele valida apenas PostgreSQL e a integração Asaas, sem exigir
+JWT, credenciais administrativas, criptografia de dados ou demais segredos
+exclusivos da API.
 Falhas de chamadas ao Asaas preservam apenas o status, o código e a primeira
 descrição normalizada/limitada; o evento estruturado
 `billing_provider_request_failed` inclui o `request_id` para correlação sem

@@ -4,12 +4,21 @@ Manual canônico de arquitetura e negócio: `docs/system-design.md`.
 
 Guia operacional consolidado: `docs/application-readiness-guide.md`.
 
-Atualizado em: 2026-07-23 (billing Asaas homologado no sandbox; produção pendente)
+Atualizado em: 2026-07-24 (pagamento Asaas homologado em produção)
 
 ## Pendências consolidadas após a sessão de 2026-07-23
 
 ### Billing Asaas
 
+- O pagamento real em produção foi homologado ponta a ponta em 2026-07-24:
+  criação da cobrança, pagamento, webhook, atualização financeira e liberação
+  de acesso funcionaram corretamente.
+- O binário de conciliação passou a usar validação mínima própria. O serviço
+  Cron do Railway precisa apenas de PostgreSQL e das variáveis Asaas; não deve
+  receber JWT, credenciais do PLATFORM_ADMIN ou chaves de criptografia da API.
+  Ainda falta criar o serviço com
+  `/usr/local/bin/engagefit-billing-reconcile`, agenda `0 * * * *`, sem domínio
+  e sem healthcheck, e validar uma execução pelos logs.
 - Durante a homologação em produção, a remoção manual de uma cobrança de boleto
   revelou que `PAYMENT_DELETED` tentava consultar novamente a cobrança já
   apagada no Asaas e deixava a projeção local como pendente. A correção passa a

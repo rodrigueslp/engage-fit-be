@@ -188,8 +188,8 @@ func (c Config) CORSAllowedOriginList() []string {
 }
 
 func (c Config) Validate() error {
-	if strings.TrimSpace(c.DatabaseURL) == "" {
-		return errors.New("DATABASE_URL deve ser configurada")
+	if err := c.validateDatabase(); err != nil {
+		return err
 	}
 	if c.HTTPMaxBodyBytes <= 0 || c.ImportMaxUploadBytes <= 0 || c.LoginRateLimitRequests <= 0 || c.LoginRateLimitWindowSeconds <= 0 || c.SetupRateLimitRequests <= 0 || c.SetupRateLimitWindowSeconds <= 0 {
 		return errors.New("limites HTTP e de autenticacao devem ser maiores que zero")
@@ -204,21 +204,12 @@ func (c Config) Validate() error {
 	if sameSite == "none" && !c.AuthCookieSecure {
 		return errors.New("AUTH_COOKIE_SECURE deve ser true quando SameSite=None")
 	}
-	if c.DBMaxOpenConnections <= 0 || c.DBMaxIdleConnections < 0 || c.DBMaxIdleConnections > c.DBMaxOpenConnections || c.DBConnectionMaxLifetimeSeconds <= 0 || c.DBConnectionMaxIdleTimeSeconds <= 0 {
-		return errors.New("configuracao do pool PostgreSQL e invalida")
-	}
 	if c.AutomationStaleRunMinutes <= 0 || c.AutomationCatchupWindowMinutes <= 0 {
 		return errors.New("timeouts e janela de recuperacao da automacao devem ser maiores que zero")
 	}
-	if c.FeatureBillingEnabled && c.AsaasTimeoutSeconds <= 0 {
-		return errors.New("ASAAS_TIMEOUT_SECONDS deve ser maior que zero")
-	}
 	if c.FeatureBillingEnabled {
-		if strings.TrimSpace(c.AsaasAPIKey) == "" || len(c.AsaasWebhookToken) < 32 {
-			return errors.New("FEATURE_BILLING_ENABLED exige ASAAS_API_KEY e ASAAS_WEBHOOK_TOKEN com ao menos 32 caracteres")
-		}
-		if !strings.HasPrefix(c.AsaasBaseURL, "https://") {
-			return errors.New("ASAAS_BASE_URL deve usar HTTPS")
+		if err := c.validateBilling(); err != nil {
+			return err
 		}
 	}
 	if (c.OTelEnabled && strings.TrimSpace(c.OTelServiceName) == "") || c.OTelTraceSampleRatio < 0 || c.OTelTraceSampleRatio > 1 {
@@ -256,6 +247,39 @@ func (c Config) Validate() error {
 	}
 	if c.DataEncryptionActiveKeyID == "" || c.DataEncryptionKeys == "" {
 		return errors.New("DATA_ENCRYPTION_ACTIVE_KEY_ID e DATA_ENCRYPTION_KEYS sao obrigatorios em production")
+	}
+	return nil
+}
+
+func (c Config) ValidateBillingReconciliation() error {
+	if err := c.validateDatabase(); err != nil {
+		return err
+	}
+	if !c.FeatureBillingEnabled {
+		return errors.New("FEATURE_BILLING_ENABLED deve ser true")
+	}
+	return c.validateBilling()
+}
+
+func (c Config) validateDatabase() error {
+	if strings.TrimSpace(c.DatabaseURL) == "" {
+		return errors.New("DATABASE_URL deve ser configurada")
+	}
+	if c.DBMaxOpenConnections <= 0 || c.DBMaxIdleConnections < 0 || c.DBMaxIdleConnections > c.DBMaxOpenConnections || c.DBConnectionMaxLifetimeSeconds <= 0 || c.DBConnectionMaxIdleTimeSeconds <= 0 {
+		return errors.New("configuracao do pool PostgreSQL e invalida")
+	}
+	return nil
+}
+
+func (c Config) validateBilling() error {
+	if c.AsaasTimeoutSeconds <= 0 {
+		return errors.New("ASAAS_TIMEOUT_SECONDS deve ser maior que zero")
+	}
+	if strings.TrimSpace(c.AsaasAPIKey) == "" || len(c.AsaasWebhookToken) < 32 {
+		return errors.New("FEATURE_BILLING_ENABLED exige ASAAS_API_KEY e ASAAS_WEBHOOK_TOKEN com ao menos 32 caracteres")
+	}
+	if !strings.HasPrefix(c.AsaasBaseURL, "https://") {
+		return errors.New("ASAAS_BASE_URL deve usar HTTPS")
 	}
 	return nil
 }
