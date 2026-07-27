@@ -5,6 +5,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"boxengage/backend/internal/adapters/http/dto"
@@ -46,16 +47,32 @@ func (h BillingHandler) Webhook(c *gin.Context) {
 }
 
 func (h BillingHandler) ListPlans(c *gin.Context) {
-	items, err := h.service.ListPlans(c.Request.Context(), true)
+	status, valid := billingPlanStatus(c.Query("status"))
+	if !valid {
+		respondPublicError(c, http.StatusBadRequest, "billing_plan_status_invalid", "filtro de status de plano inválido")
+		return
+	}
+	items, err := h.service.ListPlans(c.Request.Context(), status != "active")
 	if err != nil {
 		respondError(c, err)
 		return
 	}
 	response := make([]dto.BillingPlanResponse, 0, len(items))
 	for _, item := range items {
+		if status == "inactive" && item.Active {
+			continue
+		}
 		response = append(response, billingPlanResponse(item))
 	}
 	c.JSON(http.StatusOK, response)
+}
+
+func billingPlanStatus(value string) (string, bool) {
+	status := strings.ToLower(strings.TrimSpace(value))
+	if status == "" {
+		status = "active"
+	}
+	return status, status == "active" || status == "inactive" || status == "all"
 }
 
 func (h BillingHandler) CreatePlan(c *gin.Context) { h.savePlan(c, "") }

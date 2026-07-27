@@ -6,6 +6,21 @@ Guia operacional consolidado: `docs/application-readiness-guide.md`.
 
 Atualizado em: 2026-07-24 (pagamento Asaas homologado em produção)
 
+## Documento de visão futura de produto
+
+Foi registrada a visão de evolução comercial e de produto em
+[`docs/future-product-roadmap.md`](../docs/future-product-roadmap.md). O
+documento reúne oportunidades futuras para aumentar frequência e retenção,
+incluindo radar de risco, jornadas do ciclo de vida, central de ações da
+equipe, medição de retorno/ROI, feedback, desafios, WhatsApp em duas vias,
+integrações e usos responsáveis de IA. Também contém roadmap conceitual,
+métricas para o piloto e frases para conversas com futuros donos de boxes.
+
+Esse material é exploratório: não representa funcionalidades implementadas nem
+compromissos de prazo. A validação com os primeiros boxes deve orientar a
+priorização, especialmente sobre os sinais que antecedem afastamento e as
+ações que efetivamente recuperam frequência.
+
 ## Pendências consolidadas após a sessão de 2026-07-24
 
 ### Billing Asaas

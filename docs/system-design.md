@@ -665,7 +665,10 @@ academia suspensa administrativamente. Bloqueio financeiro revoga sessões,
 impede novo login e exclui a academia do worker de automação.
 
 Planos em uso têm preço, franquias e tolerância imutáveis. Uma mudança comercial
-exige nova versão do plano, preservando o contrato histórico. Eventos Asaas são
+exige nova versão do plano, preservando o contrato histórico. Planos podem ser
+desativados sem alterar assinaturas existentes; a listagem administrativa retorna
+somente ativos por padrão e aceita filtros explícitos para inativos ou todos.
+Eventos Asaas são
 persistidos por `(provider, provider_event_id)`, duplicatas processadas são
 ignoradas e eventos falhos podem ser reentregues. `PAYMENT_DELETED` usa a
 projeção local existente, marca a cobrança como `DELETED` e remove seus links

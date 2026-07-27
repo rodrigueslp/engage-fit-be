@@ -75,3 +75,23 @@ func TestRespondBillingProviderErrorHidesAuthenticationDetails(t *testing.T) {
 		t.Fatalf("unexpected authentication response %s", response.Body.String())
 	}
 }
+
+func TestBillingPlanStatusDefaultsToActiveAndAcceptsSupportedFilters(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+		valid bool
+	}{
+		{input: "", want: "active", valid: true},
+		{input: " ACTIVE ", want: "active", valid: true},
+		{input: "inactive", want: "inactive", valid: true},
+		{input: "all", want: "all", valid: true},
+		{input: "deleted", want: "deleted", valid: false},
+	}
+	for _, test := range tests {
+		got, valid := billingPlanStatus(test.input)
+		if got != test.want || valid != test.valid {
+			t.Fatalf("billingPlanStatus(%q) = (%q, %t), want (%q, %t)", test.input, got, valid, test.want, test.valid)
+		}
+	}
+}
