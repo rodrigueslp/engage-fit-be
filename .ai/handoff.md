@@ -4,7 +4,229 @@ Manual canônico de arquitetura e negócio: `docs/system-design.md`.
 
 Guia operacional consolidado: `docs/application-readiness-guide.md`.
 
-Atualizado em: 2026-07-24 (pagamento Asaas homologado em produção)
+Atualizado em: 2026-07-28 (checkpoint de prontidão para go-live do CrossFit Alados)
+
+## Checkpoint de go-live do CrossFit Alados em 2026-07-28
+
+Este checkpoint é o retrato mais recente da preparação para o go-live previsto
+para **01/08/2026**. Em caso de conflito com checkpoints históricos abaixo,
+prevalece esta seção.
+
+### Conclusão executiva
+
+- O EngageFit está **próximo e tecnicamente apto para um piloto assistido** com
+  o CrossFit Alados em 01/08/2026.
+- Não foi identificado bloqueador técnico conhecido na aplicação, no deploy,
+  no acesso ou na conexão dedicada de WhatsApp.
+- O lançamento deve continuar restrito ao Alados, acompanhado manualmente e
+  com automações agendadas desligadas no início.
+- Os principais pontos ainda abertos são operacionais/jurídicos: revisar e
+  assinar o termo do piloto, formalizar o aviso de privacidade e as
+  responsabilidades do Alados, importar os dados reais quando o cliente estiver
+  pronto e combinar a cobrança real.
+- Backup automático/PITR do Railway foi conscientemente adiado por depender do
+  plano Pro. Existe backup manual anterior à limpeza, mas isso não substitui uma
+  política recorrente de backup.
+
+### Produção, código e deploy
+
+- Backend, frontend e PostgreSQL estão no ambiente `production` do Railway.
+- Domínio principal validado: `https://www.engagefit.com.br`.
+- A aplicação pública, o proxy para a API e os healthchecks responderam
+  corretamente durante a conferência.
+- Código implantado e CI confirmada como verde:
+  - backend: `525bd21`;
+  - frontend: `b6b790c`.
+- O frontend possui a opção de desativar planos comerciais. Por padrão exibe
+  somente planos ativos e oferece filtros para ativos, desativados ou todos.
+- `OWNER_SETUP_ENABLED=false` foi confirmado e o setup token foi
+  removido/selado.
+- `Serverless/App Sleeping` está desligado na API.
+- Custom Start Command está vazio.
+- Pre-deploy configurado como
+  `/usr/local/bin/engagefit-migrate up`; deploy validado com
+  `migration complete: 0 applied`.
+- A política de restart da API foi revisada no Railway.
+
+### Observabilidade, disponibilidade e alertas
+
+- OpenTelemetry está habilitado na API e os traces estão chegando ao Grafana
+  Cloud. A própria tela de setup confirmou `Traces are being ingested
+  properly`.
+- Foi criado o synthetic check `engagefit-production-api` para:
+  `GET https://www.engagefit.com.br/api/v1/capabilities`.
+- Probe de São Paulo validada com HTTP 200.
+- Foram configurados alertas do check para falhas, expiração de certificado TLS
+  e latência.
+- O contact point e a notification policy do Grafana foram configurados para
+  encaminhar os alertas por e-mail.
+- Monitorar nos primeiros dias se os alertas estão chegando de fato e fazer um
+  teste controlado de notificação quando conveniente.
+- Domínio, redirecionamento do apex para `www` e certificado TLS foram
+  verificados. Também estão presentes CSP, `X-Frame-Options`,
+  `X-Content-Type-Options`, política de referrer e permissions policy.
+- O header HSTS ainda não está presente. Isso é uma melhoria de segurança, não
+  um bloqueador imediato do piloto. Quando for habilitado, começar de forma
+  gradual e não usar `includeSubDomains` ou `preload` até validar HTTPS em todos
+  os subdomínios.
+
+### Academias, dados de teste e backup manual
+
+- As três academias usadas em homologação foram arquivadas:
+  `Academia Produção Teste`, `Academia Teste` e `Billing Sandbox`.
+- O CrossFit Alados é a única academia ativa.
+- Os dados operacionais de teste do Alados foram removidos de produção para
+  permitir início limpo:
+  - 2 alunos;
+  - 20 check-ins;
+  - 2 importações;
+  - 1 campanha de meta;
+  - 1 campanha de mensagem;
+  - 3 destinatários;
+  - 2 disparos;
+  - 2 buckets de consumo.
+- Foram preservados o tenant, o owner, a conexão dedicada Twilio, os três
+  templates aprovados e a política de mensageria.
+- Antes da limpeza foi criado backup lógico em:
+  `/home/luiz-paulo/workspace/engage-fit/production-backups/engagefit-production-pre-cleanup-20260728.dump`.
+- SHA-256 do backup:
+  `32640d8ed298bf4791803adca65ca08af582fe56b8ff834aa37c3e855932aec7`.
+- O arquivo temporário que continha a credencial do banco foi removido.
+- Não é necessário preservar histórico financeiro dos testes.
+- Backup automático/PITR e teste recorrente de restore permanecem adiados até
+  contratação do Railway Pro. Tratar isso como risco aceito do piloto e manter
+  cópias dos arquivos de importação na origem.
+
+### Acessos e identidade
+
+- O acesso `PLATFORM_ADMIN` foi validado.
+- E-mail administrativo correto: `lprodrigs@gmail.com`.
+- O endereço antigo `improdrigs@gmail.com` está incorreto e não deve ser usado.
+- Owner do CrossFit Alados validado com `aladoscrossfit@gmail.com`.
+- Senhas e demais credenciais não devem ser registradas no Git ou neste
+  handoff.
+
+### Plano comercial do Alados
+
+- Plano confirmado: `Piloto 500`.
+- Duração: 90 dias.
+- Mensalidade: **R$ 247,00**.
+- Sem taxa de implantação.
+- Franquia: 500 mensagens de WhatsApp por ciclo mensal.
+- Limite: 50 mensagens por dia.
+- Limite: 50 destinatários por disparo.
+- Alerta de consumo: 80%.
+- Tolerância após vencimento: 2 dias.
+- Sem cobrança automática de excedentes e sem acúmulo de franquia.
+- O documento histórico `.ai/commercial-pilot-alados.md` ainda contém a oferta
+  antiga de R$ 297/300 mensagens e **não deve ser enviado ao cliente** sem
+  atualização.
+- A sincronização do cliente com o Asaas, a criação da assinatura e a primeira
+  cobrança real foram adiadas por decisão do usuário. Os fluxos do Asaas já
+  foram bastante homologados, mas a contratação real do Alados será feita
+  depois.
+
+### WhatsApp e automações
+
+- A conexão dedicada Twilio do CrossFit Alados está salva e o teste de conexão
+  foi validado pelo provedor.
+- Os três templates `_2` permanecem aprovados e configurados:
+  - `copy_engagefit_falta_pouco_2` ->
+    `HX38b4be2ac29ab416ab94d06357280cf4`;
+  - `copy_engagefit_meta_atingida_2` ->
+    `HX75f8491a6c1e7f8446677b4ad13f493d`;
+  - `copy_engagefit_sentimos_sua_falta_2` ->
+    `HXa819f068a4fc87df4b75c1ade6be7a39`.
+- O envio real controlado já foi recebido corretamente nos aparelhos de teste.
+- `FEATURE_WHATSAPP_ENABLED=true` e `WHATSAPP_ALLOW_REAL_SEND=true` estão
+  preparados para o uso controlado.
+- `FEATURE_AUTOMATION_ENABLED=true`, mas
+  `AUTOMATION_WORKER_ENABLED=false`.
+- Não há rotinas automáticas cadastradas no Alados após a limpeza.
+- Manter o worker desligado no início. Criar e revisar cada rotina junto com o
+  Alados antes de habilitar execução agendada.
+- O Alados deve revisar audiência, mensagem e preferências de contato antes de
+  cada disparo e registrar `Autorizado`, `Não contatar` ou `Não informado`
+  conforme a evidência disponível.
+
+### Importação e operação inicial
+
+- A interface de importação de Wellhub e TotalPass foi testada anteriormente.
+- A importação dos arquivos reais foi deliberadamente adiada pelo usuário e
+  será validada depois.
+- Como a base foi limpa, o go-live operacional precisa começar com uma
+  importação real revisada, conferindo:
+  - origem correta;
+  - quantidade de linhas, alunos e check-ins;
+  - duplicidades e rejeições;
+  - telefones antes de qualquer campanha;
+  - preferência de contato;
+  - período e metas da primeira campanha.
+- Campanhas e automações devem ser criadas somente depois dessa conferência.
+
+### Termo digital, privacidade e responsabilidades
+
+- Foi criada a minuta
+  [`.ai/termo-piloto-alados.md`](termo-piloto-alados.md), versão 0.1, para
+  revisão da advogada do usuário.
+- A minuta consolida escopo, prazo, valor, franquia, responsabilidades, regras
+  de WhatsApp, confidencialidade, segurança, rescisão, tratamento de dados,
+  fornecedores e assinatura eletrônica com trilha de auditoria.
+- Enquadramento operacional proposto, ainda sujeito à revisão jurídica:
+  - Alados como controlador por decidir finalidade, base legal, alunos,
+    audiências e mensagens;
+  - EngageFit como operador ao processar esses dados conforme as instruções do
+    Alados.
+- Para o piloto, a recomendação é assinar a versão final por plataforma de
+  assinatura eletrônica que registre identidade, autenticação, data/hora,
+  versão ou hash do documento, eventos, IP quando disponível e entregue uma
+  cópia final às duas partes.
+- Não armazenar no Git a versão final assinada, CPF, CNPJ completo ou outros
+  dados pessoais dos representantes. O repositório deve conservar apenas a
+  minuta com placeholders.
+- Campos ainda pendentes na minuta:
+  - razão social/nome, CPF ou CNPJ, endereço e representante das Partes;
+  - forma e dia de vencimento;
+  - canal e horário de suporte;
+  - confirmação da janela de 30 dias para exportação após encerramento;
+  - confirmação da rescisão com aviso de 7 dias e sem multa;
+  - cidade/UF do foro;
+  - revisão jurídica das cláusulas de privacidade, responsabilidade,
+    transferência internacional e retenção.
+- O Alados ainda precisa disponibilizar uma informação/aviso de privacidade aos
+  alunos e definir internamente quem atende pedidos de acesso, correção,
+  oposição, não contato e anonimização. Isso pode ser simples no piloto, mas
+  deve existir antes de campanhas reais em escala.
+
+### Pendências restantes classificadas
+
+#### Necessárias antes do primeiro uso real
+
+1. Receber a revisão jurídica, preencher e assinar o termo do piloto.
+2. Definir e comunicar ao Alados o procedimento mínimo de privacidade e não
+   contato dos alunos.
+3. Importar e conferir o primeiro arquivo real.
+4. Criar e revisar a primeira campanha, audiência e mensagem antes do envio.
+5. Confirmar com o Alados a forma operacional de suporte e cobrança, ainda que
+   a assinatura do Asaas seja criada posteriormente.
+
+#### Riscos aceitos ou itens adiados
+
+1. Backup/PITR automático e restore gerenciado do Railway, dependentes do plano
+   Pro; existe apenas o backup lógico manual registrado acima.
+2. Sincronização e cobrança real do Alados no Asaas.
+3. Importação dos arquivos reais.
+4. HSTS, a ser ativado gradualmente.
+5. Automações agendadas, mantidas desligadas até homologação explícita.
+
+#### Acompanhamento recomendado na primeira semana
+
+1. Conferir diariamente Railway, Grafana, synthetic check, traces e alertas.
+2. Acompanhar consumo e custo real da subconta Twilio.
+3. Revisar manualmente os primeiros disparos e seus destinatários.
+4. Conferir falhas de importação, duplicidades e preferências de contato.
+5. Registrar problemas, decisões e feedback do Alados.
+6. Fazer checkpoints de 30, 60 e 90 dias conforme o termo do piloto.
 
 ## Documento de visão futura de produto
 
