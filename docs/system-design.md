@@ -304,6 +304,7 @@ erDiagram
     MESSAGE_CAMPAIGNS ||--o{ MESSAGE_RECIPIENTS : records
     BOXES ||--o{ AUTOMATION_SCHEDULES : configures
     AUTOMATION_SCHEDULES ||--o{ AUTOMATION_RUNS : triggers
+    STUDENTS ||--o{ RETENTION_INTERVENTIONS : receives
 ```
 
 ### 9.2 Grupos de tabelas
@@ -317,6 +318,7 @@ erDiagram
 | WhatsApp | `whatsapp_settings`, `message_templates`, `message_campaigns`, `message_recipients` | configuração, catálogo oficial, disparos e auditoria de destinatários |
 | E-mail | `email_settings`, `email_templates`, `email_campaigns`, `email_recipients` | configuração SMTP e campanhas |
 | Automação | `automation_schedules`, `automation_runs` | agendas e execuções idempotentes |
+| Retenção V2 | `retention_interventions` | acompanhamento humano associado aos sinais de mudança de frequência |
 | Treino/LLM | `workouts`, `workout_message_drafts`, `workout_message_recipients`, `llm_generation_logs` | treino, geração, aprovação e envio |
 | Governança | `messaging_policies`, `messaging_usage_buckets`, `message_dispatches`, `admin_audit_logs` | limites, reservas, custo estimado e auditoria administrativa |
 | Privacidade | `privacy_suppressions`, `privacy_audit_events` | impedir reimportação e auditar direitos do titular |
@@ -488,6 +490,33 @@ O fluxo de e-mail inativo exclui paused/not interested e opt-out, mas atualmente
 - brindes pendentes: deliveries não entregues;
 - frequência mensal: contagem e primeira/última visita por aluno;
 - consulta de check-ins por intervalo: contagem e primeira/última visita por aluno, com busca, plataforma, ordenação e paginação locais na tela `Check-ins`;
+
+### 12.4 Radar de retenção V2
+
+Na branch `v2/retention-foundation`, `GET /api/v1/retention/radar` compara os
+últimos 28 dias com os 28 anteriores. O resultado é um sinal explicável de
+mudança de engajamento, não uma previsão de cancelamento.
+
+As classificações são `history_insufficient`, `healthy`, `attention`,
+`at_risk`, `critical` e `recovered`. Uma queda só participa da regra quando a
+janela anterior possui ao menos quatro check-ins. Histórico com menos de oito
+semanas é explicitamente marcado como insuficiente.
+
+`retention_interventions` registra contatos humanos e permite observar se
+existiu check-in posterior em até 3, 7 ou 14 dias. Essa associação é temporal;
+a interface não afirma causalidade.
+
+O radar separa severidade do sinal e situação da operação. Registrar um contato
+não muda a frequência: o aluno pode continuar `critical`, mas passa de
+`needs_action` para `waiting_return`. Na data de revisão, sem novo check-in,
+passa a `follow_up_due`. Pausa e encerramento saem da fila diária; retorno
+observado fica destacado por até 30 dias.
+
+O frontend reutiliza `GET /api/v1/students/:id/checkins` em um painel lateral
+acessível pelo Radar e pela tela `Check-ins`. O painel mostra a distribuição das
+últimas oito semanas, calendário mensal e os horários/origens de cada presença.
+Essa visualização explica o padrão que originou o sinal sem persistir uma nova
+projeção.
 - exportação: CSV gerado no backend ou arquivo preparado pela interface, conforme a tela.
 
 ## 13. Comunicação e públicos

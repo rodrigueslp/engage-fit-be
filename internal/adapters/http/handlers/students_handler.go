@@ -45,7 +45,7 @@ func (h StudentsHandler) ExportData(c *gin.Context) {
 		respondError(c, err)
 		return
 	}
-	response := dto.StudentPrivacyExportResponse{Student: studentResponse(result.Student), ExportedAt: result.ExportedAt.Format(time.RFC3339), Checkins: []dto.CheckinResponse{}, Progress: []dto.CampaignProgressResponse{}, Communications: []dto.PrivacyCommunicationResponse{}}
+	response := dto.StudentPrivacyExportResponse{Student: studentResponse(result.Student), ExportedAt: result.ExportedAt.Format(time.RFC3339), Checkins: []dto.CheckinResponse{}, Progress: []dto.CampaignProgressResponse{}, Communications: []dto.PrivacyCommunicationResponse{}, RetentionInterventions: []dto.RetentionInterventionResponse{}}
 	for _, checkin := range result.Checkins {
 		item := dto.CheckinResponse{ID: string(checkin.ID), StudentID: string(checkin.StudentID), CheckinDate: checkin.CheckinDate.Format("2006-01-02"), Source: string(checkin.Source)}
 		if checkin.CheckinTime != nil {
@@ -62,6 +62,9 @@ func (h StudentsHandler) ExportData(c *gin.Context) {
 			item.SentAt = communication.SentAt.Format(time.RFC3339)
 		}
 		response.Communications = append(response.Communications, item)
+	}
+	for _, intervention := range result.RetentionInterventions {
+		response.RetentionInterventions = append(response.RetentionInterventions, retentionInterventionResponse(intervention))
 	}
 	c.Header("Content-Disposition", `attachment; filename="student-data-export.json"`)
 	c.JSON(http.StatusOK, response)

@@ -165,6 +165,21 @@ type CheckinModel struct {
 	CreatedAt       time.Time
 }
 
+type RetentionInterventionModel struct {
+	ID              string `gorm:"primaryKey"`
+	BoxID           string `gorm:"index"`
+	StudentID       string `gorm:"index"`
+	CreatedByUserID *string
+	Channel         string
+	Status          string
+	Outcome         *string
+	PlannedFor      *time.Time
+	CompletedAt     *time.Time
+	Notes           *string
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+}
+
 type CampaignModel struct {
 	ID          string `gorm:"primaryKey"`
 	BoxID       string `gorm:"index"`

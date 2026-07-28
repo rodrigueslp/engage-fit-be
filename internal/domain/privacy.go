@@ -13,9 +13,10 @@ type PrivacyCommunication struct {
 }
 
 type StudentPrivacyExport struct {
-	Student        Student
-	Checkins       []Checkin
-	Progress       []CampaignProgress
-	Communications []PrivacyCommunication
-	ExportedAt     time.Time
+	Student                Student
+	Checkins               []Checkin
+	Progress               []CampaignProgress
+	Communications         []PrivacyCommunication
+	RetentionInterventions []RetentionIntervention
+	ExportedAt             time.Time
 }

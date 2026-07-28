@@ -53,6 +53,14 @@ func NewCheckinGormRepository(db *gorm.DB) CheckinGormRepository {
 	return CheckinGormRepository{db: db}
 }
 
+type RetentionGormRepository struct {
+	db *gorm.DB
+}
+
+func NewRetentionGormRepository(db *gorm.DB) RetentionGormRepository {
+	return RetentionGormRepository{db: db}
+}
+
 type ImportHistoryGormRepository struct {
 	db *gorm.DB
 }

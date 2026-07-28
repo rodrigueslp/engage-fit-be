@@ -13,11 +13,11 @@ const officialWhatsappTemplates = [
   { type: 'WE_MISS_YOU', contentSid: 'HX198c7dcaf71ae42a733719eee86d5aa5' },
 ];
 const demoStudents = [
-  { name: 'Luiz', email: 'lprodrigs@gmail.com', phone: luizPhone, checkins: 9, scenario: 'falta 1 check-in' },
-  { name: 'Deborah', email: 'deborah@example.com', phone: luizPhone, checkins: 8, scenario: 'faltam 2 check-ins' },
-  { name: 'Bruno Teste', email: 'bruno.teste@example.com', phone: luizPhone, checkins: 7, scenario: 'abaixo do corte de falta pouco' },
-  { name: 'Carla Teste', email: 'carla.teste@example.com', phone: luizPhone, checkins: 10, scenario: 'meta ja atingida' },
-  { name: 'Marina Risco', email: 'marina.risco@example.com', phone: luizPhone, checkins: 3, startOffsetDays: 12, scenario: 'sem check-in ha mais de 7 dias' },
+  { name: 'Luiz', email: 'lprodrigs@gmail.com', phone: luizPhone, checkins: 9, previousCheckins: 9, scenario: 'frequencia estavel' },
+  { name: 'Deborah', email: 'deborah@example.com', phone: luizPhone, checkins: 8, previousCheckins: 12, scenario: 'queda leve de frequencia' },
+  { name: 'Bruno Teste', email: 'bruno.teste@example.com', phone: luizPhone, checkins: 7, previousCheckins: 14, scenario: 'queda relevante de frequencia' },
+  { name: 'Carla Teste', email: 'carla.teste@example.com', phone: luizPhone, checkins: 10, previousCheckins: 10, scenario: 'frequencia estavel e meta atingida' },
+  { name: 'Marina Risco', email: 'marina.risco@example.com', phone: luizPhone, checkins: 3, previousCheckins: 12, startOffsetDays: 12, scenario: 'queda critica e ausencia recente' },
 ];
 
 const almostThereTemplateContent =
@@ -276,7 +276,10 @@ async function configureOfficialWhatsappTemplates(token) {
 }
 
 function totalpassCsv() {
-  return buildCsv(demoStudents.flatMap((student) => studentRows(student.name, student.email, student.phone, student.checkins, student.startOffsetDays)));
+  return buildCsv(demoStudents.flatMap((student) => [
+    ...studentRows(student.name, student.email, student.phone, student.checkins, student.startOffsetDays),
+    ...retentionReferenceRows(student.name, student.email, student.phone, student.previousCheckins),
+  ]));
 }
 
 function studentRows(name, email, phone, amount, startOffsetDays = 1) {
@@ -301,6 +304,18 @@ function recentDates(amount, startOffsetDays = 1) {
     result.push(formatDate(date));
   }
   return result;
+}
+
+function retentionReferenceRows(name, email, phone, amount) {
+  const offsets = [56];
+  for (let index = 0; index < amount; index += 1) {
+    offsets.push(28 + Math.floor((index * 27) / Math.max(1, amount - 1)));
+  }
+  return offsets.map((offset, index) => {
+    const date = new Date();
+    date.setDate(date.getDate() - offset);
+    return { nome: name, email, telefone: phone, data: formatDate(date), hora: `${String(7 + (index % 3)).padStart(2, '0')}:15` };
+  });
 }
 
 function currentMonthRange() {

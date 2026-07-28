@@ -4,7 +4,46 @@ Manual canônico de arquitetura e negócio: `docs/system-design.md`.
 
 Guia operacional consolidado: `docs/application-readiness-guide.md`.
 
-Atualizado em: 2026-07-28 (checkpoint de prontidão para go-live do CrossFit Alados)
+Atualizado em: 2026-07-28 (checkpoint do go-live e início da V2 de retenção)
+
+## Desenvolvimento V2 isolado do go-live
+
+- A evolução V2 começou nas branches locais `v2/retention-foundation` do
+  backend e frontend; não foi enviada nem implantada em produção.
+- Primeiro recorte: radar explicável de mudança de frequência e registro de
+  ações humanas, documentado em `.ai/v2-retention-foundation.md`.
+- O radar compara duas janelas de 28 dias, distingue histórico insuficiente e
+  evita apresentar o resultado como previsão de cancelamento.
+- A migration `035_create_retention_interventions.sql`, endpoints de radar e
+  intervenções e a página `Retenção` foram implementados.
+- Retorno em 3, 7 e 14 dias é descrito como associação temporal, sem atribuir
+  causalidade ao contato.
+- Após validação de uso, o radar passou a separar o sinal de frequência do
+  fluxo operacional. A tela abre em `Precisa de ação`; contatos realizados vão
+  para `Em acompanhamento`, voltam como `Revisão vencida` na data informada e
+  podem ser pausados ou encerrados. Assim, um aluno pode continuar crítico sem
+  permanecer indevidamente na fila diária.
+- O histórico individual de presença ganhou painel visual reutilizável no
+  Radar e em `Check-ins`, com comparação das últimas oito semanas, calendário
+  mensal navegável e detalhes por dia/origem. Usa o endpoint individual já
+  existente e não adiciona migration.
+- O painel `Histórico de frequência` permite navegar entre meses, selecionar
+  uma data e conferir horário, origem e múltiplos check-ins no mesmo dia. As
+  cores diferenciam Wellhub e TotalPass; a visão de oito semanas torna quedas e
+  interrupções de rotina visualmente identificáveis.
+- O fluxo foi validado manualmente pelo usuário no navegador com a base demo.
+  Também foram conferidos o painel em desktop/mobile, a abertura a partir de
+  `Retenção` e `Check-ins` e o estado real da Marina: sinal `critical`, mas
+  acompanhamento `waiting_return` com data de revisão, fora da fila diária de
+  ações pendentes.
+- Validações técnicas da V2: `go test ./...`, teste PostgreSQL de isolamento
+  entre tenants, TypeScript, build Vite, smoke autenticado do radar,
+  navegação Playwright pelos dois pontos de entrada e `git diff --check`.
+- O desenvolvimento local aplicou a migration 035; a segunda execução aplicou
+  zero migrations.
+- As alterações continuam locais e sem commit/push/deploy. Antes de qualquer
+  integração com `main`, revisar o conjunto completo nas duas branches
+  `v2/retention-foundation` e manter a V1 do go-live inalterada.
 
 ## Checkpoint de go-live do CrossFit Alados em 2026-07-28
 

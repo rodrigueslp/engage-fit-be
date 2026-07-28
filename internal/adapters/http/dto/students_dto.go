@@ -36,11 +36,12 @@ type PrivacyCommunicationResponse struct {
 }
 
 type StudentPrivacyExportResponse struct {
-	Student        StudentResponse                `json:"student"`
-	Checkins       []CheckinResponse              `json:"checkins"`
-	Progress       []CampaignProgressResponse     `json:"campaign_progress"`
-	Communications []PrivacyCommunicationResponse `json:"communications"`
-	ExportedAt     string                         `json:"exported_at"`
+	Student                StudentResponse                 `json:"student"`
+	Checkins               []CheckinResponse               `json:"checkins"`
+	Progress               []CampaignProgressResponse      `json:"campaign_progress"`
+	Communications         []PrivacyCommunicationResponse  `json:"communications"`
+	RetentionInterventions []RetentionInterventionResponse `json:"retention_interventions"`
+	ExportedAt             string                          `json:"exported_at"`
 }
 
 type UpdateStudentRiskStatusRequest struct {

@@ -34,6 +34,7 @@ import (
 	messagingapp "boxengage/backend/internal/app/messaging"
 	"boxengage/backend/internal/app/platformadmin"
 	reportsapp "boxengage/backend/internal/app/reports"
+	"boxengage/backend/internal/app/retention"
 	"boxengage/backend/internal/app/rewards"
 	"boxengage/backend/internal/app/students"
 	whatsappapp "boxengage/backend/internal/app/whatsapp"
@@ -119,6 +120,7 @@ func main() {
 	studentRepository := pgrepo.NewStudentGormRepository(db)
 	privacyRepository := pgrepo.NewPrivacyGormRepository(db)
 	checkinRepository := pgrepo.NewCheckinGormRepository(db)
+	retentionRepository := pgrepo.NewRetentionGormRepository(db)
 	importRepository := pgrepo.NewImportHistoryGormRepository(db)
 	campaignRepository := pgrepo.NewCampaignGormRepository(db)
 	rewardRepository := pgrepo.NewRewardGormRepository(db)
@@ -211,6 +213,7 @@ func main() {
 	dashboardActiveCampaignsUseCase := dashboard.NewListActiveCampaignsUseCase(campaignRepository)
 	dashboardNearGoalUseCase := dashboard.NewListNearGoalStudentsUseCase(studentRepository, campaignRepository)
 	dashboardAtRiskUseCase := dashboard.NewListAtRiskStudentsUseCase(boxRepository, studentRepository, checkinRepository)
+	retentionService := retention.NewService(boxRepository, studentRepository, retentionRepository)
 
 	getWhatsappSettingsUseCase := whatsappapp.NewGetSettingsUseCase(whatsappSettingsRepository, whatsappSettingsResolver)
 	updateWhatsappSettingsUseCase := whatsappapp.NewUpdateSettingsUseCase(whatsappSettingsRepository)
@@ -322,6 +325,7 @@ func main() {
 		DashboardActiveCampaignsUseCase: dashboardActiveCampaignsUseCase,
 		DashboardNearGoalUseCase:        dashboardNearGoalUseCase,
 		DashboardAtRiskUseCase:          dashboardAtRiskUseCase,
+		RetentionService:                retentionService,
 
 		GetWhatsappSettingsUseCase:    getWhatsappSettingsUseCase,
 		UpdateWhatsappSettingsUseCase: updateWhatsappSettingsUseCase,

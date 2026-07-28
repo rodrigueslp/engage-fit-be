@@ -21,6 +21,7 @@ import (
 	"boxengage/backend/internal/app/messages"
 	"boxengage/backend/internal/app/platformadmin"
 	"boxengage/backend/internal/app/reports"
+	"boxengage/backend/internal/app/retention"
 	"boxengage/backend/internal/app/rewards"
 	"boxengage/backend/internal/app/students"
 	"boxengage/backend/internal/app/whatsapp"
@@ -81,6 +82,7 @@ type RouterDependencies struct {
 	DashboardActiveCampaignsUseCase dashboard.ListActiveCampaignsUseCase
 	DashboardNearGoalUseCase        dashboard.ListNearGoalStudentsUseCase
 	DashboardAtRiskUseCase          dashboard.ListAtRiskStudentsUseCase
+	RetentionService                retention.Service
 
 	GetWhatsappSettingsUseCase    whatsapp.GetSettingsUseCase
 	UpdateWhatsappSettingsUseCase whatsapp.UpdateSettingsUseCase
@@ -275,6 +277,12 @@ func NewRouter(deps RouterDependencies) *gin.Engine {
 	protected.GET("/dashboard/near-goal-students", dashboardHandler.NearGoalStudents)
 	protected.GET("/dashboard/at-risk-students", dashboardHandler.AtRiskStudents)
 	protected.GET("/dashboard/pending-rewards", dashboardHandler.PendingRewards)
+
+	retentionHandler := handlers.NewRetentionHandler(deps.RetentionService)
+	protected.GET("/retention/radar", retentionHandler.Radar)
+	protected.GET("/students/:id/retention-interventions", retentionHandler.ListInterventions)
+	protected.POST("/students/:id/retention-interventions", retentionHandler.CreateIntervention)
+	protected.PATCH("/retention-interventions/:id", retentionHandler.UpdateIntervention)
 
 	studentsHandler := handlers.NewStudentsHandler(deps.ListStudentsUseCase, deps.GetStudentUseCase, deps.ListStudentCheckinsUseCase, deps.UpdateStudentRiskStatusUseCase, deps.ExportStudentDataUseCase, deps.UpdateContactPreferenceUseCase, deps.AnonymizeStudentUseCase)
 	protected.GET("/students", studentsHandler.List)

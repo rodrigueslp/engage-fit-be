@@ -26,6 +26,10 @@ func (CheckinModel) TableName() string {
 	return "checkins"
 }
 
+func (RetentionInterventionModel) TableName() string {
+	return "retention_interventions"
+}
+
 func (CampaignModel) TableName() string {
 	return "campaigns"
 }

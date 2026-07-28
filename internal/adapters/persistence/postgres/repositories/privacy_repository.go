@@ -61,7 +61,11 @@ func (r PrivacyGormRepository) ExportStudent(ctx context.Context, boxID, student
 	for _, row := range rows {
 		communications = append(communications, domain.PrivacyCommunication{Channel: row.Channel, CampaignID: domain.ID(row.CampaignID), Destination: row.Destination, Status: row.Status, ErrorMessage: row.ErrorMessage, SentAt: row.SentAt, CreatedAt: row.CreatedAt})
 	}
-	return &domain.StudentPrivacyExport{Student: *student, Checkins: checkins, Progress: progress, Communications: communications, ExportedAt: time.Now().UTC()}, nil
+	interventions, err := NewRetentionGormRepository(r.db).ListInterventions(ctx, boxID, studentID)
+	if err != nil {
+		return nil, err
+	}
+	return &domain.StudentPrivacyExport{Student: *student, Checkins: checkins, Progress: progress, Communications: communications, RetentionInterventions: interventions, ExportedAt: time.Now().UTC()}, nil
 }
 
 func (r PrivacyGormRepository) AnonymizeStudent(ctx context.Context, boxID, studentID, actorUserID domain.ID, reason string) error {
@@ -90,6 +94,9 @@ func (r PrivacyGormRepository) AnonymizeStudent(ctx context.Context, boxID, stud
 			return err
 		}
 		if err := tx.Model(&models.WorkoutMessageRecipientModel{}).Where("student_id = ?", stringID(studentID)).Updates(map[string]any{"phone": "", "error_message": ""}).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&models.RetentionInterventionModel{}).Where("box_id = ? AND student_id = ?", stringID(boxID), stringID(studentID)).Updates(map[string]any{"notes": nil}).Error; err != nil {
 			return err
 		}
 		return PrivacyGormRepository{db: tx}.recordAudit(ctx, boxID, studentID, actorUserID, "anonymized", reason)
