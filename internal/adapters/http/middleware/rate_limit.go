@@ -116,7 +116,7 @@ func JSONRateLimit(limiter *WindowRateLimiter, identityField string) gin.Handler
 func BodySizeLimit(defaultBytes, importBytes int64) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		limit := defaultBytes
-		if c.Request.Method == http.MethodPost && c.Request.URL.Path == "/api/v1/imports" {
+		if c.Request.Method == http.MethodPost && (c.Request.URL.Path == "/api/v1/imports" || strings.HasPrefix(c.Request.URL.Path, "/api/v1/checkin-ingestion/")) {
 			limit = importBytes
 		}
 		if limit > 0 && c.Request.Body != nil {

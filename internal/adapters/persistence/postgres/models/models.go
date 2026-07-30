@@ -123,26 +123,29 @@ type UserModel struct {
 	PasswordHash string
 	AuthVersion  int
 	Role         string
+	Active       bool
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 }
 
 type StudentModel struct {
-	ID                     string `gorm:"primaryKey"`
-	BoxID                  string `gorm:"index"`
-	Name                   string
-	Email                  string
-	Phone                  string
-	Source                 string `gorm:"index"`
-	ExternalID             string `gorm:"index"`
-	RiskStatus             string
-	RiskLastMessageAt      *time.Time
-	ContactStatus          string
-	ContactStatusUpdatedAt *time.Time
-	ContactStatusSource    string
-	AnonymizedAt           *time.Time
-	CreatedAt              time.Time
-	UpdatedAt              time.Time
+	ID                      string `gorm:"primaryKey"`
+	BoxID                   string `gorm:"index"`
+	Name                    string
+	Email                   string
+	Phone                   string
+	Source                  string `gorm:"index"`
+	ExternalID              string `gorm:"index"`
+	RiskStatus              string
+	RiskLastMessageAt       *time.Time
+	ContactStatus           string
+	ContactStatusUpdatedAt  *time.Time
+	ContactStatusSource     string
+	MembershipStartedAt     *time.Time
+	MembershipStartedSource *string
+	AnonymizedAt            *time.Time
+	CreatedAt               time.Time
+	UpdatedAt               time.Time
 }
 
 type ImportHistoryModel struct {
@@ -152,6 +155,33 @@ type ImportHistoryModel struct {
 	Source       string
 	TotalRecords int
 	ImportedAt   time.Time
+}
+
+type CheckinIngestionSourceModel struct {
+	ID              string `gorm:"primaryKey"`
+	BoxID           string `gorm:"index"`
+	CreatedByUserID *string
+	Name            string
+	Source          string
+	TokenHash       string
+	Enabled         bool
+	LastIngestedAt  *time.Time
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+}
+
+type CheckinIngestionBatchModel struct {
+	ID              string `gorm:"primaryKey"`
+	SourceID        string
+	BoxID           string
+	IdempotencyKey  string
+	Status          string
+	ImportHistoryID *string
+	TotalRecords    int
+	StudentsCreated int
+	CheckinsCreated int
+	CreatedAt       time.Time
+	CompletedAt     *time.Time
 }
 
 type CheckinModel struct {
@@ -166,18 +196,21 @@ type CheckinModel struct {
 }
 
 type RetentionInterventionModel struct {
-	ID              string `gorm:"primaryKey"`
-	BoxID           string `gorm:"index"`
-	StudentID       string `gorm:"index"`
-	CreatedByUserID *string
-	Channel         string
-	Status          string
-	Outcome         *string
-	PlannedFor      *time.Time
-	CompletedAt     *time.Time
-	Notes           *string
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
+	ID                 string `gorm:"primaryKey"`
+	BoxID              string `gorm:"index"`
+	StudentID          string `gorm:"index"`
+	CreatedByUserID    *string
+	AssignedToUserID   *string
+	AssignedToUserName string `gorm:"column:assigned_to_user_name;->"`
+	Channel            string
+	Status             string
+	Outcome            *string
+	ReasonCode         *string
+	PlannedFor         *time.Time
+	CompletedAt        *time.Time
+	Notes              *string
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
 }
 
 type CampaignModel struct {

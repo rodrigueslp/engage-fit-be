@@ -127,6 +127,26 @@ sempre na fila de recuperados.
 Não haverá atribuição entre múltiplos funcionários nesta primeira entrega,
 porque o produto ainda possui somente o papel operacional `OWNER`.
 
+## Segundo vertical slice — operação e aprendizado
+
+Implementado na continuidade da branch `v2/retention-foundation`:
+
+- `GET /api/v1/retention/summary` apresenta ações concluídas, fila atual,
+  retornos observados em 3/7/14 dias, mediana válida e distribuições por motivo,
+  canal e resultado;
+- intervenções possuem `reason_code` estruturado e recomendação operacional
+  determinística no radar;
+- a jornada dos primeiros 30 dias usa `membership_started_at`, diferenciando
+  data inferida pela primeira presença de data confirmada manualmente;
+- entradas recorrentes aceitam os arquivos Wellhub/TotalPass existentes com
+  credencial armazenada como hash e batch idempotente;
+- o papel `COACH` possui allowlist operacional, sessão revogada ao ser
+  desativado e pode receber atribuição de acompanhamentos;
+- owner continua exclusivo para cobrança, integrações, importações,
+  configurações, campanhas, comunicação, automação e privacidade.
+
+Migrations deste slice: `036` a `039`.
+
 ## Contrato técnico proposto
 
 Nova tabela tenant-scoped `retention_interventions`:
@@ -180,13 +200,15 @@ afirmar que a intervenção causou o retorno.
 ## Fora do primeiro slice
 
 - score preditivo ou uso de IA;
-- ingestão automática de check-ins;
-- jornadas de onboarding de 7/14/30 dias;
+- integração nativa com APIs de check-ins;
 - WhatsApp em duas vias;
-- tarefas atribuídas a coaches;
 - dados financeiros, renovação e cancelamento;
 - testes A/B e grupos de controle;
 - automações de envio baseadas no novo radar.
+
+A porta recorrente implementada não é uma integração nativa com as APIs da
+Wellhub ou TotalPass. Conectores externos ainda precisam obter o arquivo na
+origem e enviá-lo ao EngageFit.
 
 Esses itens continuam no roadmap, mas dependem de histórico e aprendizado com
 os primeiros clientes.

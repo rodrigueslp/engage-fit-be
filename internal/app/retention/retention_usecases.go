@@ -18,11 +18,12 @@ type Service struct {
 	boxes     repositories.BoxRepository
 	students  repositories.StudentRepository
 	retention repositories.RetentionRepository
+	team      repositories.TeamRepository
 	now       func() time.Time
 }
 
-func NewService(boxes repositories.BoxRepository, students repositories.StudentRepository, retention repositories.RetentionRepository) Service {
-	return Service{boxes: boxes, students: students, retention: retention, now: time.Now}
+func NewService(boxes repositories.BoxRepository, students repositories.StudentRepository, retention repositories.RetentionRepository, team repositories.TeamRepository) Service {
+	return Service{boxes: boxes, students: students, retention: retention, team: team, now: time.Now}
 }
 
 func (s Service) ListRadar(ctx context.Context, boxID domain.ID) ([]domain.RetentionRadarItem, error) {
@@ -114,7 +115,36 @@ func classify(metric domain.RetentionMetrics, today time.Time, inactiveDays int)
 		}
 	}
 	item.WorkflowStatus, item.FollowUpDueAt = workflowStatus(item, today)
+	item.Recommendation = recommendation(item)
 	return item
+}
+
+func recommendation(item domain.RetentionRadarItem) domain.RetentionRecommendation {
+	switch item.WorkflowStatus {
+	case domain.RetentionWorkflowRecovered:
+		return domain.RetentionRecommendation{Code: "acknowledge_return", Title: "Reconhecer o retorno", Message: "Houve uma nova presença após o acompanhamento. Considere reconhecer a retomada sem atribuir causalidade ao contato."}
+	case domain.RetentionWorkflowFollowUpDue:
+		return domain.RetentionRecommendation{Code: "review_follow_up", Title: "Revisar acompanhamento", Message: "A data combinada para revisão chegou e ainda não foi observado retorno."}
+	case domain.RetentionWorkflowWaitingReturn:
+		return domain.RetentionRecommendation{Code: "wait_for_review", Title: "Aguardar até a revisão", Message: "Já existe acompanhamento em andamento. Evite uma nova abordagem antes da data informada."}
+	case domain.RetentionWorkflowPaused:
+		return domain.RetentionRecommendation{Code: "respect_pause", Title: "Respeitar a pausa", Message: "O acompanhamento está pausado até a data registrada."}
+	case domain.RetentionWorkflowClosed:
+		return domain.RetentionRecommendation{Code: "do_not_contact", Title: "Não realizar nova abordagem", Message: "O caso foi encerrado conforme o resultado registrado."}
+	}
+	if item.WorkflowStatus == domain.RetentionWorkflowNeedsAction {
+		if item.ContactStatus == domain.ContactStatusOptedOut {
+			return domain.RetentionRecommendation{Code: "talk_in_person", Title: "Priorizar conversa presencial", Message: "Há um sinal relevante, mas o aluno não autorizou contato eletrônico."}
+		}
+		if item.Level == domain.EngagementCritical {
+			return domain.RetentionRecommendation{Code: "contact_today", Title: "Entrar em contato hoje", Message: "A ausência ou queda de frequência atingiu o nível mais alto das regras atuais."}
+		}
+		return domain.RetentionRecommendation{Code: "check_context", Title: "Entender o contexto", Message: "Confirme com o aluno se existe alguma mudança de rotina antes que o afastamento aumente."}
+	}
+	if item.Level == domain.EngagementHistoryInsufficient {
+		return domain.RetentionRecommendation{Code: "observe_history", Title: "Observar a formação do histórico", Message: "Ainda não há dados suficientes para comparar oito semanas de frequência."}
+	}
+	return domain.RetentionRecommendation{Code: "no_action", Title: "Nenhuma ação necessária", Message: "As regras atuais não identificaram mudança relevante de frequência."}
 }
 
 func workflowStatus(item domain.RetentionRadarItem, today time.Time) (domain.RetentionWorkflowStatus, *time.Time) {
@@ -186,14 +216,143 @@ func (s Service) ListInterventions(ctx context.Context, boxID, studentID domain.
 	return s.retention.ListInterventions(ctx, boxID, studentID)
 }
 
+func (s Service) Summary(ctx context.Context, boxID domain.ID, start, end time.Time) (*domain.RetentionSummary, error) {
+	if start.IsZero() || end.IsZero() || end.Before(start) || end.Sub(start) > 365*24*time.Hour {
+		return nil, ErrInvalidIntervention
+	}
+	radar, err := s.ListRadar(ctx, boxID)
+	if err != nil {
+		return nil, err
+	}
+	interventions, err := s.retention.SummarizeInterventions(ctx, boxID, start, end.AddDate(0, 0, 1))
+	if err != nil {
+		return nil, err
+	}
+	result := &domain.RetentionSummary{
+		PeriodStart: start, PeriodEnd: end,
+		CompletedInterventions: interventions.CompletedInterventions,
+		ReturnWithin3Days:      interventions.ReturnWithin3Days, ReturnWithin7Days: interventions.ReturnWithin7Days,
+		ReturnWithin14Days: interventions.ReturnWithin14Days, MedianDaysToReturn: interventions.MedianDaysToReturn,
+		Reasons: interventions.Reasons, Channels: interventions.Channels, Outcomes: interventions.Outcomes,
+	}
+	for _, item := range radar {
+		switch item.WorkflowStatus {
+		case domain.RetentionWorkflowNeedsAction:
+			result.NeedsAction++
+		case domain.RetentionWorkflowWaitingReturn:
+			result.WaitingReturn++
+		case domain.RetentionWorkflowFollowUpDue:
+			result.FollowUpDue++
+		case domain.RetentionWorkflowRecovered:
+			result.Recovered++
+		}
+	}
+	return result, nil
+}
+
+func (s Service) ListOnboardingJourney(ctx context.Context, boxID domain.ID) ([]domain.OnboardingJourneyItem, error) {
+	box, err := s.boxes.FindByID(ctx, boxID)
+	if err != nil {
+		return nil, err
+	}
+	now := s.now().UTC()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+	metrics, err := s.retention.ListOnboardingMetrics(ctx, boxID, today)
+	if err != nil {
+		return nil, err
+	}
+	inactiveDays := box.RiskInactiveDays
+	if inactiveDays <= 0 {
+		inactiveDays = 7
+	}
+	result := make([]domain.OnboardingJourneyItem, 0, len(metrics))
+	for _, metric := range metrics {
+		item := domain.OnboardingJourneyItem{OnboardingMetrics: metric}
+		startedAt := time.Date(metric.MembershipStartedAt.Year(), metric.MembershipStartedAt.Month(), metric.MembershipStartedAt.Day(), 0, 0, 0, 0, time.UTC)
+		item.Day = int(today.Sub(startedAt).Hours()/24) + 1
+		if metric.LastCheckin != nil {
+			last := time.Date(metric.LastCheckin.Year(), metric.LastCheckin.Month(), metric.LastCheckin.Day(), 0, 0, 0, 0, time.UTC)
+			days := int(today.Sub(last).Hours() / 24)
+			item.DaysSinceCheckin = &days
+		}
+		switch {
+		case metric.FirstCheckin == nil:
+			item.Status = "no_first_visit"
+			item.StatusMessage = "Ainda não há presença registrada desde o início informado."
+			item.Recommendation = domain.RetentionRecommendation{Code: "confirm_first_visit", Title: "Confirmar a primeira presença", Message: "Verifique se o início está correto e se o aluno precisa de apoio para realizar a primeira aula."}
+		case metric.SecondCheckin == nil && item.Day >= 3:
+			item.Status = "needs_second_visit"
+			item.StatusMessage = "A primeira presença ocorreu, mas ainda não houve uma segunda visita."
+			if metric.ContactStatus == domain.ContactStatusOptedOut {
+				item.Recommendation = domain.RetentionRecommendation{Code: "second_visit_in_person", Title: "Conversar presencialmente", Message: "O aluno ainda não formou a segunda presença e não autorizou contato eletrônico."}
+			} else {
+				item.Recommendation = domain.RetentionRecommendation{Code: "encourage_second_visit", Title: "Incentivar a segunda presença", Message: "Uma segunda visita cedo ajuda a equipe a acompanhar a formação da rotina."}
+			}
+		case item.DaysSinceCheckin != nil && *item.DaysSinceCheckin >= inactiveDays:
+			item.Status = "interrupted"
+			item.StatusMessage = "A rotina inicial foi interrompida pelo limite de inatividade atual."
+			item.Recommendation = domain.RetentionRecommendation{Code: "understand_early_interruption", Title: "Entender a interrupção", Message: "Confirme o contexto antes que o afastamento se prolongue."}
+		case metric.SecondCheckin == nil:
+			item.Status = "building_habit"
+			item.StatusMessage = "O aluno iniciou recentemente e ainda está formando a rotina."
+			item.Recommendation = domain.RetentionRecommendation{Code: "observe_second_visit", Title: "Acompanhar a próxima presença", Message: "Ainda é cedo para sinalizar atraso; observe se ocorrerá uma segunda visita."}
+		default:
+			item.Status = "on_track"
+			item.StatusMessage = "Há pelo menos duas presenças e nenhuma interrupção relevante."
+			item.Recommendation = domain.RetentionRecommendation{Code: "reinforce_consistency", Title: "Reforçar a consistência", Message: "Reconheça a continuidade e acompanhe os marcos de 7, 14 e 30 dias."}
+		}
+		result = append(result, item)
+	}
+	sort.SliceStable(result, func(i, j int) bool {
+		left, right := onboardingPriority(result[i].Status), onboardingPriority(result[j].Status)
+		if left != right {
+			return left < right
+		}
+		return result[i].Day > result[j].Day
+	})
+	return result, nil
+}
+
+func onboardingPriority(status string) int {
+	switch status {
+	case "no_first_visit":
+		return 0
+	case "interrupted":
+		return 1
+	case "needs_second_visit":
+		return 2
+	case "building_habit":
+		return 3
+	default:
+		return 4
+	}
+}
+
+func (s Service) UpdateMembershipStart(ctx context.Context, boxID, studentID domain.ID, startedAt time.Time) error {
+	if _, err := s.students.FindByID(ctx, boxID, studentID); err != nil {
+		return err
+	}
+	now := s.now().UTC()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+	startedAt = time.Date(startedAt.Year(), startedAt.Month(), startedAt.Day(), 0, 0, 0, 0, time.UTC)
+	if startedAt.After(today) || startedAt.Before(time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)) {
+		return ErrInvalidIntervention
+	}
+	return s.retention.UpdateMembershipStart(ctx, boxID, studentID, startedAt, "manual", now)
+}
+
 func (s Service) CreateIntervention(ctx context.Context, item *domain.RetentionIntervention) error {
 	if _, err := s.students.FindByID(ctx, item.BoxID, item.StudentID); err != nil {
+		return err
+	}
+	if err := s.validateAssignee(ctx, item.BoxID, item.AssignedToUserID); err != nil {
 		return err
 	}
 	now := s.now()
 	item.Channel = strings.TrimSpace(item.Channel)
 	item.Status = strings.TrimSpace(item.Status)
 	item.Outcome = strings.TrimSpace(item.Outcome)
+	item.ReasonCode = strings.TrimSpace(item.ReasonCode)
 	item.Notes = strings.TrimSpace(item.Notes)
 	if item.Status == "" {
 		item.Status = "planned"
@@ -208,12 +367,15 @@ func (s Service) CreateIntervention(ctx context.Context, item *domain.RetentionI
 	return s.retention.SaveIntervention(ctx, item)
 }
 
-func (s Service) UpdateIntervention(ctx context.Context, boxID, id domain.ID, status, outcome, notes string, plannedFor *time.Time) (*domain.RetentionIntervention, error) {
+func (s Service) UpdateIntervention(ctx context.Context, boxID, id domain.ID, status, outcome, reasonCode, notes string, plannedFor *time.Time, assignedToUserID domain.ID) (*domain.RetentionIntervention, error) {
 	item, err := s.retention.FindIntervention(ctx, boxID, id)
 	if err != nil {
 		return nil, err
 	}
-	item.Status, item.Outcome, item.Notes, item.PlannedFor = strings.TrimSpace(status), strings.TrimSpace(outcome), strings.TrimSpace(notes), plannedFor
+	if err := s.validateAssignee(ctx, boxID, assignedToUserID); err != nil {
+		return nil, err
+	}
+	item.Status, item.Outcome, item.ReasonCode, item.Notes, item.PlannedFor, item.AssignedToUserID = strings.TrimSpace(status), strings.TrimSpace(outcome), strings.TrimSpace(reasonCode), strings.TrimSpace(notes), plannedFor, assignedToUserID
 	now := s.now()
 	if item.Status == "completed" && item.CompletedAt == nil {
 		item.CompletedAt = &now
@@ -231,6 +393,23 @@ func (s Service) UpdateIntervention(ctx context.Context, boxID, id domain.ID, st
 	return item, nil
 }
 
+func (s Service) validateAssignee(ctx context.Context, boxID, userID domain.ID) error {
+	if userID == "" {
+		return nil
+	}
+	if s.team == nil {
+		return ErrInvalidIntervention
+	}
+	user, err := s.team.FindMember(ctx, boxID, userID)
+	if err != nil {
+		return ErrInvalidIntervention
+	}
+	if user.Role == domain.UserRoleCoach && !user.Active {
+		return ErrInvalidIntervention
+	}
+	return nil
+}
+
 func validIntervention(item domain.RetentionIntervention) bool {
 	if len(item.Notes) > 500 {
 		return false
@@ -242,6 +421,9 @@ func validIntervention(item domain.RetentionIntervention) bool {
 		return false
 	}
 	if item.Outcome != "" && item.Outcome != "contacted" && item.Outcome != "no_response" && item.Outcome != "follow_up" && item.Outcome != "paused" && item.Outcome != "not_interested" && item.Outcome != "other" {
+		return false
+	}
+	if item.ReasonCode != "" && item.ReasonCode != "travel" && item.ReasonCode != "schedule" && item.ReasonCode != "financial" && item.ReasonCode != "motivation" && item.ReasonCode != "service" && item.ReasonCode != "health" && item.ReasonCode != "moved" && item.ReasonCode != "unknown" && item.ReasonCode != "other" {
 		return false
 	}
 	return item.Status != "completed" || item.CompletedAt != nil

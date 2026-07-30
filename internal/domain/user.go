@@ -10,6 +10,7 @@ type User struct {
 	PasswordHash string
 	AuthVersion  int
 	Role         UserRole
+	Active       bool
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 }

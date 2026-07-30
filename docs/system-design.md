@@ -64,7 +64,15 @@ O owner:
 - usa capacidades de comunicação e automação quando habilitadas;
 - troca a própria senha.
 
-### 3.3 `PLATFORM_ADMIN`
+### 3.3 `COACH`
+
+É um usuário operacional criado pelo owner e vinculado ao mesmo `box_id`.
+Pode consultar dashboard, radar, alunos e frequência, registrar intervenções e
+ser responsável por um acompanhamento. Não pode acessar cobrança, integrações,
+importações, campanhas, comunicação, automações, configurações ou operações de
+privacidade. Desativar o coach incrementa `auth_version` e revoga suas sessões.
+
+### 3.4 `PLATFORM_ADMIN`
 
 É o administrador do EngageFit, provisionado pelas variáveis `PLATFORM_ADMIN_*`. Seu usuário não possui `box_id`.
 
@@ -311,8 +319,8 @@ erDiagram
 
 | Grupo | Tabelas | Papel |
 |---|---|---|
-| Tenancy/acesso | `boxes`, `users` | tenant, owner, platform admin e versão de autenticação |
-| Ingestão | `students`, `import_histories`, `checkins` | identidade importada e frequência |
+| Tenancy/acesso | `boxes`, `users` | tenant, owner, coach, platform admin e versão de autenticação |
+| Ingestão | `students`, `import_histories`, `checkins`, `checkin_ingestion_sources`, `checkin_ingestion_batches` | identidade importada, frequência e entradas recorrentes idempotentes |
 | Campanhas | `campaigns`, `campaign_goals`, `campaign_progresses` | período, meta por origem e snapshot de progresso |
 | Brindes | `rewards`, `reward_deliveries` | catálogo e entrega por aluno elegível |
 | WhatsApp | `whatsapp_settings`, `message_templates`, `message_campaigns`, `message_recipients` | configuração, catálogo oficial, disparos e auditoria de destinatários |
@@ -335,7 +343,7 @@ erDiagram
 - execução de automação é única por `(box_id, execution_key)` quando a chave existe;
 - provider SID é único nos recipients quando preenchido;
 - supressão é única por `(box_id, source, external_id_hash)`;
-- platform admin deve ter `box_id IS NULL`; owner deve ter box;
+- platform admin deve ter `box_id IS NULL`; owner e coach devem ter box;
 - deleções do box propagam para a maior parte dos dados tenant via cascade.
 
 O schema não usa soft delete. Fechar campanha altera `active`; excluir campanha remove dependências conforme as foreign keys.
@@ -397,6 +405,21 @@ Atenção: `checkin_time` pode ser nulo. No PostgreSQL, valores `NULL` não coli
 ### 10.4 Consistência da importação
 
 A importação inteira não roda hoje em uma única transação. Histórico, novos alunos, check-ins e recálculo são passos sequenciais. Uma falha intermediária pode deixar efeitos parciais, embora reexecução e upserts reduzam parte do impacto.
+
+### 10.5 Entrada recorrente
+
+O owner pode criar uma fonte em `checkin_ingestion_sources`. A API devolve a
+credencial somente na criação ou rotação e persiste apenas SHA-256 do token.
+Um conector envia o mesmo CSV/XLSX já suportado para
+`POST /api/v1/checkin-ingestion/:sourceId/imports`, com
+`X-Ingestion-Token` e `Idempotency-Key`.
+
+`checkin_ingestion_batches` faz claim único por `(source_id,
+idempotency_key)`. Um retry retorna o batch existente e não repete a
+importação. Uma queda depois do claim conserva semântica at-most-once: batch
+`processing` ou `failed` exige revisão e uma nova chave, evitando duplicação
+incerta. Isso é uma porta para conectores; não representa integração nativa
+com APIs da Wellhub ou TotalPass.
 
 ## 11. Campanhas, metas, progresso e brindes
 
@@ -517,6 +540,21 @@ acessível pelo Radar e pela tela `Check-ins`. O painel mostra a distribuição 
 últimas oito semanas, calendário mensal e os horários/origens de cada presença.
 Essa visualização explica o padrão que originou o sinal sem persistir uma nova
 projeção.
+
+`GET /api/v1/retention/summary` agrega ações concluídas, fila atual, motivos,
+canais e retornos observados em 3, 7 e 14 dias. A mediana considera somente o
+primeiro retorno em até 14 dias e permanece ausente quando não há amostra.
+
+Intervenções aceitam motivo estruturado, sem detalhes médicos ou financeiros,
+e responsável pertencente à mesma academia. Recomendações como contato hoje,
+revisão vencida, conversa presencial ou respeito à pausa são regras
+determinísticas e explicáveis, não decisões de IA.
+
+`students.membership_started_at` sustenta a jornada dos primeiros 30 dias. A
+data começa como `first_checkin_inferred` e pode ser confirmada manualmente; a
+interface nunca apresenta a inferência como matrícula comprovada. A jornada
+destaca ausência da primeira ou segunda presença, interrupção inicial e
+formação de hábito, com contagens nos marcos de 7, 14 e 30 dias.
 - exportação: CSV gerado no backend ou arquivo preparado pela interface, conforme a tela.
 
 ## 13. Comunicação e públicos
@@ -915,7 +953,10 @@ O contrato definitivo está em `internal/adapters/http/router.go`. Mapa resumido
 | `/health*`, `/metrics` | público/controlado | runtime e observabilidade |
 | `/api/v1/capabilities` | público | booleans de disponibilidade |
 | `/api/v1/auth`, `/setup/owner` | público/autenticado | sessão e onboarding |
-| `/api/v1/box`, `/students`, `/imports`, `/checkins` | OWNER | tenant, alunos, ingestão e frequência por intervalo |
+| `/api/v1/box`, `/students`, `/checkins` | OWNER/COACH, conforme allowlist | tenant, alunos e frequência |
+| `/api/v1/retention*`, `/team/members` | OWNER/COACH | radar, jornada, ações e consulta da equipe |
+| `/api/v1/imports`, `/checkin-ingestion*` | OWNER ou credencial de ingestão | upload manual e entrada recorrente |
+| `/api/v1/team/coaches*` | OWNER | criação, desativação e senha de coaches |
 | `/api/v1/campaigns`, `/rewards` | OWNER | campanha, meta, progresso e brinde |
 | `/api/v1/message-*`, `/whatsapp` | OWNER + capability | comunicação WhatsApp |
 | `/api/v1/email*` | OWNER + capability | e-mail |

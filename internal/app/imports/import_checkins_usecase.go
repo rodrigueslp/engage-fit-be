@@ -91,19 +91,30 @@ func (uc ImportCheckinsUseCase) Execute(ctx context.Context, input ImportCheckin
 			}
 
 			student = &domain.Student{
-				BoxID:      input.BoxID,
-				Name:       parsedCheckin.StudentName,
-				Email:      parsedCheckin.StudentEmail,
-				Phone:      parsedCheckin.StudentPhone,
-				Source:     input.Source,
-				ExternalID: identity,
-				CreatedAt:  now,
-				UpdatedAt:  now,
+				BoxID:                   input.BoxID,
+				Name:                    parsedCheckin.StudentName,
+				Email:                   parsedCheckin.StudentEmail,
+				Phone:                   parsedCheckin.StudentPhone,
+				Source:                  input.Source,
+				ExternalID:              identity,
+				MembershipStartedAt:     &parsedCheckin.CheckinDate,
+				MembershipStartedSource: "first_checkin_inferred",
+				CreatedAt:               now,
+				UpdatedAt:               now,
 			}
 			if err := uc.students.Save(ctx, student); err != nil {
 				return nil, err
 			}
 			studentsCreated++
+		}
+		if student.MembershipStartedAt == nil || (student.MembershipStartedSource == "first_checkin_inferred" && parsedCheckin.CheckinDate.Before(*student.MembershipStartedAt)) {
+			startedAt := parsedCheckin.CheckinDate
+			student.MembershipStartedAt = &startedAt
+			student.MembershipStartedSource = "first_checkin_inferred"
+			student.UpdatedAt = now
+			if err := uc.students.Save(ctx, student); err != nil {
+				return nil, err
+			}
 		}
 
 		checkins = append(checkins, domain.Checkin{

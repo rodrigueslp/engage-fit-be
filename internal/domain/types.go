@@ -15,6 +15,7 @@ type UserRole string
 
 const (
 	UserRoleOwner         UserRole = "OWNER"
+	UserRoleCoach         UserRole = "COACH"
 	UserRolePlatformAdmin UserRole = "PLATFORM_ADMIN"
 )
 

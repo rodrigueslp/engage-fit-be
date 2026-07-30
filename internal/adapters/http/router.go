@@ -15,6 +15,7 @@ import (
 	billingapp "boxengage/backend/internal/app/billing"
 	"boxengage/backend/internal/app/boxes"
 	"boxengage/backend/internal/app/campaigns"
+	"boxengage/backend/internal/app/checkiningestion"
 	"boxengage/backend/internal/app/dashboard"
 	"boxengage/backend/internal/app/email"
 	"boxengage/backend/internal/app/imports"
@@ -24,6 +25,7 @@ import (
 	"boxengage/backend/internal/app/retention"
 	"boxengage/backend/internal/app/rewards"
 	"boxengage/backend/internal/app/students"
+	"boxengage/backend/internal/app/team"
 	"boxengage/backend/internal/app/whatsapp"
 	"boxengage/backend/internal/app/workouts"
 	"boxengage/backend/internal/ports/repositories"
@@ -53,9 +55,11 @@ type RouterDependencies struct {
 	UpdateContactPreferenceUseCase students.UpdateContactPreferenceUseCase
 	AnonymizeStudentUseCase        students.AnonymizeStudentUseCase
 
-	ListImportsUseCase    imports.ListImportsUseCase
-	GetImportUseCase      imports.GetImportUseCase
-	ImportCheckinsUseCase imports.ImportCheckinsUseCase
+	ListImportsUseCase      imports.ListImportsUseCase
+	GetImportUseCase        imports.GetImportUseCase
+	ImportCheckinsUseCase   imports.ImportCheckinsUseCase
+	CheckinIngestionService *checkiningestion.Service
+	TeamService             *team.Service
 
 	ListCampaignsUseCase               campaigns.ListCampaignsUseCase
 	CreateCampaignUseCase              campaigns.CreateCampaignUseCase
@@ -221,6 +225,10 @@ func NewRouter(deps RouterDependencies) *gin.Engine {
 		billingHandler := handlers.NewBillingHandler(deps.BillingService)
 		api.POST("/webhooks/asaas", billingHandler.Webhook)
 	}
+	if deps.CheckinIngestionService != nil {
+		ingestionHandler := handlers.NewCheckinIngestionHandler(deps.CheckinIngestionService)
+		api.POST("/checkin-ingestion/:sourceId/imports", ingestionHandler.Ingest)
+	}
 
 	authenticated := api.Group("")
 	authenticated.Use(middleware.Auth(deps.TokenService, deps.UserRepository, deps.BoxRepository, deps.SessionConfig), middleware.CSRF(deps.SessionConfig))
@@ -229,10 +237,19 @@ func NewRouter(deps RouterDependencies) *gin.Engine {
 	authenticated.PUT("/auth/password", authHandler.ChangePassword)
 
 	protected := authenticated.Group("")
-	protected.Use(middleware.Tenant())
+	protected.Use(middleware.Tenant(), middleware.TenantRoleAccess())
 
 	governanceHandler := handlers.NewMessagingGovernanceHandler(deps.MessagingAdminUseCases, deps.TenantMessagingUsageUseCase)
 	protected.GET("/messaging/usage", governanceHandler.TenantUsage)
+	if deps.TeamService != nil {
+		teamHandler := handlers.NewTeamHandler(deps.TeamService)
+		protected.GET("/team/members", teamHandler.List)
+		ownerTeam := protected.Group("/team")
+		ownerTeam.Use(middleware.Owner())
+		ownerTeam.POST("/coaches", teamHandler.CreateCoach)
+		ownerTeam.PATCH("/coaches/:id", teamHandler.UpdateCoach)
+		ownerTeam.PUT("/coaches/:id/password", teamHandler.ResetPassword)
+	}
 
 	admin := authenticated.Group("/admin")
 	admin.Use(middleware.PlatformAdmin())
@@ -280,9 +297,12 @@ func NewRouter(deps RouterDependencies) *gin.Engine {
 
 	retentionHandler := handlers.NewRetentionHandler(deps.RetentionService)
 	protected.GET("/retention/radar", retentionHandler.Radar)
+	protected.GET("/retention/summary", retentionHandler.Summary)
+	protected.GET("/retention/onboarding", retentionHandler.OnboardingJourney)
 	protected.GET("/students/:id/retention-interventions", retentionHandler.ListInterventions)
 	protected.POST("/students/:id/retention-interventions", retentionHandler.CreateIntervention)
 	protected.PATCH("/retention-interventions/:id", retentionHandler.UpdateIntervention)
+	protected.PATCH("/students/:id/membership-start", retentionHandler.UpdateMembershipStart)
 
 	studentsHandler := handlers.NewStudentsHandler(deps.ListStudentsUseCase, deps.GetStudentUseCase, deps.ListStudentCheckinsUseCase, deps.UpdateStudentRiskStatusUseCase, deps.ExportStudentDataUseCase, deps.UpdateContactPreferenceUseCase, deps.AnonymizeStudentUseCase)
 	protected.GET("/students", studentsHandler.List)
@@ -298,6 +318,13 @@ func NewRouter(deps RouterDependencies) *gin.Engine {
 	protected.POST("/imports", importsHandler.Create)
 	protected.GET("/imports", importsHandler.List)
 	protected.GET("/imports/:id", importsHandler.Get)
+	if deps.CheckinIngestionService != nil {
+		ingestionHandler := handlers.NewCheckinIngestionHandler(deps.CheckinIngestionService)
+		protected.GET("/checkin-ingestion/sources", ingestionHandler.ListSources)
+		protected.POST("/checkin-ingestion/sources", ingestionHandler.CreateSource)
+		protected.PATCH("/checkin-ingestion/sources/:id", ingestionHandler.UpdateSource)
+		protected.POST("/checkin-ingestion/sources/:id/rotate-token", ingestionHandler.RotateToken)
+	}
 
 	messagesHandler := handlers.NewMessagesHandler(deps.ListMessageTemplatesUseCase, deps.CreateMessageTemplateUseCase, deps.GetMessageTemplateUseCase, deps.UpdateMessageTemplateUseCase, deps.DeleteMessageTemplateUseCase, deps.ListMessageCampaignsUseCase, deps.CreateMessageCampaignUseCase, deps.GetMessageCampaignUseCase, deps.SendMessageCampaignUseCase, deps.ListMessageRecipientsUseCase)
 

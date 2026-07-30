@@ -30,6 +30,14 @@ func (RetentionInterventionModel) TableName() string {
 	return "retention_interventions"
 }
 
+func (CheckinIngestionSourceModel) TableName() string {
+	return "checkin_ingestion_sources"
+}
+
+func (CheckinIngestionBatchModel) TableName() string {
+	return "checkin_ingestion_batches"
+}
+
 func (CampaignModel) TableName() string {
 	return "campaigns"
 }

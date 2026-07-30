@@ -25,6 +25,14 @@ type UserGormRepository struct {
 	db *gorm.DB
 }
 
+type TeamGormRepository struct {
+	db *gorm.DB
+}
+
+func NewTeamGormRepository(db *gorm.DB) TeamGormRepository {
+	return TeamGormRepository{db: db}
+}
+
 func NewUserGormRepository(db *gorm.DB) UserGormRepository {
 	return UserGormRepository{db: db}
 }
@@ -63,6 +71,14 @@ func NewRetentionGormRepository(db *gorm.DB) RetentionGormRepository {
 
 type ImportHistoryGormRepository struct {
 	db *gorm.DB
+}
+
+type CheckinIngestionGormRepository struct {
+	db *gorm.DB
+}
+
+func NewCheckinIngestionGormRepository(db *gorm.DB) CheckinIngestionGormRepository {
+	return CheckinIngestionGormRepository{db: db}
 }
 
 func NewImportHistoryGormRepository(db *gorm.DB) ImportHistoryGormRepository {

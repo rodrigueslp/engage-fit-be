@@ -86,6 +86,29 @@ func (r StudentGormRepository) UpdateContactPreference(ctx context.Context, boxI
 		}).Error
 }
 
+func (r StudentGormRepository) UpdateMembershipStart(ctx context.Context, boxID, id domain.ID, startedAt time.Time, source string, updatedAt time.Time) error {
+	return r.db.WithContext(ctx).
+		Model(&models.StudentModel{}).
+		Where("box_id = ? AND id = ? AND anonymized_at IS NULL", stringID(boxID), stringID(id)).
+		Updates(map[string]any{
+			"membership_started_at":     startedAt,
+			"membership_started_source": source,
+			"updated_at":                updatedAt,
+		}).Error
+}
+
+func (r StudentGormRepository) SetEarlierInferredMembershipStart(ctx context.Context, boxID, id domain.ID, startedAt time.Time, updatedAt time.Time) error {
+	return r.db.WithContext(ctx).
+		Model(&models.StudentModel{}).
+		Where("box_id = ? AND id = ? AND anonymized_at IS NULL", stringID(boxID), stringID(id)).
+		Where("membership_started_at IS NULL OR (membership_started_source = ? AND membership_started_at > ?)", "first_checkin_inferred", startedAt).
+		Updates(map[string]any{
+			"membership_started_at":     startedAt,
+			"membership_started_source": "first_checkin_inferred",
+			"updated_at":                updatedAt,
+		}).Error
+}
+
 func (r StudentGormRepository) Save(ctx context.Context, student *domain.Student) error {
 	if err := ensureID(&student.ID); err != nil {
 		return err

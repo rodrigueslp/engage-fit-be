@@ -115,3 +115,35 @@ func TestWorkflowCanPauseOrCloseACase(t *testing.T) {
 		t.Fatalf("expected closed, got %s", status)
 	}
 }
+
+func TestRecommendationRespectsContactPreferenceAndWorkflow(t *testing.T) {
+	item := domain.RetentionRadarItem{
+		Level:            domain.EngagementCritical,
+		RetentionMetrics: domain.RetentionMetrics{ContactStatus: domain.ContactStatusOptedOut},
+		WorkflowStatus:   domain.RetentionWorkflowNeedsAction,
+	}
+	result := recommendation(item)
+	if result.Code != "talk_in_person" {
+		t.Fatalf("expected in-person recommendation, got %#v", result)
+	}
+	item.WorkflowStatus = domain.RetentionWorkflowWaitingReturn
+	result = recommendation(item)
+	if result.Code != "wait_for_review" {
+		t.Fatalf("expected recommendation to avoid duplicate contact, got %#v", result)
+	}
+}
+
+func TestValidInterventionAcceptsStructuredReason(t *testing.T) {
+	now := time.Now()
+	item := domain.RetentionIntervention{
+		Channel: "in_person", Status: "completed", Outcome: "contacted",
+		ReasonCode: "schedule", CompletedAt: &now,
+	}
+	if !validIntervention(item) {
+		t.Fatal("expected structured reason to be valid")
+	}
+	item.ReasonCode = "medical_diagnosis"
+	if validIntervention(item) {
+		t.Fatal("unexpected free-form sensitive reason code accepted")
+	}
+}

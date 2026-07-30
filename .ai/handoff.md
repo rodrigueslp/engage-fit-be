@@ -4,7 +4,7 @@ Manual canônico de arquitetura e negócio: `docs/system-design.md`.
 
 Guia operacional consolidado: `docs/application-readiness-guide.md`.
 
-Atualizado em: 2026-07-28 (checkpoint do go-live e início da V2 de retenção)
+Atualizado em: 2026-07-30 (V2 de retenção, operação por coaches e manual no produto)
 
 ## Desenvolvimento V2 isolado do go-live
 
@@ -41,9 +41,47 @@ Atualizado em: 2026-07-28 (checkpoint do go-live e início da V2 de retenção)
   navegação Playwright pelos dois pontos de entrada e `git diff --check`.
 - O desenvolvimento local aplicou a migration 035; a segunda execução aplicou
   zero migrations.
-- As alterações continuam locais e sem commit/push/deploy. Antes de qualquer
-  integração com `main`, revisar o conjunto completo nas duas branches
-  `v2/retention-foundation` e manter a V1 do go-live inalterada.
+- O conjunto permanece isolado da `main` nas branches
+  `v2/retention-foundation` dos dois repositórios. Este checkpoint será
+  versionado e enviado para essas branches remotas, sem merge nem deploy; a V1
+  do go-live permanece inalterada.
+- A continuidade da V2 implementou os itens priorizados até operação por
+  coaches: painel de resultados, motivos estruturados, recomendações por
+  regras, jornada dos primeiros 30 dias, entrada recorrente idempotente de
+  arquivos e papel `COACH` com atribuição e allowlist de acesso.
+- Foram adicionadas as migrations `036` a `039`. Elas passaram em PostgreSQL
+  vazio (39 migrations), segunda execução com zero aplicações e testes reais
+  de isolamento. Backend, TypeScript, build Vite e revisão visual
+  desktop/mobile também passaram.
+- A entrada recorrente é uma porta segura para conectores enviarem CSV/XLSX;
+  não é integração nativa com Wellhub/TotalPass. Credenciais são exibidas
+  somente na criação/rotação e persistidas como hash.
+- A importação manual deixou de iniciar com Wellhub pré-selecionado. A origem
+  agora deve ser escolhida explicitamente antes de liberar o envio, e a
+  confirmação informa a plataforma usada. A mudança reduz a criação acidental
+  de um segundo aluno quando o arquivo pertence a outra origem.
+- O usuário validou no navegador a jornada dos primeiros 30 dias e a
+  importação de um check-in para uma aluna TotalPass. Duas tentativas com a
+  origem Wellhub selecionada criaram identidades separadas, como previsto pelo
+  isolamento por plataforma; os registros de teste foram removidos e esse uso
+  revelou a necessidade da seleção explícita descrita acima.
+- A página de Retenção ganhou o primeiro manual de uso dentro do produto. O
+  botão `Como usar` abre um painel lateral com oito tópicos, screenshots reais
+  ampliáveis, rotina sugerida, explicação das filas, leitura dos sinais,
+  histórico de frequência, registro de acompanhamento, primeiros 30 dias,
+  resultados e boas práticas.
+- O manual usa o componente reutilizável
+  `src/components/help/ProductGuide.tsx`; o conteúdo específico fica em
+  `src/features/help/guides/retentionGuide.ts` e as imagens em
+  `public/help/retention`. O padrão pode ser replicado nas demais páginas sem
+  acoplar o conteúdo ao componente. A primeira versão foi deliberadamente
+  preparada e validada para desktop; versão editorial específica para mobile
+  ficou para depois.
+- O manual passou em TypeScript, build Vite e navegação Playwright: oito
+  tópicos, troca de seção, ampliação de imagem, fechamento por `Escape` e
+  ausência de overflow horizontal no viewport desktop.
+- WhatsApp em duas vias e IA/score preditivo permanecem deliberadamente fora
+  deste recorte.
 
 ## Checkpoint de go-live do CrossFit Alados em 2026-07-28
 

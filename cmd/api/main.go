@@ -27,6 +27,7 @@ import (
 	billingapp "boxengage/backend/internal/app/billing"
 	"boxengage/backend/internal/app/boxes"
 	"boxengage/backend/internal/app/campaigns"
+	"boxengage/backend/internal/app/checkiningestion"
 	"boxengage/backend/internal/app/dashboard"
 	emailapp "boxengage/backend/internal/app/email"
 	"boxengage/backend/internal/app/imports"
@@ -37,6 +38,7 @@ import (
 	"boxengage/backend/internal/app/retention"
 	"boxengage/backend/internal/app/rewards"
 	"boxengage/backend/internal/app/students"
+	"boxengage/backend/internal/app/team"
 	whatsappapp "boxengage/backend/internal/app/whatsapp"
 	"boxengage/backend/internal/app/workouts"
 	"boxengage/backend/internal/config"
@@ -117,11 +119,13 @@ func main() {
 
 	boxRepository := pgrepo.NewBoxGormRepository(db)
 	userRepository := pgrepo.NewUserGormRepository(db)
+	teamRepository := pgrepo.NewTeamGormRepository(db)
 	studentRepository := pgrepo.NewStudentGormRepository(db)
 	privacyRepository := pgrepo.NewPrivacyGormRepository(db)
 	checkinRepository := pgrepo.NewCheckinGormRepository(db)
 	retentionRepository := pgrepo.NewRetentionGormRepository(db)
 	importRepository := pgrepo.NewImportHistoryGormRepository(db)
+	checkinIngestionRepository := pgrepo.NewCheckinIngestionGormRepository(db)
 	campaignRepository := pgrepo.NewCampaignGormRepository(db)
 	rewardRepository := pgrepo.NewRewardGormRepository(db)
 	whatsappSettingsRepository := pgrepo.NewWhatsappSettingsGormRepository(db, secretCipher)
@@ -175,6 +179,7 @@ func main() {
 	boxAdminUseCases := platformadmin.NewBoxAdminUseCases(boxRepository, userRepository, createBoxUseCase, messagingGovernanceRepository)
 	getBoxUseCase := boxes.NewGetBoxUseCase(boxRepository)
 	updateBoxUseCase := boxes.NewUpdateBoxUseCase(boxRepository)
+	teamService := team.NewService(userRepository, teamRepository, passwordService)
 
 	listStudentsUseCase := students.NewListStudentsUseCase(studentRepository)
 	getStudentUseCase := students.NewGetStudentUseCase(studentRepository)
@@ -187,6 +192,7 @@ func main() {
 	listImportsUseCase := imports.NewListImportsUseCase(importRepository)
 	getImportUseCase := imports.NewGetImportUseCase(importRepository)
 	importCheckinsUseCase := imports.NewImportCheckinsUseCase(checkinParser, importRepository, studentRepository, checkinRepository, campaignRepository, rewardRepository, privacyRepository)
+	checkinIngestionService := checkiningestion.NewService(checkinIngestionRepository, importCheckinsUseCase)
 
 	listCampaignsUseCase := campaigns.NewListCampaignsUseCase(campaignRepository)
 	createCampaignUseCase := campaigns.NewCreateCampaignUseCase(campaignRepository)
@@ -213,7 +219,7 @@ func main() {
 	dashboardActiveCampaignsUseCase := dashboard.NewListActiveCampaignsUseCase(campaignRepository)
 	dashboardNearGoalUseCase := dashboard.NewListNearGoalStudentsUseCase(studentRepository, campaignRepository)
 	dashboardAtRiskUseCase := dashboard.NewListAtRiskStudentsUseCase(boxRepository, studentRepository, checkinRepository)
-	retentionService := retention.NewService(boxRepository, studentRepository, retentionRepository)
+	retentionService := retention.NewService(boxRepository, studentRepository, retentionRepository, teamRepository)
 
 	getWhatsappSettingsUseCase := whatsappapp.NewGetSettingsUseCase(whatsappSettingsRepository, whatsappSettingsResolver)
 	updateWhatsappSettingsUseCase := whatsappapp.NewUpdateSettingsUseCase(whatsappSettingsRepository)
@@ -296,9 +302,11 @@ func main() {
 		UpdateContactPreferenceUseCase: updateContactPreferenceUseCase,
 		AnonymizeStudentUseCase:        anonymizeStudentUseCase,
 
-		ListImportsUseCase:    listImportsUseCase,
-		GetImportUseCase:      getImportUseCase,
-		ImportCheckinsUseCase: importCheckinsUseCase,
+		ListImportsUseCase:      listImportsUseCase,
+		GetImportUseCase:        getImportUseCase,
+		ImportCheckinsUseCase:   importCheckinsUseCase,
+		CheckinIngestionService: checkinIngestionService,
+		TeamService:             teamService,
 
 		ListCampaignsUseCase:               listCampaignsUseCase,
 		CreateCampaignUseCase:              createCampaignUseCase,

@@ -12,6 +12,7 @@ import (
 
 var ErrBoxAccessInactive = errors.New("academia inativa")
 var ErrBillingAccessBlocked = errors.New("acesso bloqueado por pendência financeira")
+var ErrUserAccessInactive = errors.New("acesso do usuário desativado")
 
 type LoginInput struct {
 	Email    string
@@ -41,7 +42,10 @@ func (uc LoginUseCase) Execute(ctx context.Context, input LoginInput) (*LoginOut
 	if err := uc.passwords.Compare(ctx, user.PasswordHash, input.Password); err != nil {
 		return nil, err
 	}
-	if user.Role == domain.UserRoleOwner {
+	if user.Role == domain.UserRoleCoach && !user.Active {
+		return nil, ErrUserAccessInactive
+	}
+	if user.Role == domain.UserRoleOwner || user.Role == domain.UserRoleCoach {
 		box, err := uc.boxes.FindByID(ctx, user.BoxID)
 		if err != nil {
 			return nil, err

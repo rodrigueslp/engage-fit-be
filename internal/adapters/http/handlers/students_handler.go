@@ -240,15 +240,19 @@ func studentResponse(student domain.Student) dto.StudentResponse {
 		riskStatus = domain.StudentRiskStatusActive
 	}
 	response := dto.StudentResponse{
-		ID:                  string(student.ID),
-		Name:                student.Name,
-		Email:               student.Email,
-		Phone:               student.Phone,
-		Source:              string(student.Source),
-		ExternalID:          student.ExternalID,
-		RiskStatus:          string(riskStatus),
-		ContactStatus:       string(student.ContactStatus),
-		ContactStatusSource: student.ContactStatusSource,
+		ID:                      string(student.ID),
+		Name:                    student.Name,
+		Email:                   student.Email,
+		Phone:                   student.Phone,
+		Source:                  string(student.Source),
+		ExternalID:              student.ExternalID,
+		RiskStatus:              string(riskStatus),
+		ContactStatus:           string(student.ContactStatus),
+		ContactStatusSource:     student.ContactStatusSource,
+		MembershipStartedSource: student.MembershipStartedSource,
+	}
+	if student.MembershipStartedAt != nil {
+		response.MembershipStartedAt = student.MembershipStartedAt.Format("2006-01-02")
 	}
 	if student.ContactStatusUpdatedAt != nil {
 		response.ContactStatusUpdatedAt = student.ContactStatusUpdatedAt.Format(time.RFC3339)

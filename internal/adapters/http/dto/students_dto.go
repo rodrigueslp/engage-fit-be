@@ -1,18 +1,20 @@
 package dto
 
 type StudentResponse struct {
-	ID                     string `json:"id"`
-	Name                   string `json:"name"`
-	Email                  string `json:"email"`
-	Phone                  string `json:"phone"`
-	Source                 string `json:"source"`
-	ExternalID             string `json:"external_id"`
-	RiskStatus             string `json:"risk_status"`
-	RiskLastMessageAt      string `json:"risk_last_message_at,omitempty"`
-	ContactStatus          string `json:"contact_status"`
-	ContactStatusUpdatedAt string `json:"contact_status_updated_at,omitempty"`
-	ContactStatusSource    string `json:"contact_status_source,omitempty"`
-	AnonymizedAt           string `json:"anonymized_at,omitempty"`
+	ID                      string `json:"id"`
+	Name                    string `json:"name"`
+	Email                   string `json:"email"`
+	Phone                   string `json:"phone"`
+	Source                  string `json:"source"`
+	ExternalID              string `json:"external_id"`
+	RiskStatus              string `json:"risk_status"`
+	RiskLastMessageAt       string `json:"risk_last_message_at,omitempty"`
+	ContactStatus           string `json:"contact_status"`
+	ContactStatusUpdatedAt  string `json:"contact_status_updated_at,omitempty"`
+	ContactStatusSource     string `json:"contact_status_source,omitempty"`
+	MembershipStartedAt     string `json:"membership_started_at,omitempty"`
+	MembershipStartedSource string `json:"membership_started_source,omitempty"`
+	AnonymizedAt            string `json:"anonymized_at,omitempty"`
 }
 
 type UpdateContactPreferenceRequest struct {

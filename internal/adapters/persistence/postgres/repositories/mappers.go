@@ -86,6 +86,7 @@ func userToDomain(model models.UserModel) domain.User {
 		PasswordHash: model.PasswordHash,
 		AuthVersion:  model.AuthVersion,
 		Role:         domain.UserRole(model.Role),
+		Active:       model.Active,
 		CreatedAt:    model.CreatedAt,
 		UpdatedAt:    model.UpdatedAt,
 	}
@@ -94,6 +95,9 @@ func userToDomain(model models.UserModel) domain.User {
 func userToModel(user domain.User) models.UserModel {
 	if user.AuthVersion < 1 {
 		user.AuthVersion = 1
+	}
+	if user.Role == domain.UserRoleOwner || user.Role == domain.UserRoleCoach || user.Role == domain.UserRolePlatformAdmin {
+		user.Active = true
 	}
 	var boxID *string
 	if user.BoxID != "" {
@@ -108,6 +112,7 @@ func userToModel(user domain.User) models.UserModel {
 		PasswordHash: user.PasswordHash,
 		AuthVersion:  user.AuthVersion,
 		Role:         string(user.Role),
+		Active:       user.Active,
 		CreatedAt:    user.CreatedAt,
 		UpdatedAt:    user.UpdatedAt,
 	}
@@ -119,21 +124,23 @@ func studentToDomain(model models.StudentModel) domain.Student {
 		riskStatus = domain.StudentRiskStatusActive
 	}
 	return domain.Student{
-		ID:                     domainID(model.ID),
-		BoxID:                  domainID(model.BoxID),
-		Name:                   model.Name,
-		Email:                  model.Email,
-		Phone:                  model.Phone,
-		Source:                 domain.Source(model.Source),
-		ExternalID:             model.ExternalID,
-		RiskStatus:             riskStatus,
-		RiskLastMessageAt:      model.RiskLastMessageAt,
-		ContactStatus:          modelContactStatus(model.ContactStatus),
-		ContactStatusUpdatedAt: model.ContactStatusUpdatedAt,
-		ContactStatusSource:    model.ContactStatusSource,
-		AnonymizedAt:           model.AnonymizedAt,
-		CreatedAt:              model.CreatedAt,
-		UpdatedAt:              model.UpdatedAt,
+		ID:                      domainID(model.ID),
+		BoxID:                   domainID(model.BoxID),
+		Name:                    model.Name,
+		Email:                   model.Email,
+		Phone:                   model.Phone,
+		Source:                  domain.Source(model.Source),
+		ExternalID:              model.ExternalID,
+		RiskStatus:              riskStatus,
+		RiskLastMessageAt:       model.RiskLastMessageAt,
+		ContactStatus:           modelContactStatus(model.ContactStatus),
+		ContactStatusUpdatedAt:  model.ContactStatusUpdatedAt,
+		ContactStatusSource:     model.ContactStatusSource,
+		MembershipStartedAt:     model.MembershipStartedAt,
+		MembershipStartedSource: optionalString(model.MembershipStartedSource),
+		AnonymizedAt:            model.AnonymizedAt,
+		CreatedAt:               model.CreatedAt,
+		UpdatedAt:               model.UpdatedAt,
 	}
 }
 
@@ -143,21 +150,23 @@ func studentToModel(student domain.Student) models.StudentModel {
 		riskStatus = domain.StudentRiskStatusActive
 	}
 	return models.StudentModel{
-		ID:                     stringID(student.ID),
-		BoxID:                  stringID(student.BoxID),
-		Name:                   student.Name,
-		Email:                  student.Email,
-		Phone:                  student.Phone,
-		Source:                 string(student.Source),
-		ExternalID:             student.ExternalID,
-		RiskStatus:             string(riskStatus),
-		RiskLastMessageAt:      student.RiskLastMessageAt,
-		ContactStatus:          string(normalizedContactStatus(student.ContactStatus)),
-		ContactStatusUpdatedAt: student.ContactStatusUpdatedAt,
-		ContactStatusSource:    student.ContactStatusSource,
-		AnonymizedAt:           student.AnonymizedAt,
-		CreatedAt:              student.CreatedAt,
-		UpdatedAt:              student.UpdatedAt,
+		ID:                      stringID(student.ID),
+		BoxID:                   stringID(student.BoxID),
+		Name:                    student.Name,
+		Email:                   student.Email,
+		Phone:                   student.Phone,
+		Source:                  string(student.Source),
+		ExternalID:              student.ExternalID,
+		RiskStatus:              string(riskStatus),
+		RiskLastMessageAt:       student.RiskLastMessageAt,
+		ContactStatus:           string(normalizedContactStatus(student.ContactStatus)),
+		ContactStatusUpdatedAt:  student.ContactStatusUpdatedAt,
+		ContactStatusSource:     student.ContactStatusSource,
+		MembershipStartedAt:     student.MembershipStartedAt,
+		MembershipStartedSource: stringPointer(student.MembershipStartedSource),
+		AnonymizedAt:            student.AnonymizedAt,
+		CreatedAt:               student.CreatedAt,
+		UpdatedAt:               student.UpdatedAt,
 	}
 }
 
@@ -170,6 +179,20 @@ func normalizedContactStatus(value domain.ContactStatus) domain.ContactStatus {
 		return domain.ContactStatusUnknown
 	}
 	return value
+}
+
+func optionalString(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
+}
+
+func stringPointer(value string) *string {
+	if value == "" {
+		return nil
+	}
+	return &value
 }
 
 func checkinToDomain(model models.CheckinModel) domain.Checkin {

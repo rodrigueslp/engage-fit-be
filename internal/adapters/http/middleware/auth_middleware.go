@@ -32,7 +32,11 @@ func Auth(tokens services.TokenService, users repositories.UserRepository, boxes
 			apiresponse.AbortError(c, http.StatusUnauthorized, "session_invalid", "invalid session")
 			return
 		}
-		if user.Role == domain.UserRoleOwner {
+		if user.Role == domain.UserRoleCoach && !user.Active {
+			apiresponse.AbortError(c, http.StatusForbidden, "user_inactive", "acesso desativado pelo proprietário da academia")
+			return
+		}
+		if user.Role == domain.UserRoleOwner || user.Role == domain.UserRoleCoach {
 			box, err := boxes.FindByID(c.Request.Context(), user.BoxID)
 			if err != nil {
 				apiresponse.AbortError(c, http.StatusUnauthorized, "session_invalid", "invalid session")
