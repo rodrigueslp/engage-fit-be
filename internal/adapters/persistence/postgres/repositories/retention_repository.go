@@ -18,6 +18,7 @@ func (r RetentionGormRepository) ListMetrics(ctx context.Context, boxID domain.I
 		ContactStatus                string
 		FirstCheckin                 *time.Time
 		LastCheckin                  *time.Time
+		TotalCheckins                int
 		RecentCheckins               int
 		PreviousCheckins             int
 		LastCompletedIntervention    *time.Time
@@ -37,6 +38,7 @@ func (r RetentionGormRepository) ListMetrics(ctx context.Context, boxID domain.I
 			SELECT s.id AS student_id,
 			       MIN(c.checkin_date) AS first_checkin,
 			       MAX(c.checkin_date) AS last_checkin,
+			       COUNT(c.id) AS total_checkins,
 			       COUNT(c.id) FILTER (WHERE c.checkin_date >= ?) AS recent_checkins,
 			       COUNT(c.id) FILTER (WHERE c.checkin_date >= ? AND c.checkin_date < ?) AS previous_checkins
 			FROM students s
@@ -52,7 +54,7 @@ func (r RetentionGormRepository) ListMetrics(ctx context.Context, boxID domain.I
 		)
 		SELECT s.id AS student_id, s.name AS student_name, s.phone AS student_phone,
 		       s.source, s.contact_status, a.first_checkin, a.last_checkin,
-		       a.recent_checkins, a.previous_checkins,
+		       a.total_checkins, a.recent_checkins, a.previous_checkins,
 		       la.completed_at AS last_completed_intervention,
 		       returns.first_return_after_action,
 		       la.id AS last_intervention_id,
@@ -87,7 +89,7 @@ func (r RetentionGormRepository) ListMetrics(ctx context.Context, boxID domain.I
 			StudentPhone: item.StudentPhone, Source: domain.Source(item.Source),
 			ContactStatus: domain.ContactStatus(item.ContactStatus),
 			FirstCheckin:  item.FirstCheckin, LastCheckin: item.LastCheckin,
-			RecentCheckins: item.RecentCheckins, PreviousCheckins: item.PreviousCheckins,
+			TotalCheckins: item.TotalCheckins, RecentCheckins: item.RecentCheckins, PreviousCheckins: item.PreviousCheckins,
 			LastCompletedIntervention:    item.LastCompletedIntervention,
 			FirstReturnAfterAction:       item.FirstReturnAfterAction,
 			LastInterventionID:           domainID(item.LastInterventionID),
@@ -248,23 +250,29 @@ func (r RetentionGormRepository) SummarizeInterventions(ctx context.Context, box
 
 func (r RetentionGormRepository) ListOnboardingMetrics(ctx context.Context, boxID domain.ID, today time.Time) ([]domain.OnboardingMetrics, error) {
 	type row struct {
-		StudentID               string
-		StudentName             string
-		StudentPhone            string
-		Source                  string
-		ContactStatus           string
-		MembershipStartedAt     time.Time
-		MembershipStartedSource string
-		FirstCheckin            *time.Time
-		SecondCheckin           *time.Time
-		LastCheckin             *time.Time
-		CheckinsFirst7Days      int
-		CheckinsFirst14Days     int
-		CheckinsFirst30Days     int
+		StudentID                  string
+		StudentName                string
+		StudentPhone               string
+		Source                     string
+		ContactStatus              string
+		MembershipStartedAt        time.Time
+		MembershipStartedSource    string
+		ObservationDaysBeforeStart int
+		FirstCheckin               *time.Time
+		SecondCheckin              *time.Time
+		LastCheckin                *time.Time
+		CheckinsFirst7Days         int
+		CheckinsFirst14Days        int
+		CheckinsFirst30Days        int
 	}
 	var rows []row
 	err := r.db.WithContext(ctx).Raw(`
-		WITH attendance_days AS (
+		WITH source_coverage AS (
+			SELECT source, MIN(checkin_date)::date AS coverage_start
+			FROM checkins
+			WHERE box_id = ? AND checkin_date <= ?::date
+			GROUP BY source
+		), attendance_days AS (
 			SELECT s.id AS student_id,
 			       c.checkin_date::date AS checkin_day
 			FROM students s
@@ -281,6 +289,7 @@ func (r RetentionGormRepository) ListOnboardingMetrics(ctx context.Context, boxI
 		)
 		SELECT s.id AS student_id, s.name AS student_name, s.phone AS student_phone,
 		       s.source, s.contact_status, s.membership_started_at, s.membership_started_source,
+		       GREATEST(s.membership_started_at - coverage.coverage_start, 0) AS observation_days_before_start,
 		       MIN(r.checkin_day) FILTER (WHERE r.visit_number = 1) AS first_checkin,
 		       MIN(r.checkin_day) FILTER (WHERE r.visit_number = 2) AS second_checkin,
 		       MAX(r.checkin_day) AS last_checkin,
@@ -289,12 +298,13 @@ func (r RetentionGormRepository) ListOnboardingMetrics(ctx context.Context, boxI
 		       COUNT(r.checkin_day) FILTER (WHERE r.checkin_day < s.membership_started_at + 30) AS checkins_first30_days
 		FROM students s
 		LEFT JOIN ranked_days r ON r.student_id = s.id
+		LEFT JOIN source_coverage coverage ON coverage.source = s.source
 		WHERE s.box_id = ?
 		  AND s.anonymized_at IS NULL
 		  AND s.membership_started_at BETWEEN ?::date - 30 AND ?::date
-		GROUP BY s.id
+		GROUP BY s.id, coverage.coverage_start
 		ORDER BY s.membership_started_at DESC, s.name ASC
-	`, stringID(boxID), stringID(boxID), today, today).Scan(&rows).Error
+	`, stringID(boxID), today, stringID(boxID), stringID(boxID), today, today).Scan(&rows).Error
 	if err != nil {
 		return nil, err
 	}
@@ -304,7 +314,8 @@ func (r RetentionGormRepository) ListOnboardingMetrics(ctx context.Context, boxI
 			StudentID: domainID(item.StudentID), StudentName: item.StudentName, StudentPhone: item.StudentPhone,
 			Source: domain.Source(item.Source), ContactStatus: domain.ContactStatus(item.ContactStatus),
 			MembershipStartedAt: item.MembershipStartedAt, MembershipStartedSource: item.MembershipStartedSource,
-			FirstCheckin: item.FirstCheckin, SecondCheckin: item.SecondCheckin, LastCheckin: item.LastCheckin,
+			ObservationDaysBeforeStart: item.ObservationDaysBeforeStart,
+			FirstCheckin:               item.FirstCheckin, SecondCheckin: item.SecondCheckin, LastCheckin: item.LastCheckin,
 			CheckinsFirst7Days: item.CheckinsFirst7Days, CheckinsFirst14Days: item.CheckinsFirst14Days,
 			CheckinsFirst30Days: item.CheckinsFirst30Days,
 		})

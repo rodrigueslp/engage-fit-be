@@ -202,5 +202,5 @@ func studentIdentity(parsed services.ParsedCheckin) string {
 	if parsed.StudentPhone != "" {
 		return strings.TrimSpace(strings.ToLower(parsed.StudentPhone))
 	}
-	return strings.TrimSpace(strings.ToLower(parsed.StudentName))
+	return strings.Join(strings.Fields(strings.ToLower(parsed.StudentName)), " ")
 }

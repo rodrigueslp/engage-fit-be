@@ -21,6 +21,7 @@ type RetentionRadarResponse struct {
 	FirstCheckin                 *string                         `json:"first_checkin"`
 	LastCheckin                  *string                         `json:"last_checkin"`
 	DaysSinceCheckin             *int                            `json:"days_since_checkin"`
+	TotalCheckins                int                             `json:"total_checkins"`
 	RecentCheckins               int                             `json:"recent_checkins"`
 	PreviousCheckins             int                             `json:"previous_checkins"`
 	RecentWeeklyAverage          float64                         `json:"recent_weekly_average"`
@@ -43,6 +44,23 @@ type RetentionRadarResponse struct {
 	LastInterventionAssigneeID   string                          `json:"last_intervention_assignee_id"`
 	LastInterventionAssigneeName string                          `json:"last_intervention_assignee_name"`
 	Recommendation               RetentionRecommendationResponse `json:"recommendation"`
+}
+
+type RetentionRulesResponse struct {
+	RecentStart             string `json:"recent_start"`
+	RecentEnd               string `json:"recent_end"`
+	PreviousStart           string `json:"previous_start"`
+	PreviousEnd             string `json:"previous_end"`
+	HistoryRequiredBefore   string `json:"history_required_before"`
+	HistoryDays             int    `json:"history_days"`
+	MinimumTotalCheckins    int    `json:"minimum_total_checkins"`
+	MinimumPreviousCheckins int    `json:"minimum_previous_checkins"`
+	AttentionInactiveDays   int    `json:"attention_inactive_days"`
+	AtRiskInactiveDays      int    `json:"at_risk_inactive_days"`
+	CriticalInactiveDays    int    `json:"critical_inactive_days"`
+	AttentionDropPercentage int    `json:"attention_drop_percentage"`
+	AtRiskDropPercentage    int    `json:"at_risk_drop_percentage"`
+	CriticalDropPercentage  int    `json:"critical_drop_percentage"`
 }
 
 type RetentionInterventionRequest struct {
@@ -108,22 +126,24 @@ type UpdateMembershipStartRequest struct {
 }
 
 type OnboardingJourneyResponse struct {
-	StudentID               string                          `json:"student_id"`
-	StudentName             string                          `json:"student_name"`
-	StudentPhone            string                          `json:"student_phone"`
-	Source                  string                          `json:"source"`
-	ContactStatus           string                          `json:"contact_status"`
-	MembershipStartedAt     string                          `json:"membership_started_at"`
-	MembershipStartedSource string                          `json:"membership_started_source"`
-	Day                     int                             `json:"day"`
-	FirstCheckin            *string                         `json:"first_checkin"`
-	SecondCheckin           *string                         `json:"second_checkin"`
-	LastCheckin             *string                         `json:"last_checkin"`
-	DaysSinceCheckin        *int                            `json:"days_since_checkin"`
-	CheckinsFirst7Days      int                             `json:"checkins_first_7_days"`
-	CheckinsFirst14Days     int                             `json:"checkins_first_14_days"`
-	CheckinsFirst30Days     int                             `json:"checkins_first_30_days"`
-	Status                  string                          `json:"status"`
-	StatusMessage           string                          `json:"status_message"`
-	Recommendation          RetentionRecommendationResponse `json:"recommendation"`
+	StudentID                  string                          `json:"student_id"`
+	StudentName                string                          `json:"student_name"`
+	StudentPhone               string                          `json:"student_phone"`
+	Source                     string                          `json:"source"`
+	ContactStatus              string                          `json:"contact_status"`
+	MembershipStartedAt        string                          `json:"membership_started_at"`
+	MembershipStartedSource    string                          `json:"membership_started_source"`
+	MembershipStartConfidence  string                          `json:"membership_start_confidence"`
+	ObservationDaysBeforeStart int                             `json:"observation_days_before_start"`
+	Day                        int                             `json:"day"`
+	FirstCheckin               *string                         `json:"first_checkin"`
+	SecondCheckin              *string                         `json:"second_checkin"`
+	LastCheckin                *string                         `json:"last_checkin"`
+	DaysSinceCheckin           *int                            `json:"days_since_checkin"`
+	CheckinsFirst7Days         int                             `json:"checkins_first_7_days"`
+	CheckinsFirst14Days        int                             `json:"checkins_first_14_days"`
+	CheckinsFirst30Days        int                             `json:"checkins_first_30_days"`
+	Status                     string                          `json:"status"`
+	StatusMessage              string                          `json:"status_message"`
+	Recommendation             RetentionRecommendationResponse `json:"recommendation"`
 }

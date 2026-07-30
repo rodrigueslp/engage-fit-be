@@ -17,12 +17,18 @@ func TestCoachAccessIsLimitedToOperationalRoutes(t *testing.T) {
 		c.Next()
 	}, TenantRoleAccess())
 	router.GET("/api/v1/retention/radar", func(c *gin.Context) { c.Status(http.StatusNoContent) })
+	router.GET("/api/v1/retention/rules", func(c *gin.Context) { c.Status(http.StatusNoContent) })
 	router.GET("/api/v1/imports", func(c *gin.Context) { c.Status(http.StatusNoContent) })
 
 	allowed := httptest.NewRecorder()
 	router.ServeHTTP(allowed, httptest.NewRequest(http.MethodGet, "/api/v1/retention/radar", nil))
 	if allowed.Code != http.StatusNoContent {
 		t.Fatalf("coach should access retention radar, got %d", allowed.Code)
+	}
+	rulesAllowed := httptest.NewRecorder()
+	router.ServeHTTP(rulesAllowed, httptest.NewRequest(http.MethodGet, "/api/v1/retention/rules", nil))
+	if rulesAllowed.Code != http.StatusNoContent {
+		t.Fatalf("coach should access retention rules, got %d", rulesAllowed.Code)
 	}
 	forbidden := httptest.NewRecorder()
 	router.ServeHTTP(forbidden, httptest.NewRequest(http.MethodGet, "/api/v1/imports", nil))

@@ -98,7 +98,7 @@ func parseRows(rows [][]string, source domain.Source) ([]services.ParsedCheckin,
 		return []services.ParsedCheckin{}, nil
 	}
 
-	headerIndex, headers := findHeaderRow(rows)
+	headerIndex, headers := findHeaderRow(rows, source)
 	if headerIndex < 0 {
 		return []services.ParsedCheckin{}, nil
 	}
@@ -146,9 +146,9 @@ func parseRows(rows [][]string, source domain.Source) ([]services.ParsedCheckin,
 	return result, nil
 }
 
-func findHeaderRow(rows [][]string) (int, map[string]int) {
+func findHeaderRow(rows [][]string, source domain.Source) (int, map[string]int) {
 	for index, row := range rows {
-		headers := mapHeaders(row)
+		headers := mapHeaders(row, source)
 		if _, hasName := headers["name"]; !hasName {
 			continue
 		}
@@ -160,12 +160,19 @@ func findHeaderRow(rows [][]string) (int, map[string]int) {
 	return -1, map[string]int{}
 }
 
-func mapHeaders(headers []string) map[string]int {
+func mapHeaders(headers []string, source domain.Source) map[string]int {
 	result := map[string]int{}
+	totalPassTokenExport := source == domain.SourceTotalPass && hasHeaders(headers, "colaborador", "validadoem")
 	for index, header := range headers {
 		normalized := normalizeHeader(header)
 		switch normalized {
 		case "id", "externalid", "external_id", "codigo", "matricula", "studentid", "userid", "iddowellhub":
+			// In TotalPass' token export, ID and Código identify the one-time
+			// token/check-in, not the collaborator. They therefore cannot be
+			// used as a stable student identity.
+			if totalPassTokenExport && (normalized == "id" || normalized == "codigo") {
+				continue
+			}
 			result["external_id"] = index
 		case "name", "nome", "aluno", "student", "cliente", "usuario", "user", "colaborador", "visitante":
 			result["name"] = index
@@ -180,6 +187,19 @@ func mapHeaders(headers []string) map[string]int {
 		}
 	}
 	return result
+}
+
+func hasHeaders(headers []string, expected ...string) bool {
+	found := make(map[string]bool, len(headers))
+	for _, header := range headers {
+		found[normalizeHeader(header)] = true
+	}
+	for _, header := range expected {
+		if !found[header] {
+			return false
+		}
+	}
+	return true
 }
 
 func normalizeHeader(value string) string {

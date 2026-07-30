@@ -13,7 +13,7 @@ func TestClassifyUsesExplainableFrequencySignals(t *testing.T) {
 	last := today.AddDate(0, 0, -9)
 	item := classify(domain.RetentionMetrics{
 		FirstCheckin: &first, LastCheckin: &last,
-		PreviousCheckins: 12, RecentCheckins: 4,
+		TotalCheckins: 24, PreviousCheckins: 12, RecentCheckins: 4,
 	}, today, 7)
 
 	if item.Level != domain.EngagementAtRisk {
@@ -33,7 +33,7 @@ func TestClassifyDoesNotPretendToKnowWithShortHistory(t *testing.T) {
 	last := today.AddDate(0, 0, -10)
 	item := classify(domain.RetentionMetrics{
 		FirstCheckin: &first, LastCheckin: &last,
-		PreviousCheckins: 8, RecentCheckins: 1,
+		TotalCheckins: 9, PreviousCheckins: 8, RecentCheckins: 1,
 	}, today, 7)
 
 	if item.Level != domain.EngagementHistoryInsufficient {
@@ -41,6 +41,28 @@ func TestClassifyDoesNotPretendToKnowWithShortHistory(t *testing.T) {
 	}
 	if len(item.Signals) != 1 || item.Signals[0].Code != "history_insufficient" {
 		t.Fatalf("expected explicit insufficient history signal, got %#v", item.Signals)
+	}
+}
+
+func TestClassifyDoesNotFlagAnIsolatedVisitAsRetentionRisk(t *testing.T) {
+	today := time.Date(2026, time.July, 28, 0, 0, 0, 0, time.UTC)
+	first := today.AddDate(0, 0, -100)
+	item := classify(domain.RetentionMetrics{
+		FirstCheckin: &first, LastCheckin: &first,
+		TotalCheckins: 1,
+	}, today, 7)
+
+	if item.Level != domain.EngagementHistoryInsufficient {
+		t.Fatalf("expected history_insufficient, got %s", item.Level)
+	}
+	if len(item.Signals) != 1 || item.Signals[0].Code != "routine_insufficient" {
+		t.Fatalf("expected explicit routine signal, got %#v", item.Signals)
+	}
+	if item.WorkflowStatus != domain.RetentionWorkflowNone {
+		t.Fatalf("expected no retention action, got %s", item.WorkflowStatus)
+	}
+	if item.Recommendation.Code != "observe_routine" {
+		t.Fatalf("expected routine recommendation, got %#v", item.Recommendation)
 	}
 }
 
@@ -52,7 +74,7 @@ func TestClassifyObservesReturnWithoutClaimingCausality(t *testing.T) {
 	returned := today.AddDate(0, 0, -2)
 	item := classify(domain.RetentionMetrics{
 		FirstCheckin: &first, LastCheckin: &last,
-		PreviousCheckins: 8, RecentCheckins: 2,
+		TotalCheckins: 16, PreviousCheckins: 8, RecentCheckins: 2,
 		LastCompletedIntervention: &action, FirstReturnAfterAction: &returned,
 		LastInterventionID: "action-1", LastInterventionStatus: "completed",
 	}, today, 7)
@@ -65,6 +87,52 @@ func TestClassifyObservesReturnWithoutClaimingCausality(t *testing.T) {
 	}
 	if item.WorkflowStatus != domain.RetentionWorkflowRecovered {
 		t.Fatalf("expected recovered workflow, got %s", item.WorkflowStatus)
+	}
+}
+
+func TestRetentionRulesDescribeTheSameWindowsAndThresholdsUsedByRadar(t *testing.T) {
+	now := time.Date(2026, time.July, 30, 15, 0, 0, 0, time.UTC)
+	rules := retentionRules(domain.Box{RiskInactiveDays: 7}, now)
+
+	if got := rules.RecentStart.Format("2006-01-02"); got != "2026-07-03" {
+		t.Fatalf("unexpected recent start %s", got)
+	}
+	if got := rules.PreviousStart.Format("2006-01-02"); got != "2026-06-05" {
+		t.Fatalf("unexpected previous start %s", got)
+	}
+	if got := rules.HistoryRequiredBefore.Format("2006-01-02"); got != "2026-06-04" {
+		t.Fatalf("unexpected history cutoff %s", got)
+	}
+	if rules.MinimumTotalCheckins != 4 || rules.MinimumPreviousCheckins != 4 {
+		t.Fatalf("unexpected minimum check-ins %#v", rules)
+	}
+	if rules.AttentionInactiveDays != 5 || rules.AtRiskInactiveDays != 7 || rules.CriticalInactiveDays != 14 {
+		t.Fatalf("unexpected inactivity thresholds %#v", rules)
+	}
+}
+
+func TestOnboardingStartConfidenceRequiresPriorCoverageForInferredDates(t *testing.T) {
+	probable, eligible := onboardingStartConfidence(domain.OnboardingMetrics{
+		MembershipStartedSource:    "first_checkin_inferred",
+		ObservationDaysBeforeStart: 96,
+	})
+	if !eligible || probable != domain.MembershipStartProbable {
+		t.Fatalf("expected probable start, got %q eligible=%v", probable, eligible)
+	}
+
+	unknown, eligible := onboardingStartConfidence(domain.OnboardingMetrics{
+		MembershipStartedSource:    "first_checkin_inferred",
+		ObservationDaysBeforeStart: 28,
+	})
+	if eligible || unknown != "" {
+		t.Fatalf("expected unknown start to stay out of onboarding, got %q eligible=%v", unknown, eligible)
+	}
+
+	confirmed, eligible := onboardingStartConfidence(domain.OnboardingMetrics{
+		MembershipStartedSource: "manual",
+	})
+	if !eligible || confirmed != domain.MembershipStartConfirmed {
+		t.Fatalf("expected confirmed start, got %q eligible=%v", confirmed, eligible)
 	}
 }
 

@@ -297,6 +297,7 @@ func NewRouter(deps RouterDependencies) *gin.Engine {
 
 	retentionHandler := handlers.NewRetentionHandler(deps.RetentionService)
 	protected.GET("/retention/radar", retentionHandler.Radar)
+	protected.GET("/retention/rules", retentionHandler.Rules)
 	protected.GET("/retention/summary", retentionHandler.Summary)
 	protected.GET("/retention/onboarding", retentionHandler.OnboardingJourney)
 	protected.GET("/students/:id/retention-interventions", retentionHandler.ListInterventions)

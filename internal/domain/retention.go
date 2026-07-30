@@ -44,6 +44,7 @@ type RetentionMetrics struct {
 	ContactStatus                ContactStatus
 	FirstCheckin                 *time.Time
 	LastCheckin                  *time.Time
+	TotalCheckins                int
 	RecentCheckins               int
 	PreviousCheckins             int
 	LastCompletedIntervention    *time.Time
@@ -72,6 +73,23 @@ type RetentionRadarItem struct {
 	WorkflowStatus        RetentionWorkflowStatus
 	FollowUpDueAt         *time.Time
 	Recommendation        RetentionRecommendation
+}
+
+type RetentionRules struct {
+	RecentStart             time.Time
+	RecentEnd               time.Time
+	PreviousStart           time.Time
+	PreviousEnd             time.Time
+	HistoryRequiredBefore   time.Time
+	HistoryDays             int
+	MinimumTotalCheckins    int
+	MinimumPreviousCheckins int
+	AttentionInactiveDays   int
+	AtRiskInactiveDays      int
+	CriticalInactiveDays    int
+	AttentionDropPercentage int
+	AtRiskDropPercentage    int
+	CriticalDropPercentage  int
 }
 
 type RetentionIntervention struct {
@@ -126,26 +144,35 @@ type RetentionSummary struct {
 }
 
 type OnboardingMetrics struct {
-	StudentID               ID
-	StudentName             string
-	StudentPhone            string
-	Source                  Source
-	ContactStatus           ContactStatus
-	MembershipStartedAt     time.Time
-	MembershipStartedSource string
-	FirstCheckin            *time.Time
-	SecondCheckin           *time.Time
-	LastCheckin             *time.Time
-	CheckinsFirst7Days      int
-	CheckinsFirst14Days     int
-	CheckinsFirst30Days     int
+	StudentID                  ID
+	StudentName                string
+	StudentPhone               string
+	Source                     Source
+	ContactStatus              ContactStatus
+	MembershipStartedAt        time.Time
+	MembershipStartedSource    string
+	ObservationDaysBeforeStart int
+	FirstCheckin               *time.Time
+	SecondCheckin              *time.Time
+	LastCheckin                *time.Time
+	CheckinsFirst7Days         int
+	CheckinsFirst14Days        int
+	CheckinsFirst30Days        int
 }
+
+type MembershipStartConfidence string
+
+const (
+	MembershipStartConfirmed MembershipStartConfidence = "confirmed"
+	MembershipStartProbable  MembershipStartConfidence = "probable"
+)
 
 type OnboardingJourneyItem struct {
 	OnboardingMetrics
-	Day              int
-	DaysSinceCheckin *int
-	Status           string
-	StatusMessage    string
-	Recommendation   RetentionRecommendation
+	MembershipStartConfidence MembershipStartConfidence
+	Day                       int
+	DaysSinceCheckin          *int
+	Status                    string
+	StatusMessage             string
+	Recommendation            RetentionRecommendation
 }

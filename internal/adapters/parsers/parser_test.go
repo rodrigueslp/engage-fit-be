@@ -60,8 +60,8 @@ func TestCheckinParserParsesTotalPassTokenExport(t *testing.T) {
 	if result[0].StudentName != "João Paulo da Rocha" {
 		t.Fatalf("expected TotalPass collaborator name, got %q", result[0].StudentName)
 	}
-	if result[0].StudentExternalID != "535602390" {
-		t.Fatalf("expected external id from ID column, got %q", result[0].StudentExternalID)
+	if result[0].StudentExternalID != "" {
+		t.Fatalf("expected token ID to be ignored as student identity, got %q", result[0].StudentExternalID)
 	}
 	if result[0].CheckinDate.Format("2006-01-02") != "2026-06-22" {
 		t.Fatalf("expected date 2026-06-22, got %s", result[0].CheckinDate.Format("2006-01-02"))

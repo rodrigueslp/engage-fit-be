@@ -37,6 +37,20 @@ func (h RetentionHandler) Radar(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
+func (h RetentionHandler) Rules(c *gin.Context) {
+	boxID, err := middleware.BoxID(c)
+	if err != nil {
+		respondUnauthorized(c)
+		return
+	}
+	rules, err := h.service.Rules(c.Request.Context(), boxID)
+	if err != nil {
+		respondError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, retentionRulesResponse(*rules))
+}
+
 func (h RetentionHandler) Summary(c *gin.Context) {
 	boxID, err := middleware.BoxID(c)
 	if err != nil {
@@ -213,7 +227,7 @@ func retentionRadarResponse(item domain.RetentionRadarItem) dto.RetentionRadarRe
 		Source: string(item.Source), ContactStatus: string(item.ContactStatus), Level: string(item.Level),
 		DaysSinceCheckin: item.DaysSinceCheckin, RecentCheckins: item.RecentCheckins, PreviousCheckins: item.PreviousCheckins,
 		RecentWeeklyAverage: item.RecentWeeklyAverage, PreviousWeeklyAverage: item.PreviousWeeklyAverage,
-		DropPercentage: item.DropPercentage, Signals: []dto.RetentionSignalResponse{},
+		TotalCheckins: item.TotalCheckins, DropPercentage: item.DropPercentage, Signals: []dto.RetentionSignalResponse{},
 		ReturnWithin3Days: item.ReturnWithin3Days, ReturnWithin7Days: item.ReturnWithin7Days, ReturnWithin14Days: item.ReturnWithin14Days,
 		WorkflowStatus: string(item.WorkflowStatus), LastInterventionID: string(item.LastInterventionID),
 		LastInterventionChannel: item.LastInterventionChannel, LastInterventionStatus: item.LastInterventionStatus,
@@ -256,6 +270,20 @@ func retentionRadarResponse(item domain.RetentionRadarItem) dto.RetentionRadarRe
 	return response
 }
 
+func retentionRulesResponse(item domain.RetentionRules) dto.RetentionRulesResponse {
+	return dto.RetentionRulesResponse{
+		RecentStart: item.RecentStart.Format("2006-01-02"), RecentEnd: item.RecentEnd.Format("2006-01-02"),
+		PreviousStart: item.PreviousStart.Format("2006-01-02"), PreviousEnd: item.PreviousEnd.Format("2006-01-02"),
+		HistoryRequiredBefore: item.HistoryRequiredBefore.Format("2006-01-02"),
+		HistoryDays:           item.HistoryDays, MinimumTotalCheckins: item.MinimumTotalCheckins,
+		MinimumPreviousCheckins: item.MinimumPreviousCheckins,
+		AttentionInactiveDays:   item.AttentionInactiveDays, AtRiskInactiveDays: item.AtRiskInactiveDays,
+		CriticalInactiveDays:    item.CriticalInactiveDays,
+		AttentionDropPercentage: item.AttentionDropPercentage,
+		AtRiskDropPercentage:    item.AtRiskDropPercentage, CriticalDropPercentage: item.CriticalDropPercentage,
+	}
+}
+
 func retentionInterventionResponse(item domain.RetentionIntervention) dto.RetentionInterventionResponse {
 	response := dto.RetentionInterventionResponse{ID: string(item.ID), StudentID: string(item.StudentID), CreatedByUserID: string(item.CreatedByUserID), AssignedToUserID: string(item.AssignedToUserID), AssignedToUserName: item.AssignedToUserName, Channel: item.Channel, Status: item.Status, Outcome: item.Outcome, ReasonCode: item.ReasonCode, Notes: item.Notes, CreatedAt: item.CreatedAt.Format(time.RFC3339), UpdatedAt: item.UpdatedAt.Format(time.RFC3339)}
 	if item.PlannedFor != nil {
@@ -295,6 +323,7 @@ func onboardingJourneyResponse(item domain.OnboardingJourneyItem) dto.Onboarding
 		StudentID: string(item.StudentID), StudentName: item.StudentName, StudentPhone: item.StudentPhone,
 		Source: string(item.Source), ContactStatus: string(item.ContactStatus),
 		MembershipStartedAt: item.MembershipStartedAt.Format("2006-01-02"), MembershipStartedSource: item.MembershipStartedSource,
+		MembershipStartConfidence: string(item.MembershipStartConfidence), ObservationDaysBeforeStart: item.ObservationDaysBeforeStart,
 		Day: item.Day, DaysSinceCheckin: item.DaysSinceCheckin, CheckinsFirst7Days: item.CheckinsFirst7Days,
 		CheckinsFirst14Days: item.CheckinsFirst14Days, CheckinsFirst30Days: item.CheckinsFirst30Days,
 		Status: item.Status, StatusMessage: item.StatusMessage,

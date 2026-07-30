@@ -17,6 +17,7 @@ var coachRoutes = map[string]map[string]bool{
 		"/api/v1/dashboard/at-risk-students":           true,
 		"/api/v1/dashboard/pending-rewards":            true,
 		"/api/v1/retention/radar":                      true,
+		"/api/v1/retention/rules":                      true,
 		"/api/v1/retention/summary":                    true,
 		"/api/v1/retention/onboarding":                 true,
 		"/api/v1/students":                             true,

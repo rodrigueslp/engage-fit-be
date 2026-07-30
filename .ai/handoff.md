@@ -4,7 +4,147 @@ Manual canônico de arquitetura e negócio: `docs/system-design.md`.
 
 Guia operacional consolidado: `docs/application-readiness-guide.md`.
 
-Atualizado em: 2026-07-30 (V2 de retenção, operação por coaches e manual no produto)
+Atualizado em: 2026-07-30 (importação real Alados, identidade TotalPass e retenção explicável)
+
+## Checkpoint de importação real e refinamento da retenção em 2026-07-30
+
+Este é o checkpoint mais recente da V2 preparada para o piloto assistido do
+CrossFit Alados. Em caso de conflito com o histórico abaixo, esta seção
+prevalece. O proprietário autorizou preparar a V2 para produção porque a
+operação do primeiro mês ficará nas mãos do próprio operador do EngageFit, mas
+**esta sessão não executou merge nem deploy de produção**.
+
+### Identidade dos alunos no TotalPass
+
+- Foram analisados os arquivos reais de Wellhub e TotalPass fornecidos pelo
+  usuário. O export de tokens do TotalPass contém `ID` e `Código`, mas ambos
+  identificam o token/check-in, não o colaborador. O mesmo aluno recebe valores
+  diferentes em cada visita.
+- O bug fazia cada visita TotalPass criar um aluno. No arquivo analisado,
+  Adriana Segatelli aparecia 16 vezes com 16 IDs diferentes.
+- O parser agora reconhece o export de tokens pelas colunas `Colaborador` e
+  `Validado em` e ignora `ID`/`Código` como identidade de aluno. Um
+  `external_id` realmente estável continua sendo respeitado em outros formatos.
+- Sem identificador, e-mail ou telefone estável, a identidade passa a ser o
+  nome em minúsculas com espaços normalizados, sempre isolado por academia e
+  origem. Limitação conhecida: duas pessoas diferentes com exatamente o mesmo
+  nome completo na mesma academia/origem serão unificadas, pois o arquivo não
+  oferece outro atributo para distingui-las.
+- A migration `040_merge_totalpass_students_by_name.sql` corrige dados já
+  importados. Ela:
+  - consolida alunos TotalPass pelo nome normalizado dentro do box;
+  - remove repetição da mesma visita antes de mover os check-ins;
+  - preserva históricos de mensagens, e-mail, treino, retenção, auditoria e o
+    estado manual de entregas de recompensa;
+  - recalcula progresso de campanhas e sincroniza entregas pendentes;
+  - preserva datas de início explicitamente confirmadas.
+- Na primeira validação local, a consolidação reduziu 2.058 registros
+  TotalPass para 211 pessoas; Adriana passou a ter um cadastro com 16
+  check-ins. Depois da limpeza controlada e nova importação dos arquivos reais,
+  o estado observado foi:
+  - TotalPass: 206 alunos e 2.052 check-ins, de 30/06 a 30/07;
+  - Wellhub: 55 alunos e 1.002 check-ins, de 01/04 a 29/07;
+  - total: 261 cadastros e 3.054 check-ins.
+- Existe pelo menos um mesmo nome presente nas duas plataformas. A
+  consolidação entre Wellhub e TotalPass permanece fora deste recorte; o
+  isolamento por origem continua intencional.
+
+### Radar de retenção mais conservador
+
+- O radar continua comparando 28 dias recentes com as quatro semanas
+  anteriores e exige oito semanas de cobertura para comparar frequência.
+- Uma rotina mínima de **4 check-ins no histórico** passou a ser obrigatória
+  antes de classificar ausência ou queda como risco de retenção. Alunos com
+  uma a três visitas ficam em `Pouco histórico`, com sinal
+  `routine_insufficient`, e não entram na fila de ação.
+- A queda percentual continua sendo calculada somente quando existem ao menos
+  4 check-ins na janela anterior.
+- Com `risk_inactive_days=7`, os limites explicados pela API são:
+  - `Observar`: 5 dias sem presença ou queda mínima de 25%;
+  - `Em queda`: 7 dias sem presença ou queda mínima de 50%;
+  - `Atenção imediata`: 14 dias sem presença ou queda mínima de 75%.
+- Na base real local, a nova rotina mínima reduziu:
+  - `Precisam de ação`: de 35 para 25;
+  - `Atenção imediata`: de 32 para 22.
+- Todos os 25 casos restantes eram Wellhub e possuíam pelo menos quatro
+  presenças. O TotalPass permaneceu em `Pouco histórico` porque seu arquivo
+  cobre somente cerca de um mês.
+
+### Explicação das regras dentro do produto
+
+- Novo endpoint autenticado e permitido para `OWNER` e `COACH`:
+  `GET /api/v1/retention/rules`.
+- O endpoint é a fonte de verdade para datas das janelas, corte de histórico,
+  rotina mínima e limites de ausência/queda. A tela não mantém uma segunda
+  cópia desses números.
+- O botão `Entenda os cálculos`, na página `Retenção`, abre um painel lateral
+  com:
+  - datas exatas dos dois períodos comparados;
+  - requisito de oito semanas e quatro presenças;
+  - limites de cada nível;
+  - exemplos reais escolhidos deterministicamente do radar atual;
+  - ressalva de que os sinais não preveem cancelamento.
+- Os exemplos **não usam IA**. Eles são montados diretamente com check-ins,
+  queda percentual, última presença e nível calculado. Isso evita custo,
+  latência e explicações inventadas.
+- O carregamento das regras é tolerante a uma API antiga durante rollout: se o
+  endpoint ainda não estiver disponível, o radar continua carregando e o botão
+  explicativo permanece desabilitado.
+
+### Primeiros 30 dias com confiança explícita
+
+- A planilha não contém data de matrícula. Antes deste ajuste, o primeiro
+  check-in importado era tratado como início real; isso colocava 210 alunos em
+  `Primeiros 30 dias`, incluindo todos os 206 TotalPass, apesar de o arquivo
+  começar em 30/06.
+- A jornada agora distingue:
+  - `confirmed`: data informada manualmente pelo box ou recebida de integração;
+  - `probable`: primeira presença inferida com pelo menos 56 dias anteriores
+    cobertos pela mesma plataforma sem check-in daquele aluno;
+  - desconhecido: cobertura anterior insuficiente; o aluno não aparece na
+    jornada de primeiros 30 dias.
+- A cobertura é calculada por box e origem a partir da menor data importada da
+  plataforma. Isso evita usar os meses do Wellhub como cobertura do TotalPass.
+- Com os arquivos atuais, a seção caiu de 210 para **4 inícios prováveis,
+  todos Wellhub**, com 96 a 108 dias anteriores cobertos. Nenhum TotalPass é
+  apresentado como novo.
+- A aba foi renomeada para `Primeiros 30 dias confiáveis`. Cada linha mostra
+  `Início provável` ou `Início confirmado`, a quantidade de dias cobertos
+  antes da primeira presença e permite confirmar a data sugerida sem precisar
+  alterá-la.
+- O painel `Entenda os cálculos` também explica as tags:
+  `Início confirmado`, `Início provável`, `Sem primeira presença`,
+  `Início recente`, `Aguardando 2ª presença`, `Em formação de hábito` e
+  `Rotina interrompida`. Os textos usam o limite real de inatividade retornado
+  pelo backend.
+
+### Estado local e validações deste checkpoint
+
+- A base local preserva uma academia ativa e seu owner. Durante a sessão foi
+  necessário refazer a limpeza: o estado correto para reteste manteve academia
+  e usuários e removeu somente alunos, check-ins e importações; depois os dois
+  arquivos reais foram importados novamente.
+- Não registrar credenciais locais ou de produção neste handoff.
+- Validações concluídas:
+  - parser executado contra o XLSX real TotalPass: 16 linhas da Adriana sem ID
+    transitório como identidade;
+  - migration 040 aplicada no PostgreSQL local e reaplicada dentro de transação
+    com rollback para conferir idempotência operacional;
+  - `go test ./...`;
+  - testes unitários da rotina mínima, janelas/regras e confiança do onboarding;
+  - smoke autenticado em API temporária na porta 8081 para radar, regras e
+    onboarding;
+  - endpoint de onboarding retornando exatamente 4 Wellhub e zero TotalPass;
+  - TypeScript sem erros;
+  - build Vite de produção;
+  - `git diff --check` nos dois repositórios.
+- O build Vite mantém apenas o aviso já conhecido de chunk principal acima de
+  500 kB; não é regressão deste checkpoint.
+- Após atualizar o código local, reiniciar o backend é necessário para expor
+  `/api/v1/retention/rules` e a nova resposta do onboarding.
+- Commits deste checkpoint:
+  - backend: o commit que contém esta seção;
+  - frontend: `cc9bfe5` (`feat: explain retention rules and onboarding confidence`).
 
 ## Desenvolvimento V2 isolado do go-live
 

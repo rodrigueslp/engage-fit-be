@@ -14,6 +14,15 @@ import (
 
 var ErrInvalidIntervention = errors.New("invalid retention intervention")
 
+const (
+	retentionHistoryDays     = 56
+	minimumRetentionCheckins = 4
+	minimumPreviousCheckins  = 4
+	attentionDropPercentage  = 25
+	atRiskDropPercentage     = 50
+	criticalDropPercentage   = 75
+)
+
 type Service struct {
 	boxes     repositories.BoxRepository
 	students  repositories.StudentRepository
@@ -31,21 +40,14 @@ func (s Service) ListRadar(ctx context.Context, boxID domain.ID) ([]domain.Reten
 	if err != nil {
 		return nil, err
 	}
-	now := s.now().UTC()
-	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
-	recentStart := today.AddDate(0, 0, -27)
-	previousStart := recentStart.AddDate(0, 0, -28)
-	metrics, err := s.retention.ListMetrics(ctx, boxID, recentStart, previousStart, today)
+	rules := retentionRules(*box, s.now())
+	metrics, err := s.retention.ListMetrics(ctx, boxID, rules.RecentStart, rules.PreviousStart, rules.RecentEnd)
 	if err != nil {
 		return nil, err
 	}
-	inactiveDays := box.RiskInactiveDays
-	if inactiveDays <= 0 {
-		inactiveDays = 7
-	}
 	result := make([]domain.RetentionRadarItem, 0, len(metrics))
 	for _, metric := range metrics {
-		result = append(result, classify(metric, today, inactiveDays))
+		result = append(result, classify(metric, rules.RecentEnd, rules.AtRiskInactiveDays))
 	}
 	sort.SliceStable(result, func(i, j int) bool {
 		left, right := levelPriority(result[i].Level), levelPriority(result[j].Level)
@@ -55,6 +57,37 @@ func (s Service) ListRadar(ctx context.Context, boxID domain.ID) ([]domain.Reten
 		return strings.ToLower(result[i].StudentName) < strings.ToLower(result[j].StudentName)
 	})
 	return result, nil
+}
+
+func (s Service) Rules(ctx context.Context, boxID domain.ID) (*domain.RetentionRules, error) {
+	box, err := s.boxes.FindByID(ctx, boxID)
+	if err != nil {
+		return nil, err
+	}
+	rules := retentionRules(*box, s.now())
+	return &rules, nil
+}
+
+func retentionRules(box domain.Box, now time.Time) domain.RetentionRules {
+	now = now.UTC()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+	inactiveDays := box.RiskInactiveDays
+	if inactiveDays <= 0 {
+		inactiveDays = 7
+	}
+	recentStart := today.AddDate(0, 0, -27)
+	previousStart := recentStart.AddDate(0, 0, -28)
+	return domain.RetentionRules{
+		RecentStart: recentStart, RecentEnd: today,
+		PreviousStart: previousStart, PreviousEnd: recentStart.AddDate(0, 0, -1),
+		HistoryRequiredBefore: today.AddDate(0, 0, -retentionHistoryDays),
+		HistoryDays:           retentionHistoryDays, MinimumTotalCheckins: minimumRetentionCheckins,
+		MinimumPreviousCheckins: minimumPreviousCheckins,
+		AttentionInactiveDays:   int(math.Ceil(float64(inactiveDays) * 0.7)),
+		AtRiskInactiveDays:      inactiveDays, CriticalInactiveDays: max(14, inactiveDays*2),
+		AttentionDropPercentage: attentionDropPercentage,
+		AtRiskDropPercentage:    atRiskDropPercentage, CriticalDropPercentage: criticalDropPercentage,
+	}
 }
 
 func classify(metric domain.RetentionMetrics, today time.Time, inactiveDays int) domain.RetentionRadarItem {
@@ -68,11 +101,14 @@ func classify(metric domain.RetentionMetrics, today time.Time, inactiveDays int)
 		}
 		item.DaysSinceCheckin = &days
 	}
-	if metric.PreviousCheckins >= 4 {
+	if metric.PreviousCheckins >= minimumPreviousCheckins {
 		drop := math.Max(0, float64(metric.PreviousCheckins-metric.RecentCheckins)/float64(metric.PreviousCheckins)*100)
 		item.DropPercentage = &drop
 	}
-	if metric.FirstCheckin == nil || metric.FirstCheckin.After(today.AddDate(0, 0, -56)) {
+	if metric.TotalCheckins < minimumRetentionCheckins {
+		item.Level = domain.EngagementHistoryInsufficient
+		item.Signals = append(item.Signals, domain.EngagementSignal{Code: "routine_insufficient", Message: "Ainda não há 4 presenças para caracterizar uma rotina de frequência."})
+	} else if metric.FirstCheckin == nil || metric.FirstCheckin.After(today.AddDate(0, 0, -retentionHistoryDays)) {
 		item.Level = domain.EngagementHistoryInsufficient
 		item.Signals = append(item.Signals, domain.EngagementSignal{Code: "history_insufficient", Message: "Ainda não há 8 semanas de histórico para comparar a frequência."})
 	} else {
@@ -85,17 +121,17 @@ func classify(metric domain.RetentionMetrics, today time.Time, inactiveDays int)
 			drop = *item.DropPercentage
 		}
 		switch {
-		case days >= max(14, inactiveDays*2) || (metric.PreviousCheckins >= 4 && drop >= 75):
+		case days >= max(14, inactiveDays*2) || (metric.PreviousCheckins >= minimumPreviousCheckins && drop >= criticalDropPercentage):
 			item.Level = domain.EngagementCritical
-		case days >= inactiveDays || (metric.PreviousCheckins >= 4 && drop >= 50):
+		case days >= inactiveDays || (metric.PreviousCheckins >= minimumPreviousCheckins && drop >= atRiskDropPercentage):
 			item.Level = domain.EngagementAtRisk
-		case days >= int(math.Ceil(float64(inactiveDays)*0.7)) || (metric.PreviousCheckins >= 4 && drop >= 25):
+		case days >= int(math.Ceil(float64(inactiveDays)*0.7)) || (metric.PreviousCheckins >= minimumPreviousCheckins && drop >= attentionDropPercentage):
 			item.Level = domain.EngagementAttention
 		}
 		if days >= inactiveDays {
 			item.Signals = append(item.Signals, domain.EngagementSignal{Code: "inactive_days", Message: "Está há vários dias sem registrar presença."})
 		}
-		if item.DropPercentage != nil && drop >= 25 {
+		if item.DropPercentage != nil && drop >= attentionDropPercentage {
 			item.Signals = append(item.Signals, domain.EngagementSignal{Code: "frequency_drop", Message: "A frequência caiu em relação às quatro semanas anteriores."})
 		}
 	}
@@ -142,6 +178,11 @@ func recommendation(item domain.RetentionRadarItem) domain.RetentionRecommendati
 		return domain.RetentionRecommendation{Code: "check_context", Title: "Entender o contexto", Message: "Confirme com o aluno se existe alguma mudança de rotina antes que o afastamento aumente."}
 	}
 	if item.Level == domain.EngagementHistoryInsufficient {
+		for _, signal := range item.Signals {
+			if signal.Code == "routine_insufficient" {
+				return domain.RetentionRecommendation{Code: "observe_routine", Title: "Aguardar formação de rotina", Message: "São necessárias pelo menos quatro presenças antes de interpretar ausência como sinal de retenção."}
+			}
+		}
 		return domain.RetentionRecommendation{Code: "observe_history", Title: "Observar a formação do histórico", Message: "Ainda não há dados suficientes para comparar oito semanas de frequência."}
 	}
 	return domain.RetentionRecommendation{Code: "no_action", Title: "Nenhuma ação necessária", Message: "As regras atuais não identificaram mudança relevante de frequência."}
@@ -267,7 +308,11 @@ func (s Service) ListOnboardingJourney(ctx context.Context, boxID domain.ID) ([]
 	}
 	result := make([]domain.OnboardingJourneyItem, 0, len(metrics))
 	for _, metric := range metrics {
-		item := domain.OnboardingJourneyItem{OnboardingMetrics: metric}
+		confidence, eligible := onboardingStartConfidence(metric)
+		if !eligible {
+			continue
+		}
+		item := domain.OnboardingJourneyItem{OnboardingMetrics: metric, MembershipStartConfidence: confidence}
 		startedAt := time.Date(metric.MembershipStartedAt.Year(), metric.MembershipStartedAt.Month(), metric.MembershipStartedAt.Day(), 0, 0, 0, 0, time.UTC)
 		item.Day = int(today.Sub(startedAt).Hours()/24) + 1
 		if metric.LastCheckin != nil {
@@ -311,6 +356,16 @@ func (s Service) ListOnboardingJourney(ctx context.Context, boxID domain.ID) ([]
 		return result[i].Day > result[j].Day
 	})
 	return result, nil
+}
+
+func onboardingStartConfidence(metric domain.OnboardingMetrics) (domain.MembershipStartConfidence, bool) {
+	if metric.MembershipStartedSource == "manual" || metric.MembershipStartedSource == "integration" {
+		return domain.MembershipStartConfirmed, true
+	}
+	if metric.MembershipStartedSource == "first_checkin_inferred" && metric.ObservationDaysBeforeStart >= retentionHistoryDays {
+		return domain.MembershipStartProbable, true
+	}
+	return "", false
 }
 
 func onboardingPriority(status string) int {
