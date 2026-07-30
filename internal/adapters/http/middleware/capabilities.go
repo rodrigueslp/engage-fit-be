@@ -31,7 +31,7 @@ func FeatureGates(capabilities Capabilities) gin.HandlerFunc {
 			if !disabled && c.Request.Method == http.MethodPost && strings.HasSuffix(path, "/message-drafts") {
 				disabled = !capabilities.LLM
 			}
-		case strings.HasPrefix(path, "/api/v1/whatsapp") || strings.HasPrefix(path, "/api/v1/message-") || strings.Contains(path, "/whatsapp-templates") || strings.Contains(path, "/whatsapp-settings") || path == "/api/v1/messaging/usage":
+		case strings.HasPrefix(path, "/api/v1/whatsapp") || strings.HasPrefix(path, "/api/v1/message-") || strings.Contains(path, "/whatsapp-templates") || strings.Contains(path, "/whatsapp-settings") || strings.Contains(path, "/contact-activation") || path == "/api/v1/webhooks/twilio/whatsapp" || path == "/api/v1/messaging/usage":
 			disabled = !capabilities.Whatsapp
 		case strings.HasPrefix(path, "/api/v1/billing") || strings.HasPrefix(path, "/api/v1/admin/billing") || strings.HasPrefix(path, "/api/v1/webhooks/asaas"):
 			disabled = !capabilities.Billing

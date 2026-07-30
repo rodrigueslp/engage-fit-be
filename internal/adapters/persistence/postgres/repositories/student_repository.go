@@ -35,7 +35,7 @@ func (r StudentGormRepository) FindByExternalID(ctx context.Context, boxID domai
 func (r StudentGormRepository) List(ctx context.Context, boxID domain.ID, filters portrepo.StudentFilters) ([]domain.Student, error) {
 	query := r.db.WithContext(ctx).Model(&models.StudentModel{}).Where("box_id = ?", stringID(boxID))
 	if filters.ContactableOnly {
-		query = query.Where("contact_status <> ? AND anonymized_at IS NULL", string(domain.ContactStatusOptedOut))
+		query = query.Where("contact_status = ? AND anonymized_at IS NULL", string(domain.ContactStatusOptedIn))
 	}
 
 	if filters.Source != nil {

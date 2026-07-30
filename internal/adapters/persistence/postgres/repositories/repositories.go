@@ -45,8 +45,16 @@ type PrivacyGormRepository struct {
 	db *gorm.DB
 }
 
+type ContactActivationGormRepository struct {
+	db *gorm.DB
+}
+
 func NewPrivacyGormRepository(db *gorm.DB) PrivacyGormRepository {
 	return PrivacyGormRepository{db: db}
+}
+
+func NewContactActivationGormRepository(db *gorm.DB) ContactActivationGormRepository {
+	return ContactActivationGormRepository{db: db}
 }
 
 func NewStudentGormRepository(db *gorm.DB) StudentGormRepository {

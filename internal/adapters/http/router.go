@@ -16,6 +16,7 @@ import (
 	"boxengage/backend/internal/app/boxes"
 	"boxengage/backend/internal/app/campaigns"
 	"boxengage/backend/internal/app/checkiningestion"
+	"boxengage/backend/internal/app/contactactivation"
 	"boxengage/backend/internal/app/dashboard"
 	"boxengage/backend/internal/app/email"
 	"boxengage/backend/internal/app/imports"
@@ -54,6 +55,7 @@ type RouterDependencies struct {
 	ExportStudentDataUseCase       students.ExportStudentDataUseCase
 	UpdateContactPreferenceUseCase students.UpdateContactPreferenceUseCase
 	AnonymizeStudentUseCase        students.AnonymizeStudentUseCase
+	ContactActivationService       *contactactivation.Service
 
 	ListImportsUseCase      imports.ListImportsUseCase
 	GetImportUseCase        imports.GetImportUseCase
@@ -229,6 +231,13 @@ func NewRouter(deps RouterDependencies) *gin.Engine {
 		ingestionHandler := handlers.NewCheckinIngestionHandler(deps.CheckinIngestionService)
 		api.POST("/checkin-ingestion/:sourceId/imports", ingestionHandler.Ingest)
 	}
+	if deps.ContactActivationService != nil {
+		activationHandler := handlers.NewContactActivationHandler(deps.ContactActivationService)
+		activationLimiter := middleware.NewWindowRateLimiter(10, time.Minute)
+		api.GET("/public/contact-activation/:code", activationHandler.PublicConfig)
+		api.POST("/public/contact-activation/:code", middleware.JSONRateLimit(activationLimiter, "name"), activationHandler.Start)
+		api.POST("/webhooks/twilio/whatsapp", activationHandler.Inbound)
+	}
 
 	authenticated := api.Group("")
 	authenticated.Use(middleware.Auth(deps.TokenService, deps.UserRepository, deps.BoxRepository, deps.SessionConfig), middleware.CSRF(deps.SessionConfig))
@@ -314,6 +323,13 @@ func NewRouter(deps RouterDependencies) *gin.Engine {
 	protected.GET("/students/:id/privacy-export", studentsHandler.ExportData)
 	protected.PATCH("/students/:id/contact-preference", studentsHandler.UpdateContactPreference)
 	protected.POST("/students/:id/anonymize", studentsHandler.Anonymize)
+	if deps.ContactActivationService != nil {
+		activationHandler := handlers.NewContactActivationHandler(deps.ContactActivationService)
+		protected.GET("/contact-activations/summary", activationHandler.Summary)
+		protected.GET("/contact-activations", activationHandler.List)
+		protected.POST("/students/:id/contact-activation", activationHandler.StartForStudent)
+		protected.POST("/contact-activations/:id/resolve", activationHandler.Resolve)
+	}
 
 	importsHandler := handlers.NewImportsHandler(deps.ImportCheckinsUseCase, deps.ListImportsUseCase, deps.GetImportUseCase)
 	protected.POST("/imports", importsHandler.Create)

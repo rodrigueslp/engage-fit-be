@@ -12,11 +12,21 @@ type PrivacyCommunication struct {
 	CreatedAt    time.Time
 }
 
+type ContactConsentEvent struct {
+	Action         string
+	Source         string
+	Phone          string
+	ConsentVersion string
+	ConsentText    string
+	CreatedAt      time.Time
+}
+
 type StudentPrivacyExport struct {
 	Student                Student
 	Checkins               []Checkin
 	Progress               []CampaignProgress
 	Communications         []PrivacyCommunication
+	ContactConsents        []ContactConsentEvent
 	RetentionInterventions []RetentionIntervention
 	ExportedAt             time.Time
 }

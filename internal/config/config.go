@@ -53,6 +53,7 @@ type Config struct {
 	WhatsappPlatformAlmostThereSID    string
 	WhatsappPlatformGoalReachedSID    string
 	WhatsappPlatformWeMissYouSID      string
+	TwilioInboundWebhookURL           string
 	EmailAllowRealSend                bool
 	EmailDevRecipientEmail            string
 	AutomationWorkerEnabled           bool
@@ -132,6 +133,7 @@ func Load() Config {
 		WhatsappPlatformAlmostThereSID:    getEnv("WHATSAPP_PLATFORM_TWILIO_CONTENT_SID_ALMOST_THERE", ""),
 		WhatsappPlatformGoalReachedSID:    getEnv("WHATSAPP_PLATFORM_TWILIO_CONTENT_SID_GOAL_REACHED", ""),
 		WhatsappPlatformWeMissYouSID:      getEnv("WHATSAPP_PLATFORM_TWILIO_CONTENT_SID_WE_MISS_YOU", ""),
+		TwilioInboundWebhookURL:           getEnv("TWILIO_INBOUND_WEBHOOK_URL", ""),
 		EmailAllowRealSend:                getEnv("EMAIL_ALLOW_REAL_SEND", "false") == "true",
 		EmailDevRecipientEmail:            getEnv("EMAIL_DEV_RECIPIENT_EMAIL", ""),
 		AutomationWorkerEnabled:           getEnv("AUTOMATION_WORKER_ENABLED", "false") == "true",
@@ -223,6 +225,9 @@ func (c Config) Validate() error {
 	}
 	if c.WhatsappAllowRealSend && !c.FeatureWhatsappEnabled {
 		return errors.New("WHATSAPP_ALLOW_REAL_SEND exige FEATURE_WHATSAPP_ENABLED")
+	}
+	if c.AppEnv == "production" && c.TwilioInboundWebhookURL != "" && !strings.HasPrefix(c.TwilioInboundWebhookURL, "https://") {
+		return errors.New("TWILIO_INBOUND_WEBHOOK_URL deve usar HTTPS em production")
 	}
 	if c.EmailAllowRealSend && !c.FeatureEmailEnabled {
 		return errors.New("EMAIL_ALLOW_REAL_SEND exige FEATURE_EMAIL_ENABLED")

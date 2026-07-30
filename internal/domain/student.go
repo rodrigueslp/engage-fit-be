@@ -31,5 +31,5 @@ type Student struct {
 }
 
 func (s Student) CanContact() bool {
-	return s.AnonymizedAt == nil && s.ContactStatus != ContactStatusOptedOut
+	return s.AnonymizedAt == nil && s.ContactStatus == ContactStatusOptedIn
 }

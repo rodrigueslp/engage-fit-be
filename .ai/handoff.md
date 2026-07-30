@@ -4,7 +4,39 @@ Manual canônico de arquitetura e negócio: `docs/system-design.md`.
 
 Guia operacional consolidado: `docs/application-readiness-guide.md`.
 
-Atualizado em: 2026-07-30 (importação real Alados, identidade TotalPass e retenção explicável)
+Atualizado em: 2026-07-30 (ativação consentida no WhatsApp sem telefone nas planilhas)
+
+## Checkpoint de ativação consentida no WhatsApp em 2026-07-30
+
+- Wellhub e TotalPass não fornecem telefone nos arquivos reais. O produto agora
+  trata as planilhas como fonte de frequência e cria uma base de comunicação
+  própria por adesão do aluno.
+- A migration `041_create_contact_activations.sql` adiciona código público por
+  academia, pedidos temporários de ativação e trilha versionada de
+  consentimento/revogação.
+- Nova página pública `#/activate/:code`: o aluno informa nome, plataforma e
+  uma presença recente, aceita o texto explícito e segue para o WhatsApp sem
+  digitar telefone.
+- O número só é persistido depois que o aluno envia a mensagem. O webhook
+  `POST /api/v1/webhooks/twilio/whatsapp` valida `X-Twilio-Signature` com a
+  credencial efetiva do box antes de qualquer alteração.
+- Correspondência única por box, origem, nome normalizado e data confirma
+  automaticamente. Casos sem correspondência única entram em `needs_review`.
+- A área `Ativação WhatsApp` mostra cobertura, QR público, convite individual
+  para uso na recepção, fila de revisão e histórico recente.
+- `SAIR`, `PARAR`, `CANCELAR` e `STOP` registram revogação e marcam o aluno
+  como `opted_out`.
+- Audiências de comunicação agora exigem `opted_in`; `unknown` deixou de ser
+  tecnicamente contatável. O seed demo autoriza explicitamente seus alunos.
+- Exportação e anonimização LGPD incluem a nova trilha. O comando de retenção
+  remove ativações e eventos após o prazo de auditoria configurado.
+- Configuração nova:
+  `TWILIO_INBOUND_WEBHOOK_URL=https://www.engagefit.com.br/api/v1/webhooks/twilio/whatsapp`.
+  O valor deve ser idêntico à URL cadastrada no sender Twilio para a assinatura
+  validar. A configuração e o webhook ainda não foram aplicados em produção.
+- Validações concluídas até este checkpoint: 41 migrations em PostgreSQL vazio,
+  idempotência local, integração PostgreSQL do vínculo/consentimento,
+  assinatura Twilio unitária, `go test ./...`, TypeScript e build Vite.
 
 ## Checkpoint de importação real e refinamento da retenção em 2026-07-30
 

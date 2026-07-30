@@ -42,8 +42,18 @@ type StudentPrivacyExportResponse struct {
 	Checkins               []CheckinResponse               `json:"checkins"`
 	Progress               []CampaignProgressResponse      `json:"campaign_progress"`
 	Communications         []PrivacyCommunicationResponse  `json:"communications"`
+	ContactConsents        []ContactConsentResponse        `json:"contact_consents"`
 	RetentionInterventions []RetentionInterventionResponse `json:"retention_interventions"`
 	ExportedAt             string                          `json:"exported_at"`
+}
+
+type ContactConsentResponse struct {
+	Action         string `json:"action"`
+	Source         string `json:"source"`
+	Phone          string `json:"phone"`
+	ConsentVersion string `json:"consent_version"`
+	ConsentText    string `json:"consent_text"`
+	CreatedAt      string `json:"created_at"`
 }
 
 type UpdateStudentRiskStatusRequest struct {

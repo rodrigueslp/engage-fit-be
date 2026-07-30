@@ -1,0 +1,361 @@
+package repositories
+
+import (
+	"context"
+	"errors"
+	"strings"
+	"time"
+
+	"boxengage/backend/internal/domain"
+	"github.com/google/uuid"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
+)
+
+type contactActivationRow struct {
+	ID                string
+	BoxID             string
+	StudentID         *string
+	StudentName       string `gorm:"->"`
+	ClaimedName       string
+	Source            string
+	RecentCheckinDate *time.Time
+	SenderPhone       string
+	Phone             string
+	TokenHash         string
+	Status            string
+	ConsentVersion    string
+	ConsentText       string
+	ConsentedAt       *time.Time
+	ExpiresAt         time.Time
+	ResolvedAt        *time.Time
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+}
+
+func (r ContactActivationGormRepository) FindPublicBox(ctx context.Context, activationCode string) (domain.ID, string, error) {
+	var row struct {
+		ID   string
+		Name string
+	}
+	err := r.db.WithContext(ctx).Table("boxes").
+		Select("id, name").
+		Where("contact_activation_code::text = ? AND status = ?", strings.TrimSpace(activationCode), string(domain.BoxStatusActive)).
+		Take(&row).Error
+	return domain.ID(row.ID), row.Name, err
+}
+
+func (r ContactActivationGormRepository) ActivationCode(ctx context.Context, boxID domain.ID) (string, error) {
+	var code string
+	err := r.db.WithContext(ctx).Table("boxes").
+		Select("contact_activation_code::text").
+		Where("id = ?", stringID(boxID)).
+		Scan(&code).Error
+	if err == nil && code == "" {
+		err = gorm.ErrRecordNotFound
+	}
+	return code, err
+}
+
+func (r ContactActivationGormRepository) FindMatchingStudents(ctx context.Context, boxID domain.ID, source domain.Source, name string, recentCheckinDate time.Time) ([]domain.Student, error) {
+	var rows []struct {
+		ID string
+	}
+	normalized := normalizeActivationName(name)
+	err := r.db.WithContext(ctx).Table("students").
+		Select("students.id").
+		Joins("JOIN checkins ON checkins.student_id = students.id AND checkins.box_id = students.box_id").
+		Where("students.box_id = ? AND students.source = ? AND students.anonymized_at IS NULL", stringID(boxID), string(source)).
+		Where("LOWER(REGEXP_REPLACE(BTRIM(students.name), '[[:space:]]+', ' ', 'g')) = ?", normalized).
+		Where("checkins.checkin_date = ?", recentCheckinDate.Format("2006-01-02")).
+		Group("students.id").
+		Find(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	result := make([]domain.Student, 0, len(rows))
+	for _, row := range rows {
+		student, findErr := NewStudentGormRepository(r.db).FindByID(ctx, boxID, domain.ID(row.ID))
+		if findErr != nil {
+			return nil, findErr
+		}
+		result = append(result, *student)
+	}
+	return result, nil
+}
+
+func (r ContactActivationGormRepository) CreateActivation(ctx context.Context, activation *domain.ContactActivationRequest) error {
+	if activation.ID == "" {
+		activation.ID = domain.ID(uuid.NewString())
+	}
+	row := activationToRow(*activation)
+	return r.db.WithContext(ctx).Table("contact_activation_requests").Create(&row).Error
+}
+
+func (r ContactActivationGormRepository) FindActivationByTokenHash(ctx context.Context, tokenHash string) (*domain.ContactActivationRequest, error) {
+	var row contactActivationRow
+	err := activationQuery(r.db.WithContext(ctx)).
+		Where("contact_activation_requests.token_hash = ?", tokenHash).
+		Take(&row).Error
+	if err != nil {
+		return nil, err
+	}
+	activation := activationToDomain(row)
+	return &activation, nil
+}
+
+func (r ContactActivationGormRepository) FindActivationsByPhoneAndSender(ctx context.Context, phone, senderPhone string) ([]domain.ContactActivationRequest, error) {
+	var rows []contactActivationRow
+	err := activationQuery(r.db.WithContext(ctx)).
+		Where("contact_activation_requests.phone = ? AND contact_activation_requests.sender_phone = ?", phone, senderPhone).
+		Where("contact_activation_requests.status IN ?", []string{string(domain.ContactActivationConfirmed), string(domain.ContactActivationNeedsReview), string(domain.ContactActivationCancelled)}).
+		Find(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	result := make([]domain.ContactActivationRequest, 0, len(rows))
+	for _, row := range rows {
+		result = append(result, activationToDomain(row))
+	}
+	return result, nil
+}
+
+func (r ContactActivationGormRepository) ConfirmActivation(ctx context.Context, activationID domain.ID, phone string, confirmedAt time.Time) (*domain.ContactActivationRequest, error) {
+	var result domain.ContactActivationRequest
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var row contactActivationRow
+		if err := activationQuery(tx).Clauses(activationLock()).Where("contact_activation_requests.id = ?", stringID(activationID)).Take(&row).Error; err != nil {
+			return err
+		}
+		if row.Status != string(domain.ContactActivationAwaitingMessage) {
+			result = activationToDomain(row)
+			return nil
+		}
+		status := domain.ContactActivationNeedsReview
+		if row.StudentID != nil {
+			status = domain.ContactActivationConfirmed
+			var phoneConflicts int64
+			if err := tx.Table("students").
+				Where("box_id = ? AND id <> ? AND phone = ? AND anonymized_at IS NULL", row.BoxID, *row.StudentID, phone).
+				Count(&phoneConflicts).Error; err != nil {
+				return err
+			}
+			if phoneConflicts > 0 {
+				status = domain.ContactActivationNeedsReview
+			}
+		}
+		updates := map[string]any{
+			"phone":        phone,
+			"status":       string(status),
+			"consented_at": confirmedAt,
+			"updated_at":   confirmedAt,
+		}
+		if status == domain.ContactActivationConfirmed {
+			updates["resolved_at"] = confirmedAt
+		}
+		if err := tx.Table("contact_activation_requests").Where("id = ?", row.ID).Updates(updates).Error; err != nil {
+			return err
+		}
+		if row.StudentID != nil {
+			if err := activateStudent(tx, row.BoxID, *row.StudentID, phone, confirmedAt); err != nil {
+				return err
+			}
+		}
+		if err := createConsentEvent(tx, row, phone, "opted_in", "whatsapp_self_activation", confirmedAt); err != nil {
+			return err
+		}
+		row.Phone = phone
+		row.Status = string(status)
+		row.ConsentedAt = &confirmedAt
+		result = activationToDomain(row)
+		return nil
+	})
+	return &result, err
+}
+
+func (r ContactActivationGormRepository) OptOutActivations(ctx context.Context, activationIDs []domain.ID, phone string, optedOutAt time.Time) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		for _, activationID := range activationIDs {
+			var row contactActivationRow
+			if err := activationQuery(tx).Clauses(activationLock()).Where("contact_activation_requests.id = ?", stringID(activationID)).Take(&row).Error; err != nil {
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					continue
+				}
+				return err
+			}
+			if err := tx.Table("contact_activation_requests").Where("id = ?", row.ID).Updates(map[string]any{
+				"status":     string(domain.ContactActivationCancelled),
+				"updated_at": optedOutAt,
+			}).Error; err != nil {
+				return err
+			}
+			if row.StudentID != nil {
+				if err := tx.Table("students").Where("box_id = ? AND id = ?", row.BoxID, *row.StudentID).Updates(map[string]any{
+					"contact_status":            string(domain.ContactStatusOptedOut),
+					"contact_status_source":     "whatsapp_keyword",
+					"contact_status_updated_at": optedOutAt,
+					"updated_at":                optedOutAt,
+				}).Error; err != nil {
+					return err
+				}
+			}
+			if err := createConsentEvent(tx, row, phone, "opted_out", "whatsapp_keyword", optedOutAt); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+func (r ContactActivationGormRepository) ListActivations(ctx context.Context, boxID domain.ID) ([]domain.ContactActivationRequest, error) {
+	var rows []contactActivationRow
+	err := activationQuery(r.db.WithContext(ctx)).
+		Where("contact_activation_requests.box_id = ?", stringID(boxID)).
+		Order("contact_activation_requests.created_at DESC").
+		Limit(200).
+		Find(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	result := make([]domain.ContactActivationRequest, 0, len(rows))
+	for _, row := range rows {
+		result = append(result, activationToDomain(row))
+	}
+	return result, nil
+}
+
+func (r ContactActivationGormRepository) ResolveActivation(ctx context.Context, boxID, activationID, studentID domain.ID, resolvedAt time.Time) (*domain.ContactActivationRequest, error) {
+	var result domain.ContactActivationRequest
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var row contactActivationRow
+		if err := activationQuery(tx).Clauses(activationLock()).
+			Where("contact_activation_requests.box_id = ? AND contact_activation_requests.id = ?", stringID(boxID), stringID(activationID)).
+			Take(&row).Error; err != nil {
+			return err
+		}
+		var count int64
+		if err := tx.Table("students").Where("box_id = ? AND id = ? AND source = ? AND anonymized_at IS NULL", stringID(boxID), stringID(studentID), row.Source).Count(&count).Error; err != nil {
+			return err
+		}
+		if count != 1 {
+			return gorm.ErrRecordNotFound
+		}
+		status := domain.ContactActivationAwaitingMessage
+		if row.Phone != "" {
+			status = domain.ContactActivationConfirmed
+			if err := activateStudent(tx, row.BoxID, stringID(studentID), row.Phone, resolvedAt); err != nil {
+				return err
+			}
+		}
+		if err := tx.Table("contact_activation_requests").Where("id = ?", row.ID).Updates(map[string]any{
+			"student_id":  stringID(studentID),
+			"status":      string(status),
+			"resolved_at": resolvedAt,
+			"updated_at":  resolvedAt,
+		}).Error; err != nil {
+			return err
+		}
+		if row.Phone != "" {
+			if err := tx.Table("contact_consent_events").
+				Where("activation_request_id = ? AND student_id IS NULL", row.ID).
+				Update("student_id", stringID(studentID)).Error; err != nil {
+				return err
+			}
+		}
+		row.StudentID = pointerString(stringID(studentID))
+		row.Status = string(status)
+		row.ResolvedAt = &resolvedAt
+		result = activationToDomain(row)
+		return nil
+	})
+	return &result, err
+}
+
+func (r ContactActivationGormRepository) Summary(ctx context.Context, boxID domain.ID) (domain.ContactActivationSummary, error) {
+	var row struct {
+		TotalStudents   int64
+		WithPhone       int64
+		OptedIn         int64
+		OptedOut        int64
+		PendingReview   int64
+		AwaitingMessage int64
+	}
+	err := r.db.WithContext(ctx).Raw(`
+		SELECT
+			COUNT(*) FILTER (WHERE s.anonymized_at IS NULL) AS total_students,
+			COUNT(*) FILTER (WHERE s.anonymized_at IS NULL AND s.phone <> '') AS with_phone,
+			COUNT(*) FILTER (WHERE s.anonymized_at IS NULL AND s.contact_status = 'opted_in') AS opted_in,
+			COUNT(*) FILTER (WHERE s.anonymized_at IS NULL AND s.contact_status = 'opted_out') AS opted_out,
+			(SELECT COUNT(*) FROM contact_activation_requests car WHERE car.box_id = ? AND car.status = 'needs_review') AS pending_review,
+			(SELECT COUNT(*) FROM contact_activation_requests car WHERE car.box_id = ? AND car.status = 'awaiting_message' AND car.expires_at > NOW()) AS awaiting_message
+		FROM students s
+		WHERE s.box_id = ?
+	`, stringID(boxID), stringID(boxID), stringID(boxID)).Scan(&row).Error
+	return domain.ContactActivationSummary{
+		TotalStudents: row.TotalStudents, WithPhone: row.WithPhone, OptedIn: row.OptedIn,
+		OptedOut: row.OptedOut, PendingReview: row.PendingReview, AwaitingMessage: row.AwaitingMessage,
+	}, err
+}
+
+func activationQuery(db *gorm.DB) *gorm.DB {
+	return db.Table("contact_activation_requests").
+		Select("contact_activation_requests.*, COALESCE(students.name, '') AS student_name").
+		Joins("LEFT JOIN students ON students.id = contact_activation_requests.student_id")
+}
+
+func activationLock() clause.Locking {
+	return clause.Locking{Strength: "UPDATE", Table: clause.Table{Name: "contact_activation_requests"}}
+}
+
+func activationToRow(value domain.ContactActivationRequest) contactActivationRow {
+	var studentID *string
+	if value.StudentID != "" {
+		studentID = pointerString(stringID(value.StudentID))
+	}
+	return contactActivationRow{
+		ID: stringID(value.ID), BoxID: stringID(value.BoxID), StudentID: studentID,
+		ClaimedName: value.ClaimedName, Source: string(value.Source), RecentCheckinDate: value.RecentCheckinDate,
+		SenderPhone: value.SenderPhone, Phone: value.Phone, TokenHash: value.TokenHash, Status: string(value.Status),
+		ConsentVersion: value.ConsentVersion, ConsentText: value.ConsentText, ConsentedAt: value.ConsentedAt,
+		ExpiresAt: value.ExpiresAt, ResolvedAt: value.ResolvedAt, CreatedAt: value.CreatedAt, UpdatedAt: value.UpdatedAt,
+	}
+}
+
+func activationToDomain(row contactActivationRow) domain.ContactActivationRequest {
+	studentID := domain.ID("")
+	if row.StudentID != nil {
+		studentID = domain.ID(*row.StudentID)
+	}
+	return domain.ContactActivationRequest{
+		ID: domain.ID(row.ID), BoxID: domain.ID(row.BoxID), StudentID: studentID, StudentName: row.StudentName,
+		ClaimedName: row.ClaimedName, Source: domain.Source(row.Source), RecentCheckinDate: row.RecentCheckinDate,
+		SenderPhone: row.SenderPhone, Phone: row.Phone, TokenHash: row.TokenHash,
+		Status: domain.ContactActivationStatus(row.Status), ConsentVersion: row.ConsentVersion,
+		ConsentText: row.ConsentText, ConsentedAt: row.ConsentedAt, ExpiresAt: row.ExpiresAt,
+		ResolvedAt: row.ResolvedAt, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
+	}
+}
+
+func activateStudent(tx *gorm.DB, boxID, studentID, phone string, at time.Time) error {
+	return tx.Table("students").Where("box_id = ? AND id = ? AND anonymized_at IS NULL", boxID, studentID).Updates(map[string]any{
+		"phone":                     phone,
+		"contact_status":            string(domain.ContactStatusOptedIn),
+		"contact_status_source":     "whatsapp_self_activation",
+		"contact_status_updated_at": at,
+		"updated_at":                at,
+	}).Error
+}
+
+func createConsentEvent(tx *gorm.DB, row contactActivationRow, phone, action, source string, at time.Time) error {
+	return tx.Table("contact_consent_events").Create(map[string]any{
+		"id": uuid.NewString(), "box_id": row.BoxID, "student_id": row.StudentID,
+		"activation_request_id": row.ID, "phone": phone, "action": action, "source": source,
+		"consent_version": row.ConsentVersion, "consent_text": row.ConsentText, "created_at": at,
+	}).Error
+}
+
+func normalizeActivationName(value string) string {
+	return strings.ToLower(strings.Join(strings.Fields(strings.TrimSpace(value)), " "))
+}
+
+func pointerString(value string) *string { return &value }

@@ -48,6 +48,7 @@ func TestProductionConfigValidation(t *testing.T) {
 		{name: "enabled otel without service name", mutate: func(cfg *Config) { cfg.OTelEnabled = true }},
 		{name: "missing encryption keyring", mutate: func(cfg *Config) { cfg.DataEncryptionKeys = "" }},
 		{name: "insecure production cookie", mutate: func(cfg *Config) { cfg.AuthCookieSecure = false }},
+		{name: "insecure Twilio webhook", mutate: func(cfg *Config) { cfg.TwilioInboundWebhookURL = "http://example.com/webhook" }},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

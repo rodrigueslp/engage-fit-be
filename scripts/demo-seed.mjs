@@ -42,6 +42,7 @@ async function main() {
   await createReward(token, secondaryCampaign.id, 'Garrafa EngageFit', 'Brinde demo da segunda campanha ativa.', 50);
 
   await importCheckins(token, 'totalpass', totalpassCsv(), totalPassFilePath);
+  await authorizeDemoStudents(token);
   await recalculateCampaign(token, campaign.id);
   await recalculateCampaign(token, secondaryCampaign.id);
   await configureEmailMock(token);
@@ -172,6 +173,20 @@ async function importCheckins(token, source, csv, filePath) {
     body: formData,
   });
   await assertResponse(response, `importar check-ins ${source}`);
+}
+
+async function authorizeDemoStudents(token) {
+  const response = await authedFetch(token, '/api/v1/students');
+  await assertResponse(response, 'listar alunos demo para autorização');
+  const students = await response.json();
+  for (const student of students) {
+    if (!demoStudents.some((demo) => demo.name === student.name)) continue;
+    const update = await authedFetch(token, `/api/v1/students/${student.id}/contact-preference`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status: 'opted_in', source: 'demo_seed' }),
+    });
+    await assertResponse(update, `autorizar contato demo de ${student.name}`);
+  }
 }
 
 async function recalculateCampaign(token, campaignId) {

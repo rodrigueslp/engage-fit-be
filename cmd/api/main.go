@@ -28,6 +28,7 @@ import (
 	"boxengage/backend/internal/app/boxes"
 	"boxengage/backend/internal/app/campaigns"
 	"boxengage/backend/internal/app/checkiningestion"
+	"boxengage/backend/internal/app/contactactivation"
 	"boxengage/backend/internal/app/dashboard"
 	emailapp "boxengage/backend/internal/app/email"
 	"boxengage/backend/internal/app/imports"
@@ -122,6 +123,7 @@ func main() {
 	teamRepository := pgrepo.NewTeamGormRepository(db)
 	studentRepository := pgrepo.NewStudentGormRepository(db)
 	privacyRepository := pgrepo.NewPrivacyGormRepository(db)
+	contactActivationRepository := pgrepo.NewContactActivationGormRepository(db)
 	checkinRepository := pgrepo.NewCheckinGormRepository(db)
 	retentionRepository := pgrepo.NewRetentionGormRepository(db)
 	importRepository := pgrepo.NewImportHistoryGormRepository(db)
@@ -161,6 +163,7 @@ func main() {
 		},
 	}
 	whatsappSettingsResolver := whatsappapp.NewSettingsResolver(whatsappSettingsRepository, platformWhatsappSettings)
+	contactActivationService := contactactivation.NewService(contactActivationRepository, studentRepository, whatsappSettingsResolver, cfg.TwilioInboundWebhookURL)
 	messagingGovernanceService := messagingapp.NewGovernanceService(messagingGovernanceRepository)
 	messagingAdminUseCases := platformadmin.NewMessagingAdminUseCases(boxRepository, whatsappSettingsResolver, messagingGovernanceRepository)
 	tenantMessagingUsageUseCase := platformadmin.NewGetTenantMessagingUsageUseCase(messagingGovernanceRepository)
@@ -301,6 +304,7 @@ func main() {
 		ExportStudentDataUseCase:       exportStudentDataUseCase,
 		UpdateContactPreferenceUseCase: updateContactPreferenceUseCase,
 		AnonymizeStudentUseCase:        anonymizeStudentUseCase,
+		ContactActivationService:       contactActivationService,
 
 		ListImportsUseCase:      listImportsUseCase,
 		GetImportUseCase:        getImportUseCase,

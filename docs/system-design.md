@@ -323,7 +323,7 @@ erDiagram
 | Ingestão | `students`, `import_histories`, `checkins`, `checkin_ingestion_sources`, `checkin_ingestion_batches` | identidade importada, frequência e entradas recorrentes idempotentes |
 | Campanhas | `campaigns`, `campaign_goals`, `campaign_progresses` | período, meta por origem e snapshot de progresso |
 | Brindes | `rewards`, `reward_deliveries` | catálogo e entrega por aluno elegível |
-| WhatsApp | `whatsapp_settings`, `message_templates`, `message_campaigns`, `message_recipients` | configuração, catálogo oficial, disparos e auditoria de destinatários |
+| WhatsApp | `whatsapp_settings`, `message_templates`, `message_campaigns`, `message_recipients`, `contact_activation_requests`, `contact_consent_events` | configuração, ativação consentida, catálogo oficial, disparos e auditoria |
 | E-mail | `email_settings`, `email_templates`, `email_campaigns`, `email_recipients` | configuração SMTP e campanhas |
 | Automação | `automation_schedules`, `automation_runs` | agendas e execuções idempotentes |
 | Retenção V2 | `retention_interventions` | acompanhamento humano associado aos sinais de mudança de frequência |
@@ -569,7 +569,8 @@ Públicos disponíveis:
 | `achieved` | snapshot `achieved=true` |
 | `inactive` | sem frequência recente, sujeito às regras de risco do canal |
 
-`CanContact()` exige que o aluno não esteja anonimizado e não esteja `opted_out`. O estado `unknown` ainda permite contato tecnicamente; a base legal dessa escolha precisa ser definida operacional/juridicamente.
+`CanContact()` exige que o aluno não esteja anonimizado e esteja explicitamente
+`opted_in`. `unknown` e `opted_out` não entram em audiências de comunicação.
 
 ### 13.1 WhatsApp oficial
 
@@ -644,7 +645,33 @@ Os custos são estimativas internas na moeda configurada; não há conciliação
 
 Hoje essa governança cobre campanhas WhatsApp e drafts de Treino do dia. Campanhas de e-mail não reservam esses limites.
 
-### 13.4 E-mail
+### 13.4 Ativação consentida no WhatsApp
+
+As planilhas de Wellhub e TotalPass podem não fornecer telefone. A ativação
+separa a identidade comportamental importada do canal de comunicação:
+
+1. cada box possui `contact_activation_code` aleatório;
+2. o aluno abre `#/activate/:code`, informa nome, origem e uma presença recente;
+3. a API procura correspondência exata por box, origem, nome normalizado e data;
+4. um token aleatório de 30 minutos é persistido somente como SHA-256;
+5. o aluno abre `wa.me` e envia a mensagem pronta;
+6. o webhook valida `X-Twilio-Signature` com o Auth Token da conexão efetiva;
+7. somente então o telefone inbound é gravado e o aluno vira `opted_in`;
+8. ausência ou ambiguidade de correspondência produz `needs_review`, resolvido
+   pelo owner sem expor a lista de alunos na página pública.
+
+O modo assistido gera um QR já ligado a um aluno selecionado pelo owner. A
+confirmação é idempotente sob lock de linha. `SAIR`, `PARAR`, `CANCELAR` e
+`STOP` registram novo evento e mudam o aluno para `opted_out`.
+
+`contact_consent_events` preserva versão e texto apresentados, canal, telefone
+e horário. Esses eventos entram na exportação LGPD; anonimização limpa telefone
+e nome reivindicado. `TWILIO_INBOUND_WEBHOOK_URL` deve conter exatamente a URL
+pública configurada no sender, pois ela participa da validação da assinatura.
+O fluxo exige Twilio habilitado e remetente numérico; Messaging Service SID
+sozinho não fornece o destino necessário ao link `wa.me`.
+
+### 13.5 E-mail
 
 E-mail possui settings SMTP/mock, templates editáveis, campanhas, preview e recipients.
 
@@ -655,7 +682,7 @@ E-mail possui settings SMTP/mock, templates editáveis, campanhas, preview e rec
 - cada recipient persiste pending e depois sent/failed;
 - não há fila, retry, MIME HTML ou governança de orçamento.
 
-### 13.5 Treino do dia e LLM
+### 13.6 Treino do dia e LLM
 
 Fluxo:
 
@@ -773,6 +800,7 @@ O JSON contém:
 - check-ins;
 - progressos;
 - histórico WhatsApp, e-mail e Treino;
+- eventos de consentimento e revogação de contato;
 - horário de exportação.
 
 A exportação também gera `privacy_audit_events`.
@@ -789,6 +817,7 @@ Ela:
 - limpa e-mail, telefone e external ID original;
 - pausa risco e marca opt-out;
 - limpa destino e erro dos recipients históricos;
+- limpa telefone e nome reivindicado nas ativações e eventos de consentimento;
 - preserva check-ins, progressos e métricas sem identidade direta;
 - grava auditoria.
 
@@ -807,6 +836,7 @@ Padrões:
 | runs de automação | 180 |
 | importações/check-ins | 730 |
 | auditoria de privacidade | 1.825 |
+| ativações e consentimentos | 1.825 |
 
 Supressões não expiram automaticamente. A deleção ocorre em transação. Import history possui cascade para check-ins.
 
@@ -934,7 +964,7 @@ A lista executável completa está em `.env.example`. Os grupos conceituais são
 | Sessão | `JWT_SECRET`, `AUTH_COOKIE_*`, `CORS_ALLOWED_ORIGINS` | login quebrado, CSRF ou cookie inseguro |
 | Administração/setup | `PLATFORM_ADMIN_*`, `OWNER_SETUP_*` | conta privilegiada ou onboarding exposto |
 | Capabilities | `FEATURE_*` | superfície de produto disponível |
-| WhatsApp | `WHATSAPP_PLATFORM_*`, `WHATSAPP_ALLOW_REAL_SEND`, allowlist dev | efeito externo e credenciais |
+| WhatsApp | `WHATSAPP_PLATFORM_*`, `WHATSAPP_ALLOW_REAL_SEND`, `TWILIO_INBOUND_WEBHOOK_URL`, allowlist dev | efeito externo, assinatura inbound e credenciais |
 | E-mail | `EMAIL_ALLOW_REAL_SEND`, destinatário dev + settings no DB | efeito externo |
 | Automação | `AUTOMATION_WORKER_*`, stale/catch-up | duplicidade, perda ou horário errado |
 | OpenAI | `OPENAI_API_KEY`, model, timeout | custo e envio de conteúdo ao provedor |
@@ -959,6 +989,8 @@ O contrato definitivo está em `internal/adapters/http/router.go`. Mapa resumido
 | `/api/v1/team/coaches*` | OWNER | criação, desativação e senha de coaches |
 | `/api/v1/campaigns`, `/rewards` | OWNER | campanha, meta, progresso e brinde |
 | `/api/v1/message-*`, `/whatsapp` | OWNER + capability | comunicação WhatsApp |
+| `/api/v1/public/contact-activation*`, `/webhooks/twilio/whatsapp` | público + capability | início e confirmação assinada da ativação |
+| `/api/v1/contact-activations*` | OWNER + capability | cobertura, fila e vínculo assistido |
 | `/api/v1/email*` | OWNER + capability | e-mail |
 | `/api/v1/workouts*` | OWNER + capability | treino/LLM/WhatsApp |
 | `/api/v1/automation*` | OWNER + capability | schedules e runs |
@@ -1084,6 +1116,7 @@ Hoje há lógica de audiência semelhante em três packages. Mudanças devem ser
 | at-most-once em automação | evita duplicar efeito incerto | pode exigir recuperação manual |
 | policies/buckets com lock | limita concorrência sem Redis | transações mais serializadas |
 | catálogo WhatsApp fixo | consistência e aprovação oficial | menos liberdade de template |
+| telefone obtido por ativação inbound | número válido, opt-in auditável e menor digitação | depende da ação inicial do aluno |
 | worker no processo da API | operação simples | acoplamento de recursos e deploy |
 | rate limit em memória | zero infraestrutura extra | não é global entre réplicas |
 | sem RLS | código/repositories mais simples | isolamento depende de disciplina/testes |
@@ -1244,6 +1277,7 @@ Você domina o núcleo quando consegue explicar:
 | Frequência/check-ins | `internal/adapters/persistence/postgres/repositories/checkin_repository.go`, `engage-fit-fe/src/pages/checkins/CheckinsPage.tsx` |
 | Risco/dashboard | `internal/app/dashboard/dashboard_usecases.go` |
 | WhatsApp/audiência | `internal/app/messages/message_usecases.go` |
+| Ativação WhatsApp | `internal/app/contactactivation/service.go`, `contact_activation_repository.go` |
 | Governança | `internal/adapters/persistence/postgres/repositories/messaging_governance_repository.go` |
 | Automação | `internal/app/automation` |
 | Billing/Asaas | `internal/app/billing`, `internal/adapters/billing`, `docs/asaas-billing-runbook.md` |

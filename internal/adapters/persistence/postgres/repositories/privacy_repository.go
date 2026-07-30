@@ -22,6 +22,15 @@ type privacyCommunicationRow struct {
 	CreatedAt    time.Time
 }
 
+type contactConsentRow struct {
+	Action         string
+	Source         string
+	Phone          string
+	ConsentVersion string
+	ConsentText    string
+	CreatedAt      time.Time
+}
+
 func (r PrivacyGormRepository) ExportStudent(ctx context.Context, boxID, studentID domain.ID) (*domain.StudentPrivacyExport, error) {
 	studentRepository := NewStudentGormRepository(r.db)
 	student, err := studentRepository.FindByID(ctx, boxID, studentID)
@@ -65,7 +74,22 @@ func (r PrivacyGormRepository) ExportStudent(ctx context.Context, boxID, student
 	if err != nil {
 		return nil, err
 	}
-	return &domain.StudentPrivacyExport{Student: *student, Checkins: checkins, Progress: progress, Communications: communications, RetentionInterventions: interventions, ExportedAt: time.Now().UTC()}, nil
+	var consentRows []contactConsentRow
+	if err := r.db.WithContext(ctx).Table("contact_consent_events").
+		Select("action, source, phone, consent_version, consent_text, created_at").
+		Where("box_id = ? AND student_id = ?", stringID(boxID), stringID(studentID)).
+		Order("created_at DESC").
+		Find(&consentRows).Error; err != nil {
+		return nil, err
+	}
+	consents := make([]domain.ContactConsentEvent, 0, len(consentRows))
+	for _, row := range consentRows {
+		consents = append(consents, domain.ContactConsentEvent{
+			Action: row.Action, Source: row.Source, Phone: row.Phone,
+			ConsentVersion: row.ConsentVersion, ConsentText: row.ConsentText, CreatedAt: row.CreatedAt,
+		})
+	}
+	return &domain.StudentPrivacyExport{Student: *student, Checkins: checkins, Progress: progress, Communications: communications, ContactConsents: consents, RetentionInterventions: interventions, ExportedAt: time.Now().UTC()}, nil
 }
 
 func (r PrivacyGormRepository) AnonymizeStudent(ctx context.Context, boxID, studentID, actorUserID domain.ID, reason string) error {
@@ -97,6 +121,12 @@ func (r PrivacyGormRepository) AnonymizeStudent(ctx context.Context, boxID, stud
 			return err
 		}
 		if err := tx.Model(&models.RetentionInterventionModel{}).Where("box_id = ? AND student_id = ?", stringID(boxID), stringID(studentID)).Updates(map[string]any{"notes": nil}).Error; err != nil {
+			return err
+		}
+		if err := tx.Table("contact_activation_requests").Where("box_id = ? AND student_id = ?", stringID(boxID), stringID(studentID)).Updates(map[string]any{"claimed_name": "", "phone": "", "updated_at": now}).Error; err != nil {
+			return err
+		}
+		if err := tx.Table("contact_consent_events").Where("box_id = ? AND student_id = ?", stringID(boxID), stringID(studentID)).Update("phone", "").Error; err != nil {
 			return err
 		}
 		return PrivacyGormRepository{db: tx}.recordAudit(ctx, boxID, studentID, actorUserID, "anonymized", reason)
