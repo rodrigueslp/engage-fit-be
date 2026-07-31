@@ -87,3 +87,46 @@ func TestContactActivationMatchesAndConfirmsStudent(t *testing.T) {
 		t.Fatalf("expected one consent event, got %d", consentCount)
 	}
 }
+
+func TestContactActivationCreatesStudentAfterWhatsappConfirmation(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL is not configured")
+	}
+	db, err := postgres.Open(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC().Truncate(time.Second)
+	boxID := uuid.NewString()
+	if err := db.Create(&models.BoxModel{ID: boxID, Name: "New Student Test", Status: "active", RiskInactiveDays: 7, RiskMessageCooldownDays: 14, CreatedAt: now, UpdatedAt: now}).Error; err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Exec("DELETE FROM boxes WHERE id = ?", boxID).Error })
+
+	repository := NewContactActivationGormRepository(db)
+	activation := &domain.ContactActivationRequest{
+		ID: domain.ID(uuid.NewString()), BoxID: domain.ID(boxID), ClaimedName: "Pessoa Nova",
+		Source: domain.SourceWellhub, IsNewStudent: true, SenderPhone: "5511999999999",
+		TokenHash: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+		Status:    domain.ContactActivationAwaitingMessage, ConsentVersion: "v1", ConsentText: "consent",
+		ExpiresAt: now.Add(time.Hour), CreatedAt: now, UpdatedAt: now,
+	}
+	if err := repository.CreateActivation(context.Background(), activation); err != nil {
+		t.Fatal(err)
+	}
+	confirmed, err := repository.ConfirmActivation(context.Background(), activation.ID, "5511977776666", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if confirmed.Status != domain.ContactActivationConfirmed || confirmed.StudentID == "" || !confirmed.IsNewStudent {
+		t.Fatalf("unexpected confirmation: %+v", confirmed)
+	}
+	student, err := NewStudentGormRepository(db).FindByID(context.Background(), domain.ID(boxID), confirmed.StudentID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if student.Name != "Pessoa Nova" || student.Phone != "5511977776666" || student.ContactStatus != domain.ContactStatusOptedIn || student.MembershipStartedSource != "self_registration" {
+		t.Fatalf("unexpected student: %+v", student)
+	}
+}

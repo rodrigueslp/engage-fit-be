@@ -6,6 +6,7 @@ type StartContactActivationRequest struct {
 	Name              string `json:"name"`
 	Source            string `json:"source"`
 	RecentCheckinDate string `json:"recent_checkin_date"`
+	IsNewStudent      bool   `json:"is_new_student"`
 	ConsentAccepted   bool   `json:"consent_accepted"`
 }
 
@@ -45,6 +46,7 @@ type ContactActivationResponse struct {
 	ClaimedName       string     `json:"claimed_name"`
 	Source            string     `json:"source"`
 	RecentCheckinDate *time.Time `json:"recent_checkin_date,omitempty"`
+	IsNewStudent      bool       `json:"is_new_student"`
 	Phone             string     `json:"phone,omitempty"`
 	Status            string     `json:"status"`
 	ConsentedAt       *time.Time `json:"consented_at,omitempty"`

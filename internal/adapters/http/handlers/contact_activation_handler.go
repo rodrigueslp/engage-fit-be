@@ -42,14 +42,18 @@ func (h ContactActivationHandler) Start(c *gin.Context) {
 		respondBadRequest(c)
 		return
 	}
-	checkinDate, err := time.Parse("2006-01-02", request.RecentCheckinDate)
-	if err != nil {
-		respondBadRequest(c)
-		return
+	var checkinDate *time.Time
+	if !request.IsNewStudent {
+		parsed, err := time.Parse("2006-01-02", request.RecentCheckinDate)
+		if err != nil {
+			respondBadRequest(c)
+			return
+		}
+		checkinDate = &parsed
 	}
 	result, err := h.service.Start(c.Request.Context(), contactactivation.StartInput{
 		ActivationCode: c.Param("code"), Name: request.Name, Source: domain.Source(request.Source),
-		RecentCheckinDate: checkinDate, ConsentAccepted: request.ConsentAccepted,
+		RecentCheckinDate: checkinDate, IsNewStudent: request.IsNewStudent, ConsentAccepted: request.ConsentAccepted,
 	})
 	if err != nil {
 		respondContactActivationError(c, err)
@@ -158,7 +162,8 @@ func contactActivationResponse(item domain.ContactActivationRequest) dto.Contact
 	return dto.ContactActivationResponse{
 		ID: string(item.ID), StudentID: string(item.StudentID), StudentName: item.StudentName,
 		ClaimedName: item.ClaimedName, Source: string(item.Source), RecentCheckinDate: item.RecentCheckinDate,
-		Phone: item.Phone, Status: string(item.Status), ConsentedAt: item.ConsentedAt,
+		IsNewStudent: item.IsNewStudent,
+		Phone:        item.Phone, Status: string(item.Status), ConsentedAt: item.ConsentedAt,
 		ExpiresAt: item.ExpiresAt, ResolvedAt: item.ResolvedAt, CreatedAt: item.CreatedAt,
 	}
 }

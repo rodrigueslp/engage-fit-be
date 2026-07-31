@@ -20,6 +20,7 @@ type contactActivationRow struct {
 	ClaimedName       string
 	Source            string
 	RecentCheckinDate *time.Time
+	IsNewStudent      bool
 	SenderPhone       string
 	Phone             string
 	TokenHash         string
@@ -132,6 +133,16 @@ func (r ContactActivationGormRepository) ConfirmActivation(ctx context.Context, 
 			return nil
 		}
 		status := domain.ContactActivationNeedsReview
+		if row.StudentID == nil && row.IsNewStudent {
+			studentID, createErr := findOrCreateSelfRegisteredStudent(tx, row, phone, confirmedAt)
+			if createErr != nil {
+				return createErr
+			}
+			if studentID != "" {
+				row.StudentID = pointerString(studentID)
+				row.StudentName = row.ClaimedName
+			}
+		}
 		if row.StudentID != nil {
 			status = domain.ContactActivationConfirmed
 			var phoneConflicts int64
@@ -150,13 +161,16 @@ func (r ContactActivationGormRepository) ConfirmActivation(ctx context.Context, 
 			"consented_at": confirmedAt,
 			"updated_at":   confirmedAt,
 		}
+		if row.StudentID != nil {
+			updates["student_id"] = *row.StudentID
+		}
 		if status == domain.ContactActivationConfirmed {
 			updates["resolved_at"] = confirmedAt
 		}
 		if err := tx.Table("contact_activation_requests").Where("id = ?", row.ID).Updates(updates).Error; err != nil {
 			return err
 		}
-		if row.StudentID != nil {
+		if status == domain.ContactActivationConfirmed && row.StudentID != nil {
 			if err := activateStudent(tx, row.BoxID, *row.StudentID, phone, confirmedAt); err != nil {
 				return err
 			}
@@ -314,7 +328,7 @@ func activationToRow(value domain.ContactActivationRequest) contactActivationRow
 	}
 	return contactActivationRow{
 		ID: stringID(value.ID), BoxID: stringID(value.BoxID), StudentID: studentID,
-		ClaimedName: value.ClaimedName, Source: string(value.Source), RecentCheckinDate: value.RecentCheckinDate,
+		ClaimedName: value.ClaimedName, Source: string(value.Source), RecentCheckinDate: value.RecentCheckinDate, IsNewStudent: value.IsNewStudent,
 		SenderPhone: value.SenderPhone, Phone: value.Phone, TokenHash: value.TokenHash, Status: string(value.Status),
 		ConsentVersion: value.ConsentVersion, ConsentText: value.ConsentText, ConsentedAt: value.ConsentedAt,
 		ExpiresAt: value.ExpiresAt, ResolvedAt: value.ResolvedAt, CreatedAt: value.CreatedAt, UpdatedAt: value.UpdatedAt,
@@ -328,7 +342,7 @@ func activationToDomain(row contactActivationRow) domain.ContactActivationReques
 	}
 	return domain.ContactActivationRequest{
 		ID: domain.ID(row.ID), BoxID: domain.ID(row.BoxID), StudentID: studentID, StudentName: row.StudentName,
-		ClaimedName: row.ClaimedName, Source: domain.Source(row.Source), RecentCheckinDate: row.RecentCheckinDate,
+		ClaimedName: row.ClaimedName, Source: domain.Source(row.Source), RecentCheckinDate: row.RecentCheckinDate, IsNewStudent: row.IsNewStudent,
 		SenderPhone: row.SenderPhone, Phone: row.Phone, TokenHash: row.TokenHash,
 		Status: domain.ContactActivationStatus(row.Status), ConsentVersion: row.ConsentVersion,
 		ConsentText: row.ConsentText, ConsentedAt: row.ConsentedAt, ExpiresAt: row.ExpiresAt,
@@ -344,6 +358,36 @@ func activateStudent(tx *gorm.DB, boxID, studentID, phone string, at time.Time) 
 		"contact_status_updated_at": at,
 		"updated_at":                at,
 	}).Error
+}
+
+func findOrCreateSelfRegisteredStudent(tx *gorm.DB, row contactActivationRow, phone string, at time.Time) (string, error) {
+	var candidates []struct {
+		ID    string
+		Phone string
+	}
+	err := tx.Table("students").
+		Select("id, phone").
+		Where("box_id = ? AND source = ? AND anonymized_at IS NULL", row.BoxID, row.Source).
+		Where("phone = ? OR LOWER(REGEXP_REPLACE(BTRIM(name), '[[:space:]]+', ' ', 'g')) = ?", phone, normalizeActivationName(row.ClaimedName)).
+		Find(&candidates).Error
+	if err != nil {
+		return "", err
+	}
+	if len(candidates) == 1 && candidates[0].Phone == phone {
+		return candidates[0].ID, nil
+	}
+	if len(candidates) > 0 {
+		return "", nil
+	}
+	studentID := uuid.NewString()
+	err = tx.Table("students").Create(map[string]any{
+		"id": studentID, "box_id": row.BoxID, "name": row.ClaimedName, "phone": phone,
+		"source": row.Source, "external_id": "self-registration:" + studentID,
+		"risk_status": string(domain.StudentRiskStatusActive), "contact_status": string(domain.ContactStatusUnknown),
+		"membership_started_at": at, "membership_started_source": "self_registration",
+		"created_at": at, "updated_at": at,
+	}).Error
+	return studentID, err
 }
 
 func createConsentEvent(tx *gorm.DB, row contactActivationRow, phone, action, source string, at time.Time) error {

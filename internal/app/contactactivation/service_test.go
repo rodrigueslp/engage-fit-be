@@ -27,7 +27,7 @@ func TestStartAndConfirmActivation(t *testing.T) {
 
 	started, err := service.Start(context.Background(), StartInput{
 		ActivationCode: "activation-code", Name: "  Adriana Segatelli ", Source: domain.SourceTotalPass,
-		RecentCheckinDate: checkinDate, ConsentAccepted: true,
+		RecentCheckinDate: &checkinDate, ConsentAccepted: true,
 	})
 	if err != nil {
 		t.Fatalf("start activation: %v", err)
@@ -57,6 +57,32 @@ func TestStartAndConfirmActivation(t *testing.T) {
 	}
 	if !strings.Contains(result.Message, "Adriana") || !strings.Contains(result.Message, "SAIR") {
 		t.Fatalf("unexpected confirmation: %q", result.Message)
+	}
+}
+
+func TestStartNewStudentDoesNotRequirePreviousCheckin(t *testing.T) {
+	now := time.Date(2026, 7, 31, 12, 0, 0, 0, time.UTC)
+	repository := &activationRepositoryStub{
+		boxID: domain.ID("box-1"), boxName: "CrossFit Alados", activationCode: "activation-code",
+	}
+	service := NewService(repository, studentRepositoryStub{}, settingsResolverStub{}, "")
+	service.now = func() time.Time { return now }
+
+	started, err := service.Start(context.Background(), StartInput{
+		ActivationCode: "activation-code", Name: "Pessoa Nova", Source: domain.SourceWellhub,
+		IsNewStudent: true, ConsentAccepted: true,
+	})
+	if err != nil {
+		t.Fatalf("start new student activation: %v", err)
+	}
+	if started.WhatsappURL == "" || repository.created == nil {
+		t.Fatalf("expected activation request, got %+v", started)
+	}
+	if !repository.created.IsNewStudent || repository.created.RecentCheckinDate != nil || repository.created.StudentID != "" {
+		t.Fatalf("unexpected new student activation: %+v", repository.created)
+	}
+	if repository.matchCalls != 0 {
+		t.Fatalf("new student must not be matched against check-in history, got %d calls", repository.matchCalls)
 	}
 }
 
@@ -138,6 +164,7 @@ type activationRepositoryStub struct {
 	matches        []domain.Student
 	created        *domain.ContactActivationRequest
 	confirmedPhone string
+	matchCalls     int
 }
 
 func (r *activationRepositoryStub) FindPublicBox(context.Context, string) (domain.ID, string, error) {
@@ -147,6 +174,7 @@ func (r *activationRepositoryStub) ActivationCode(context.Context, domain.ID) (s
 	return r.activationCode, nil
 }
 func (r *activationRepositoryStub) FindMatchingStudents(context.Context, domain.ID, domain.Source, string, time.Time) ([]domain.Student, error) {
+	r.matchCalls++
 	return r.matches, nil
 }
 func (r *activationRepositoryStub) CreateActivation(_ context.Context, activation *domain.ContactActivationRequest) error {

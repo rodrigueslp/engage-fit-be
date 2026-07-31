@@ -20,6 +20,7 @@ type ContactActivationRequest struct {
 	ClaimedName       string
 	Source            Source
 	RecentCheckinDate *time.Time
+	IsNewStudent      bool
 	SenderPhone       string
 	Phone             string
 	TokenHash         string

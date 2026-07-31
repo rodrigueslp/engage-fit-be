@@ -48,7 +48,8 @@ type StartInput struct {
 	ActivationCode    string
 	Name              string
 	Source            domain.Source
-	RecentCheckinDate time.Time
+	RecentCheckinDate *time.Time
+	IsNewStudent      bool
 	ConsentAccepted   bool
 }
 
@@ -84,9 +85,18 @@ func (s *Service) PublicConfig(ctx context.Context, activationCode string) (*dom
 func (s *Service) Start(ctx context.Context, input StartInput) (*StartResult, error) {
 	name := strings.TrimSpace(input.Name)
 	now := s.now().UTC()
-	checkinDate := input.RecentCheckinDate.UTC()
-	if len([]rune(name)) < 3 || len([]rune(name)) > 160 || !validSource(input.Source) || checkinDate.IsZero() || checkinDate.After(now) || checkinDate.Before(now.AddDate(-1, 0, 0)) || !input.ConsentAccepted {
+	if len([]rune(name)) < 3 || len([]rune(name)) > 160 || !validSource(input.Source) || !input.ConsentAccepted {
 		return nil, ErrInvalidInput
+	}
+	if input.IsNewStudent {
+		input.RecentCheckinDate = nil
+	} else if input.RecentCheckinDate == nil {
+		return nil, ErrInvalidInput
+	} else {
+		checkinDate := input.RecentCheckinDate.UTC()
+		if checkinDate.IsZero() || checkinDate.After(now) || checkinDate.Before(now.AddDate(-1, 0, 0)) {
+			return nil, ErrInvalidInput
+		}
 	}
 	boxID, _, err := s.repository.FindPublicBox(ctx, input.ActivationCode)
 	if err != nil {
@@ -96,15 +106,17 @@ func (s *Service) Start(ctx context.Context, input StartInput) (*StartResult, er
 	if err != nil {
 		return nil, err
 	}
-	matches, err := s.repository.FindMatchingStudents(ctx, boxID, input.Source, name, input.RecentCheckinDate)
-	if err != nil {
-		return nil, err
-	}
 	studentID := domain.ID("")
-	if len(matches) == 1 {
-		studentID = matches[0].ID
+	if !input.IsNewStudent {
+		matches, matchErr := s.repository.FindMatchingStudents(ctx, boxID, input.Source, name, *input.RecentCheckinDate)
+		if matchErr != nil {
+			return nil, matchErr
+		}
+		if len(matches) == 1 {
+			studentID = matches[0].ID
+		}
 	}
-	return s.createRequest(ctx, boxID, studentID, name, input.Source, &input.RecentCheckinDate, sender)
+	return s.createRequest(ctx, boxID, studentID, name, input.Source, input.RecentCheckinDate, input.IsNewStudent, sender)
 }
 
 func (s *Service) StartForStudent(ctx context.Context, boxID, studentID domain.ID) (*StartResult, error) {
@@ -116,7 +128,7 @@ func (s *Service) StartForStudent(ctx context.Context, boxID, studentID domain.I
 	if err != nil {
 		return nil, err
 	}
-	return s.createRequest(ctx, boxID, student.ID, student.Name, student.Source, nil, sender)
+	return s.createRequest(ctx, boxID, student.ID, student.Name, student.Source, nil, false, sender)
 }
 
 func (s *Service) AdminSummary(ctx context.Context, boxID domain.ID) (*domain.ContactActivationSummary, error) {
@@ -189,6 +201,9 @@ func (s *Service) HandleInbound(ctx context.Context, requestURL, signature strin
 		if name == "" {
 			name = "Tudo certo"
 		}
+		if confirmed.IsNewStudent {
+			return &InboundResult{Message: name + ", seu cadastro e seu WhatsApp foram ativados. Você já faz parte da academia no EngageFit. Para cancelar mensagens, envie SAIR."}, nil
+		}
 		return &InboundResult{Message: name + ", seu WhatsApp foi ativado. Você receberá avisos sobre check-ins, metas e brindes. Para cancelar, envie SAIR."}, nil
 	}
 
@@ -219,7 +234,7 @@ func (s *Service) HandleInbound(ctx context.Context, requestURL, signature strin
 	return nil, ErrUnsupportedMessage
 }
 
-func (s *Service) createRequest(ctx context.Context, boxID, studentID domain.ID, name string, source domain.Source, recentCheckinDate *time.Time, sender string) (*StartResult, error) {
+func (s *Service) createRequest(ctx context.Context, boxID, studentID domain.ID, name string, source domain.Source, recentCheckinDate *time.Time, isNewStudent bool, sender string) (*StartResult, error) {
 	token, err := randomToken()
 	if err != nil {
 		return nil, err
@@ -227,7 +242,7 @@ func (s *Service) createRequest(ctx context.Context, boxID, studentID domain.ID,
 	now := s.now().UTC()
 	activation := domain.ContactActivationRequest{
 		BoxID: boxID, StudentID: studentID, ClaimedName: strings.TrimSpace(name), Source: source,
-		RecentCheckinDate: recentCheckinDate, SenderPhone: sender, TokenHash: tokenHash(token),
+		RecentCheckinDate: recentCheckinDate, IsNewStudent: isNewStudent, SenderPhone: sender, TokenHash: tokenHash(token),
 		Status: domain.ContactActivationAwaitingMessage, ConsentVersion: ConsentVersion,
 		ConsentText: ConsentText, ExpiresAt: now.Add(30 * time.Minute), CreatedAt: now, UpdatedAt: now,
 	}

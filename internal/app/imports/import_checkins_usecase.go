@@ -89,23 +89,41 @@ func (uc ImportCheckinsUseCase) Execute(ctx context.Context, input ImportCheckin
 			if !errors.Is(err, gorm.ErrRecordNotFound) {
 				return nil, err
 			}
-
-			student = &domain.Student{
-				BoxID:                   input.BoxID,
-				Name:                    parsedCheckin.StudentName,
-				Email:                   parsedCheckin.StudentEmail,
-				Phone:                   parsedCheckin.StudentPhone,
-				Source:                  input.Source,
-				ExternalID:              identity,
-				MembershipStartedAt:     &parsedCheckin.CheckinDate,
-				MembershipStartedSource: "first_checkin_inferred",
-				CreatedAt:               now,
-				UpdatedAt:               now,
-			}
-			if err := uc.students.Save(ctx, student); err != nil {
+			student, err = uc.findSelfRegisteredStudent(ctx, input.BoxID, input.Source, parsedCheckin.StudentName)
+			if err != nil {
 				return nil, err
 			}
-			studentsCreated++
+			if student != nil {
+				student.ExternalID = identity
+				student.Name = parsedCheckin.StudentName
+				if student.Email == "" {
+					student.Email = parsedCheckin.StudentEmail
+				}
+				if student.Phone == "" {
+					student.Phone = parsedCheckin.StudentPhone
+				}
+				student.UpdatedAt = now
+				if err := uc.students.Save(ctx, student); err != nil {
+					return nil, err
+				}
+			} else {
+				student = &domain.Student{
+					BoxID:                   input.BoxID,
+					Name:                    parsedCheckin.StudentName,
+					Email:                   parsedCheckin.StudentEmail,
+					Phone:                   parsedCheckin.StudentPhone,
+					Source:                  input.Source,
+					ExternalID:              identity,
+					MembershipStartedAt:     &parsedCheckin.CheckinDate,
+					MembershipStartedSource: "first_checkin_inferred",
+					CreatedAt:               now,
+					UpdatedAt:               now,
+				}
+				if err := uc.students.Save(ctx, student); err != nil {
+					return nil, err
+				}
+				studentsCreated++
+			}
 		}
 		if student.MembershipStartedAt == nil || (student.MembershipStartedSource == "first_checkin_inferred" && parsedCheckin.CheckinDate.Before(*student.MembershipStartedAt)) {
 			startedAt := parsedCheckin.CheckinDate
@@ -142,6 +160,25 @@ func (uc ImportCheckinsUseCase) Execute(ctx context.Context, input ImportCheckin
 		Students:     studentsCreated,
 		Checkins:     insertedCheckins,
 	}, nil
+}
+
+func (uc ImportCheckinsUseCase) findSelfRegisteredStudent(ctx context.Context, boxID domain.ID, source domain.Source, name string) (*domain.Student, error) {
+	normalizedName := strings.Join(strings.Fields(strings.ToLower(name)), " ")
+	candidates, err := uc.students.List(ctx, boxID, repositories.StudentFilters{Source: &source, Search: normalizedName})
+	if err != nil {
+		return nil, err
+	}
+	matches := make([]domain.Student, 0, 1)
+	for _, candidate := range candidates {
+		candidateName := strings.Join(strings.Fields(strings.ToLower(candidate.Name)), " ")
+		if candidate.AnonymizedAt == nil && candidate.MembershipStartedSource == "self_registration" && candidateName == normalizedName {
+			matches = append(matches, candidate)
+		}
+	}
+	if len(matches) != 1 {
+		return nil, nil
+	}
+	return &matches[0], nil
 }
 
 func (uc ImportCheckinsUseCase) recalculateActiveCampaigns(ctx context.Context, boxID domain.ID) error {
