@@ -380,7 +380,7 @@ func normalizeAndValidateSchedule(schedule *domain.AutomationSchedule) error {
 
 func validScheduleMode(mode string) bool {
 	switch mode {
-	case ScheduleModeFullDaily, ScheduleModeRecalculate, ScheduleModeAlmostThere, ScheduleModeAchieved, ScheduleModeInactive:
+	case ScheduleModeFullDaily, ScheduleModeRecalculate, ScheduleModeAlmostThere, ScheduleModeAchieved:
 		return true
 	default:
 		return false
@@ -422,19 +422,17 @@ func shouldRecalculate(mode string) bool {
 	return mode == ScheduleModeFullDaily || mode == ScheduleModeRecalculate || shouldSendMessages(mode)
 }
 func shouldSendMessages(mode string) bool {
-	return mode == ScheduleModeFullDaily || mode == ScheduleModeAlmostThere || mode == ScheduleModeAchieved || mode == ScheduleModeInactive
+	return mode == ScheduleModeFullDaily || mode == ScheduleModeAlmostThere || mode == ScheduleModeAchieved
 }
 
 func audienceMatchesMode(mode string, audience domain.MessageAudience) bool {
 	switch mode {
 	case ScheduleModeFullDaily:
-		return true
+		return audience == domain.MessageAudienceAlmostThere || audience == domain.MessageAudienceNearGoal || audience == domain.MessageAudienceAchieved
 	case ScheduleModeAlmostThere:
 		return audience == domain.MessageAudienceAlmostThere || audience == domain.MessageAudienceNearGoal
 	case ScheduleModeAchieved:
 		return audience == domain.MessageAudienceAchieved
-	case ScheduleModeInactive:
-		return audience == domain.MessageAudienceInactive
 	default:
 		return false
 	}

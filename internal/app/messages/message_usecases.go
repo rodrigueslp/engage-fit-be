@@ -595,8 +595,6 @@ func templateTypeForAudience(audience domain.MessageAudience) domain.MessageTemp
 		return domain.MessageTemplateAlmostThere
 	case domain.MessageAudienceAchieved:
 		return domain.MessageTemplateGoalReached
-	case domain.MessageAudienceInactive:
-		return domain.MessageTemplateWeMissYou
 	default:
 		return ""
 	}

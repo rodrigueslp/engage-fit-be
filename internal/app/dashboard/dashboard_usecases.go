@@ -73,11 +73,6 @@ func (uc GetDashboardSummaryUseCase) Execute(ctx context.Context, boxID domain.I
 		}
 	}
 
-	atRisk, err := uc.atRiskStudents(ctx, boxID, students)
-	if err != nil {
-		return nil, err
-	}
-
 	pendingRewards, err := uc.rewards.CountDeliveries(ctx, boxID, false)
 	if err != nil {
 		return nil, err
@@ -92,7 +87,7 @@ func (uc GetDashboardSummaryUseCase) Execute(ctx context.Context, boxID domain.I
 		TotalCheckins:      len(monthlyCheckins),
 		EligibleStudents:   len(eligible),
 		NearGoalStudents:   len(nearGoal),
-		AtRiskStudents:     len(atRisk),
+		AtRiskStudents:     0,
 		PendingRewards:     pendingRewards,
 		DeliveredRewards:   deliveredRewards,
 		CheckinsByPlatform: checkinsByPlatform,

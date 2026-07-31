@@ -39,6 +39,19 @@ func TestNormalizeAndValidateScheduleRejectsInvalidValues(t *testing.T) {
 	}
 }
 
+func TestInactiveMessagingModeIsDisabled(t *testing.T) {
+	schedule := domain.AutomationSchedule{Name: "Legado", Mode: ScheduleModeInactive, RunTime: "08:00", Timezone: defaultTimezone}
+	if err := normalizeAndValidateSchedule(&schedule); !errors.Is(err, ErrInvalidSchedule) {
+		t.Fatalf("expected inactive messaging mode to be rejected, got %v", err)
+	}
+	if audienceMatchesMode(ScheduleModeFullDaily, domain.MessageAudienceInactive) {
+		t.Fatal("full daily automation must not send the legacy inactive audience")
+	}
+	if !audienceMatchesMode(ScheduleModeFullDaily, domain.MessageAudienceAlmostThere) || !audienceMatchesMode(ScheduleModeFullDaily, domain.MessageAudienceAchieved) {
+		t.Fatal("full daily automation must keep the two goal audiences")
+	}
+}
+
 func TestIsScheduleDueUsesConfiguredTimezoneAndMinute(t *testing.T) {
 	now := time.Date(2026, 7, 20, 11, 30, 0, 0, time.UTC) // 08:30 in Sao Paulo.
 	schedule := domain.AutomationSchedule{Enabled: true, RunTime: "08:30", Timezone: defaultTimezone, DaysOfWeek: "1"}

@@ -33,15 +33,6 @@ var officialWhatsappTemplates = map[MessageTemplateType]OfficialWhatsappTemplate
 			"Você atingiu sua meta com {{current_checkins}} check-ins e está participando da recompensa: {{reward_name}}.\n\n" +
 			"Mandou muito bem!",
 	},
-	MessageTemplateWeMissYou: {
-		Type:        MessageTemplateWeMissYou,
-		Label:       "Sentimos sua falta",
-		Description: "Enviada para alunos com baixa frequência ou sem check-ins recentes.",
-		Audience:    MessageAudienceInactive,
-		Body: "Olá, {{student_name}}! Aqui é o EngageFit em nome do {{box_name}}.\n\n" +
-			"Sentimos sua falta nos treinos. Ainda dá tempo de voltar à rotina e buscar sua meta de {{target_checkins}} check-ins.\n\n" +
-			"Bora voltar aos treinos?",
-	},
 }
 
 func OfficialWhatsappTemplates() []OfficialWhatsappTemplate {

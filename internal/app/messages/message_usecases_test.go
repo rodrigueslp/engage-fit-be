@@ -72,12 +72,24 @@ func TestTemplateTypeForAudienceUsesOfficialTypes(t *testing.T) {
 		domain.MessageAudienceAlmostThere: domain.MessageTemplateAlmostThere,
 		domain.MessageAudienceNearGoal:    domain.MessageTemplateAlmostThere,
 		domain.MessageAudienceAchieved:    domain.MessageTemplateGoalReached,
-		domain.MessageAudienceInactive:    domain.MessageTemplateWeMissYou,
+		domain.MessageAudienceInactive:    "",
 	}
 
 	for audience, want := range tests {
 		if got := templateTypeForAudience(audience); got != want {
 			t.Fatalf("templateTypeForAudience(%s) = %s, want %s", audience, got, want)
+		}
+	}
+}
+
+func TestOfficialWhatsappCatalogOnlyOffersGoalMessages(t *testing.T) {
+	templates := domain.OfficialWhatsappTemplates()
+	if len(templates) != 2 {
+		t.Fatalf("expected two active WhatsApp templates, got %d", len(templates))
+	}
+	for _, template := range templates {
+		if template.Audience != domain.MessageAudienceAlmostThere && template.Audience != domain.MessageAudienceAchieved {
+			t.Fatalf("unexpected active audience: %s", template.Audience)
 		}
 	}
 }
