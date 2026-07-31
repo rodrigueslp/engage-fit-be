@@ -4,7 +4,53 @@ Manual canônico de arquitetura e negócio: `docs/system-design.md`.
 
 Guia operacional consolidado: `docs/application-readiness-guide.md`.
 
-Atualizado em: 2026-07-31 (V2 e ativação consentida homologadas em produção)
+Atualizado em: 2026-07-31 (cadastro inicial, Dashboard e mensageria simplificada em produção)
+
+## Checkpoint de Dashboard e mensageria simplificada em 2026-07-31
+
+Este é o checkpoint operacional mais recente. Em caso de conflito com os
+checkpoints históricos abaixo, esta seção prevalece.
+
+- Código publicado e sincronizado com `origin/main`:
+  - backend: `d19fee1` (`feat: disable legacy inactive messaging`);
+  - frontend: `9b77400` (`feat: refocus owner dashboard and navigation`).
+- Deploys Railway concluídos com `SUCCESS`:
+  - `engage-fit-api`: `3630bd54-096a-45a2-aa8b-0c24662395f7`;
+  - `engage-fit-billing-reconcile`: `e7475185-dd01-4e5b-83a1-4a556ec53699`;
+  - `engage-fit-web`: `0b7f567c-4751-4113-9920-e8f540cb7fd6`.
+- Antes da publicação foi criado o backup lógico validado
+  `/home/luiz-paulo/workspace/engage-fit/production-backups/engagefit-production-pre-dashboard-messaging-simplification-20260731-130232.dump`.
+  SHA-256:
+  `76f9e8106c6125dab8ceada9a6971a0a2699a2e91d562fa5c5ccb9661028d3bc`.
+  O arquivo é um dump custom PostgreSQL 18, possui 315 entradas, 290 KB e
+  permissão local `600`.
+- O pre-deploy aplicou em produção a migration
+  `044_disable_legacy_inactive_messaging.sql`. A consulta posterior confirmou
+  zero agendamentos `send_inactive` habilitados; o histórico antigo permanece
+  preservado.
+- A mensageria proativa oficial agora expõe somente dois tipos para o box:
+  `Quase lá` e `Meta atingida`. O template legado `WE_MISS_YOU` deixou de ser
+  elegível para novas campanhas e a automação não aceita novos agendamentos
+  `send_inactive`.
+- `Plano e cobranças` foi removido da navegação e das rotas do proprietário do
+  box, pois essa gestão acontece fora do produto. A administração financeira
+  da plataforma permanece isolada para o perfil administrativo.
+- O Dashboard foi reorganizado em torno da operação do dia: ações de retenção,
+  alunos perto da meta, brindes pendentes, indicadores principais, jornada dos
+  primeiros 30 dias e campanhas ativas.
+- A lista de `Primeiros 30 dias` do Dashboard agora mostra toda a mesma
+  população da aba correspondente em `Retenção`, ordenada por prioridade. Isso
+  elimina a divergência visual em que o Dashboard mostrava um aluno enquanto a
+  tela detalhada indicava quatro.
+- O resumo legado de `at-risk` do Dashboard deixou de executar a consulta
+  antiga e retorna zero apenas por compatibilidade de contrato. O módulo de
+  retenção continua sendo a fonte de verdade para sinais e ações de retenção.
+- Validações anteriores ao deploy: `go test ./...`, TypeScript/build Vite e
+  três cenários Playwright direcionados concluídos com sucesso. Depois do
+  deploy, migrations `001` a `044` apareceram aplicadas, `/health` e
+  `/api/v1/capabilities` responderam com HTTP 200 e o bundle público foi
+  confirmado com os novos textos e sem as duas opções removidas.
+- Nenhum dado fictício foi inserido em produção durante esta publicação.
 
 ## Checkpoint de produção da V2 e ativação WhatsApp em 2026-07-31
 
