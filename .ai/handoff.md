@@ -4,21 +4,41 @@ Manual canônico de arquitetura e negócio: `docs/system-design.md`.
 
 Guia operacional consolidado: `docs/application-readiness-guide.md`.
 
-Atualizado em: 2026-07-31 (cadastro inicial, Dashboard e mensageria simplificada em produção)
+Atualizado em: 2026-07-31 (triagem e exclusões de retenção homologadas em produção)
 
-## Checkpoint local de triagem de retenção em 2026-07-31 — aguardando publicação
+## Checkpoint de produção da triagem de retenção em 2026-07-31
 
-- Implementada localmente a migration `045_add_retention_monitoring_controls.sql`.
-  Ela adiciona a linha de base de retenção do box, exclusão reversível por aluno
-  e a trilha auditável `retention_monitoring_events`.
+- Este é o checkpoint operacional mais recente. Em caso de conflito com os
+  checkpoints históricos abaixo, esta seção prevalece.
+- Código publicado e sincronizado com `origin/main`:
+  - backend funcional: `5fe6de0` (`feat: add retention triage controls`);
+  - ajuste de formatação dos testes: `d13298a`;
+  - frontend: `5768995` (`feat: add retention triage queues`).
+- Deploys Railway finais concluídos com `SUCCESS`:
+  - `engage-fit-api`: `8113320c-e8f8-48d5-a016-df24a8c79db3`;
+  - `engage-fit-billing-reconcile`: `482c5998-72b0-4452-9268-528fbb9d6735`;
+  - `engage-fit-web`: `289cbdcd-9a4d-4d36-b6a9-8f98f7fea7e4`.
+- Antes da publicação foi criado e validado o backup lógico já contendo a
+  importação de 90 dias do TotalPass:
+  `/home/luiz-paulo/workspace/engage-fit/production-backups/engagefit-production-pre-retention-triage-20260731-145534.dump`.
+  SHA-256:
+  `e0aac8ff019597bf6551946b7b32032689e4c743f4875cdd07d65a1ae8edb533`.
+  É um dump custom PostgreSQL 18, com 315 entradas, 445 KB e permissão `600`.
+- O primeiro pre-deploy aplicou a migration
+  `045_add_retention_monitoring_controls.sql` e registrou
+  `migration complete: 1 applied`. O deploy final confirmou
+  `migration complete: 0 applied` e saúde HTTP 200.
+- A migration adicionou a linha de base de retenção do box, exclusão reversível
+  por aluno e a trilha auditável `retention_monitoring_events`. Produção mostra
+  as migrations `001` a `045` aplicadas, a tabela de eventos existente e linha
+  de base do Crossfit Alados em `2026-07-31`.
 - O radar continua usando os 90 dias importados, mas casos com mais de 30 dias
   sem presença passam para o workflow `historical`. Eles ficam na nova fila
   `Inativos históricos` e deixam de inflar `Precisa de ação`.
-- Na base local anterior, os 25 casos foram separados em 4 ações atuais e 21
-  inativos históricos. Para a base de produção analisada após a importação de
-  90 dias do TotalPass, a projeção com a mesma regra é 52 ações atuais e 43
-  inativos históricos; esses números ainda precisam ser confirmados depois do
-  deploy.
+- A consulta pós-deploy confirmou exatamente 52 ações atuais e 43 inativos
+  históricos no Crossfit Alados:
+  - ações atuais: 48 TotalPass e 4 Wellhub;
+  - inativos históricos: 22 TotalPass e 21 Wellhub.
 - A tela ganhou as filas `Inativos históricos` e `Não acompanhados`, além da
   ação `Não acompanhar`. Motivos disponíveis: visitante/drop-in, ex-aluno,
   pausa longa, fora do público de retenção e outro. A exclusão pode ser sem
@@ -35,9 +55,16 @@ Atualizado em: 2026-07-31 (cadastro inicial, Dashboard e mensageria simplificada
   de integração PostgreSQL, build TypeScript/Vite e Playwright com 6 cenários
   executados e 2 cenários reais corretamente ignorados. O teste E2E novo cobre
   separação histórica, exclusão de visitante e restauração.
-- Este checkpoint ainda não foi versionado nem publicado em produção. O
-  checkpoint de produção abaixo continua sendo a verdade operacional até um
-  deploy explícito.
+- O bundle público foi confirmado com `Inativos históricos`, `Não
+  acompanhados`, `Não acompanhar`, `Voltar a acompanhar` e os motivos
+  estruturados. `/health` e `/api/v1/capabilities` responderam HTTP 200.
+- As CIs finais do backend (`d13298a`) e frontend (`5768995`) concluíram com
+  `success`. A primeira CI do backend funcional falhou somente na verificação
+  de `gofmt` de um teste; `d13298a` corrigiu a formatação e executou novamente
+  toda a pipeline com sucesso, sem alteração na regra de produção.
+- Nenhum aluno foi excluído durante a homologação em produção e nenhum dado
+  fictício foi inserido. A contagem inicial de eventos de monitoramento ficou
+  em zero; o primeiro evento será criado por uma decisão real do box.
 
 ## Checkpoint de Dashboard e mensageria simplificada em 2026-07-31
 
