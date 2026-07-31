@@ -105,7 +105,7 @@ func TestRetentionExclusionIsReversibleAndCanExpire(t *testing.T) {
 	metric := domain.RetentionMetrics{
 		FirstCheckin: &first, LastCheckin: &last, TotalCheckins: 12, PreviousCheckins: 6,
 		RetentionMonitoringStatus: domain.RetentionMonitoringExcluded,
-		RetentionExclusionReason: "visitor", RetentionExcludedUntil: &future,
+		RetentionExclusionReason:  "visitor", RetentionExcludedUntil: &future,
 	}
 	item := classify(metric, today, 7)
 	if item.WorkflowStatus != domain.RetentionWorkflowExcluded {
