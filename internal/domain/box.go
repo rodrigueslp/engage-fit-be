@@ -14,6 +14,7 @@ type Box struct {
 	BillingAccessChangedAt  *time.Time
 	RiskInactiveDays        int
 	RiskMessageCooldownDays int
+	RetentionBaselineAt     *time.Time
 	CreatedAt               time.Time
 	UpdatedAt               time.Time
 }

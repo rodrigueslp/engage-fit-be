@@ -66,6 +66,60 @@ func TestClassifyDoesNotFlagAnIsolatedVisitAsRetentionRisk(t *testing.T) {
 	}
 }
 
+func TestClassifyMovesLongInactiveStudentToHistoricalReactivation(t *testing.T) {
+	today := time.Date(2026, time.July, 31, 0, 0, 0, 0, time.UTC)
+	first := today.AddDate(0, 0, -100)
+	last := today.AddDate(0, 0, -31)
+	item := classify(domain.RetentionMetrics{
+		FirstCheckin: &first, LastCheckin: &last,
+		TotalCheckins: 12, PreviousCheckins: 6,
+	}, today, 7)
+
+	if item.Level != domain.EngagementCritical || item.WorkflowStatus != domain.RetentionWorkflowHistorical {
+		t.Fatalf("expected historical critical case, got level=%s workflow=%s", item.Level, item.WorkflowStatus)
+	}
+	if item.Recommendation.Code != "historical_reactivation" {
+		t.Fatalf("expected reactivation recommendation, got %#v", item.Recommendation)
+	}
+}
+
+func TestClassifyKeepsThirtyDayAbsenceInOperationalQueue(t *testing.T) {
+	today := time.Date(2026, time.July, 31, 0, 0, 0, 0, time.UTC)
+	first := today.AddDate(0, 0, -100)
+	last := today.AddDate(0, 0, -30)
+	item := classify(domain.RetentionMetrics{
+		FirstCheckin: &first, LastCheckin: &last,
+		TotalCheckins: 12, PreviousCheckins: 6,
+	}, today, 7)
+
+	if item.WorkflowStatus != domain.RetentionWorkflowNeedsAction {
+		t.Fatalf("expected day 30 in operational queue, got %s", item.WorkflowStatus)
+	}
+}
+
+func TestRetentionExclusionIsReversibleAndCanExpire(t *testing.T) {
+	today := time.Date(2026, time.July, 31, 0, 0, 0, 0, time.UTC)
+	first := today.AddDate(0, 0, -100)
+	last := today.AddDate(0, 0, -10)
+	future := today.AddDate(0, 0, 10)
+	metric := domain.RetentionMetrics{
+		FirstCheckin: &first, LastCheckin: &last, TotalCheckins: 12, PreviousCheckins: 6,
+		RetentionMonitoringStatus: domain.RetentionMonitoringExcluded,
+		RetentionExclusionReason: "visitor", RetentionExcludedUntil: &future,
+	}
+	item := classify(metric, today, 7)
+	if item.WorkflowStatus != domain.RetentionWorkflowExcluded {
+		t.Fatalf("expected active exclusion, got %s", item.WorkflowStatus)
+	}
+
+	past := today.AddDate(0, 0, -1)
+	metric.RetentionExcludedUntil = &past
+	item = classify(metric, today, 7)
+	if item.WorkflowStatus != domain.RetentionWorkflowNeedsAction {
+		t.Fatalf("expected expired exclusion to resume monitoring, got %s", item.WorkflowStatus)
+	}
+}
+
 func TestClassifyObservesReturnWithoutClaimingCausality(t *testing.T) {
 	today := time.Date(2026, time.July, 28, 0, 0, 0, 0, time.UTC)
 	first := today.AddDate(0, 0, -100)

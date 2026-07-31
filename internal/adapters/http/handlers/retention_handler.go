@@ -131,6 +131,43 @@ func (h RetentionHandler) UpdateMembershipStart(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
+func (h RetentionHandler) UpdateMonitoring(c *gin.Context) {
+	boxID, err := middleware.BoxID(c)
+	if err != nil {
+		respondUnauthorized(c)
+		return
+	}
+	userID, err := middleware.UserID(c)
+	if err != nil {
+		respondUnauthorized(c)
+		return
+	}
+	var request dto.UpdateRetentionMonitoringRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		respondBadRequest(c)
+		return
+	}
+	var excludedUntil *time.Time
+	if request.ExcludedUntil != nil && *request.ExcludedUntil != "" {
+		value, parseErr := time.Parse("2006-01-02", *request.ExcludedUntil)
+		if parseErr != nil {
+			respondBadRequest(c)
+			return
+		}
+		excludedUntil = &value
+	}
+	err = h.service.UpdateMonitoring(c.Request.Context(), boxID, domain.ID(c.Param("id")), userID, domain.RetentionMonitoringStatus(request.Status), request.Reason, excludedUntil)
+	if err != nil {
+		if errors.Is(err, retention.ErrInvalidIntervention) {
+			respondBadRequest(c)
+			return
+		}
+		respondError(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
 func (h RetentionHandler) ListInterventions(c *gin.Context) {
 	boxID, err := middleware.BoxID(c)
 	if err != nil {
@@ -234,6 +271,8 @@ func retentionRadarResponse(item domain.RetentionRadarItem) dto.RetentionRadarRe
 		LastInterventionOutcome:      item.LastInterventionOutcome,
 		LastInterventionAssigneeID:   string(item.LastInterventionAssigneeID),
 		LastInterventionAssigneeName: item.LastInterventionAssigneeName,
+		RetentionMonitoringStatus:    string(item.RetentionMonitoringStatus),
+		RetentionExclusionReason:     item.RetentionExclusionReason,
 		Recommendation:               dto.RetentionRecommendationResponse{Code: item.Recommendation.Code, Title: item.Recommendation.Title, Message: item.Recommendation.Message},
 	}
 	if item.FirstCheckin != nil {
@@ -264,6 +303,14 @@ func retentionRadarResponse(item domain.RetentionRadarItem) dto.RetentionRadarRe
 		value := item.LastInterventionCreatedAt.Format(time.RFC3339)
 		response.LastInterventionCreatedAt = &value
 	}
+	if item.RetentionExcludedUntil != nil {
+		value := item.RetentionExcludedUntil.Format("2006-01-02")
+		response.RetentionExcludedUntil = &value
+	}
+	if item.RetentionExcludedAt != nil {
+		value := item.RetentionExcludedAt.Format(time.RFC3339)
+		response.RetentionExcludedAt = &value
+	}
 	for _, signal := range item.Signals {
 		response.Signals = append(response.Signals, dto.RetentionSignalResponse{Code: signal.Code, Message: signal.Message})
 	}
@@ -271,7 +318,7 @@ func retentionRadarResponse(item domain.RetentionRadarItem) dto.RetentionRadarRe
 }
 
 func retentionRulesResponse(item domain.RetentionRules) dto.RetentionRulesResponse {
-	return dto.RetentionRulesResponse{
+	response := dto.RetentionRulesResponse{
 		RecentStart: item.RecentStart.Format("2006-01-02"), RecentEnd: item.RecentEnd.Format("2006-01-02"),
 		PreviousStart: item.PreviousStart.Format("2006-01-02"), PreviousEnd: item.PreviousEnd.Format("2006-01-02"),
 		HistoryRequiredBefore: item.HistoryRequiredBefore.Format("2006-01-02"),
@@ -281,7 +328,13 @@ func retentionRulesResponse(item domain.RetentionRules) dto.RetentionRulesRespon
 		CriticalInactiveDays:    item.CriticalInactiveDays,
 		AttentionDropPercentage: item.AttentionDropPercentage,
 		AtRiskDropPercentage:    item.AtRiskDropPercentage, CriticalDropPercentage: item.CriticalDropPercentage,
+		OperationalInactiveDays: item.OperationalInactiveDays,
 	}
+	if item.BaselineAt != nil {
+		value := item.BaselineAt.Format("2006-01-02")
+		response.BaselineAt = &value
+	}
+	return response
 }
 
 func retentionInterventionResponse(item domain.RetentionIntervention) dto.RetentionInterventionResponse {
@@ -302,6 +355,7 @@ func retentionSummaryResponse(item domain.RetentionSummary) dto.RetentionSummary
 		PeriodStart: item.PeriodStart.Format("2006-01-02"), PeriodEnd: item.PeriodEnd.Format("2006-01-02"),
 		NeedsAction: item.NeedsAction, WaitingReturn: item.WaitingReturn, FollowUpDue: item.FollowUpDue,
 		Recovered: item.Recovered, CompletedInterventions: item.CompletedInterventions,
+		HistoricalInactive: item.HistoricalInactive, Excluded: item.Excluded,
 		ReturnWithin3Days: item.ReturnWithin3Days, ReturnWithin7Days: item.ReturnWithin7Days,
 		ReturnWithin14Days: item.ReturnWithin14Days, MedianDaysToReturn: item.MedianDaysToReturn,
 		Reasons: []dto.RetentionBreakdownResponse{}, Channels: []dto.RetentionBreakdownResponse{}, Outcomes: []dto.RetentionBreakdownResponse{},

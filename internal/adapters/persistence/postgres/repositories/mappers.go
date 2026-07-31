@@ -36,6 +36,7 @@ func boxToDomain(model models.BoxModel) domain.Box {
 		BillingAccessChangedAt:  model.BillingAccessChangedAt,
 		RiskInactiveDays:        riskInactiveDays,
 		RiskMessageCooldownDays: riskMessageCooldownDays,
+		RetentionBaselineAt:     model.RetentionBaselineAt,
 		CreatedAt:               model.CreatedAt,
 		UpdatedAt:               model.UpdatedAt,
 	}
@@ -68,6 +69,7 @@ func boxToModel(box domain.Box) models.BoxModel {
 		BillingAccessChangedAt:  box.BillingAccessChangedAt,
 		RiskInactiveDays:        riskInactiveDays,
 		RiskMessageCooldownDays: riskMessageCooldownDays,
+		RetentionBaselineAt:     box.RetentionBaselineAt,
 		CreatedAt:               box.CreatedAt,
 		UpdatedAt:               box.UpdatedAt,
 	}
@@ -123,24 +125,37 @@ func studentToDomain(model models.StudentModel) domain.Student {
 	if riskStatus == "" {
 		riskStatus = domain.StudentRiskStatusActive
 	}
+	monitoringStatus := domain.RetentionMonitoringStatus(model.RetentionMonitoringStatus)
+	if monitoringStatus == "" {
+		monitoringStatus = domain.RetentionMonitoringMonitored
+	}
+	excludedBy := domain.ID("")
+	if model.RetentionExcludedByUserID != nil {
+		excludedBy = domainID(*model.RetentionExcludedByUserID)
+	}
 	return domain.Student{
-		ID:                      domainID(model.ID),
-		BoxID:                   domainID(model.BoxID),
-		Name:                    model.Name,
-		Email:                   model.Email,
-		Phone:                   model.Phone,
-		Source:                  domain.Source(model.Source),
-		ExternalID:              model.ExternalID,
-		RiskStatus:              riskStatus,
-		RiskLastMessageAt:       model.RiskLastMessageAt,
-		ContactStatus:           modelContactStatus(model.ContactStatus),
-		ContactStatusUpdatedAt:  model.ContactStatusUpdatedAt,
-		ContactStatusSource:     model.ContactStatusSource,
-		MembershipStartedAt:     model.MembershipStartedAt,
-		MembershipStartedSource: optionalString(model.MembershipStartedSource),
-		AnonymizedAt:            model.AnonymizedAt,
-		CreatedAt:               model.CreatedAt,
-		UpdatedAt:               model.UpdatedAt,
+		ID:                        domainID(model.ID),
+		BoxID:                     domainID(model.BoxID),
+		Name:                      model.Name,
+		Email:                     model.Email,
+		Phone:                     model.Phone,
+		Source:                    domain.Source(model.Source),
+		ExternalID:                model.ExternalID,
+		RiskStatus:                riskStatus,
+		RiskLastMessageAt:         model.RiskLastMessageAt,
+		ContactStatus:             modelContactStatus(model.ContactStatus),
+		ContactStatusUpdatedAt:    model.ContactStatusUpdatedAt,
+		ContactStatusSource:       model.ContactStatusSource,
+		MembershipStartedAt:       model.MembershipStartedAt,
+		MembershipStartedSource:   optionalString(model.MembershipStartedSource),
+		RetentionMonitoringStatus: monitoringStatus,
+		RetentionExclusionReason:  model.RetentionExclusionReason,
+		RetentionExcludedUntil:    model.RetentionExcludedUntil,
+		RetentionExcludedAt:       model.RetentionExcludedAt,
+		RetentionExcludedByUserID: excludedBy,
+		AnonymizedAt:              model.AnonymizedAt,
+		CreatedAt:                 model.CreatedAt,
+		UpdatedAt:                 model.UpdatedAt,
 	}
 }
 
@@ -149,24 +164,38 @@ func studentToModel(student domain.Student) models.StudentModel {
 	if riskStatus == "" {
 		riskStatus = domain.StudentRiskStatusActive
 	}
+	monitoringStatus := student.RetentionMonitoringStatus
+	if monitoringStatus == "" {
+		monitoringStatus = domain.RetentionMonitoringMonitored
+	}
+	var excludedBy *string
+	if student.RetentionExcludedByUserID != "" {
+		value := stringID(student.RetentionExcludedByUserID)
+		excludedBy = &value
+	}
 	return models.StudentModel{
-		ID:                      stringID(student.ID),
-		BoxID:                   stringID(student.BoxID),
-		Name:                    student.Name,
-		Email:                   student.Email,
-		Phone:                   student.Phone,
-		Source:                  string(student.Source),
-		ExternalID:              student.ExternalID,
-		RiskStatus:              string(riskStatus),
-		RiskLastMessageAt:       student.RiskLastMessageAt,
-		ContactStatus:           string(normalizedContactStatus(student.ContactStatus)),
-		ContactStatusUpdatedAt:  student.ContactStatusUpdatedAt,
-		ContactStatusSource:     student.ContactStatusSource,
-		MembershipStartedAt:     student.MembershipStartedAt,
-		MembershipStartedSource: stringPointer(student.MembershipStartedSource),
-		AnonymizedAt:            student.AnonymizedAt,
-		CreatedAt:               student.CreatedAt,
-		UpdatedAt:               student.UpdatedAt,
+		ID:                        stringID(student.ID),
+		BoxID:                     stringID(student.BoxID),
+		Name:                      student.Name,
+		Email:                     student.Email,
+		Phone:                     student.Phone,
+		Source:                    string(student.Source),
+		ExternalID:                student.ExternalID,
+		RiskStatus:                string(riskStatus),
+		RiskLastMessageAt:         student.RiskLastMessageAt,
+		ContactStatus:             string(normalizedContactStatus(student.ContactStatus)),
+		ContactStatusUpdatedAt:    student.ContactStatusUpdatedAt,
+		ContactStatusSource:       student.ContactStatusSource,
+		MembershipStartedAt:       student.MembershipStartedAt,
+		MembershipStartedSource:   stringPointer(student.MembershipStartedSource),
+		RetentionMonitoringStatus: string(monitoringStatus),
+		RetentionExclusionReason:  student.RetentionExclusionReason,
+		RetentionExcludedUntil:    student.RetentionExcludedUntil,
+		RetentionExcludedAt:       student.RetentionExcludedAt,
+		RetentionExcludedByUserID: excludedBy,
+		AnonymizedAt:              student.AnonymizedAt,
+		CreatedAt:                 student.CreatedAt,
+		UpdatedAt:                 student.UpdatedAt,
 	}
 }
 

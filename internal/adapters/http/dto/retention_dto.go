@@ -43,24 +43,30 @@ type RetentionRadarResponse struct {
 	LastInterventionCreatedAt    *string                         `json:"last_intervention_created_at"`
 	LastInterventionAssigneeID   string                          `json:"last_intervention_assignee_id"`
 	LastInterventionAssigneeName string                          `json:"last_intervention_assignee_name"`
+	RetentionMonitoringStatus    string                          `json:"retention_monitoring_status"`
+	RetentionExclusionReason     string                          `json:"retention_exclusion_reason"`
+	RetentionExcludedUntil       *string                         `json:"retention_excluded_until"`
+	RetentionExcludedAt          *string                         `json:"retention_excluded_at"`
 	Recommendation               RetentionRecommendationResponse `json:"recommendation"`
 }
 
 type RetentionRulesResponse struct {
-	RecentStart             string `json:"recent_start"`
-	RecentEnd               string `json:"recent_end"`
-	PreviousStart           string `json:"previous_start"`
-	PreviousEnd             string `json:"previous_end"`
-	HistoryRequiredBefore   string `json:"history_required_before"`
-	HistoryDays             int    `json:"history_days"`
-	MinimumTotalCheckins    int    `json:"minimum_total_checkins"`
-	MinimumPreviousCheckins int    `json:"minimum_previous_checkins"`
-	AttentionInactiveDays   int    `json:"attention_inactive_days"`
-	AtRiskInactiveDays      int    `json:"at_risk_inactive_days"`
-	CriticalInactiveDays    int    `json:"critical_inactive_days"`
-	AttentionDropPercentage int    `json:"attention_drop_percentage"`
-	AtRiskDropPercentage    int    `json:"at_risk_drop_percentage"`
-	CriticalDropPercentage  int    `json:"critical_drop_percentage"`
+	RecentStart             string  `json:"recent_start"`
+	RecentEnd               string  `json:"recent_end"`
+	PreviousStart           string  `json:"previous_start"`
+	PreviousEnd             string  `json:"previous_end"`
+	HistoryRequiredBefore   string  `json:"history_required_before"`
+	HistoryDays             int     `json:"history_days"`
+	MinimumTotalCheckins    int     `json:"minimum_total_checkins"`
+	MinimumPreviousCheckins int     `json:"minimum_previous_checkins"`
+	AttentionInactiveDays   int     `json:"attention_inactive_days"`
+	AtRiskInactiveDays      int     `json:"at_risk_inactive_days"`
+	CriticalInactiveDays    int     `json:"critical_inactive_days"`
+	AttentionDropPercentage int     `json:"attention_drop_percentage"`
+	AtRiskDropPercentage    int     `json:"at_risk_drop_percentage"`
+	CriticalDropPercentage  int     `json:"critical_drop_percentage"`
+	OperationalInactiveDays int     `json:"operational_inactive_days"`
+	BaselineAt              *string `json:"baseline_at"`
 }
 
 type RetentionInterventionRequest struct {
@@ -111,6 +117,8 @@ type RetentionSummaryResponse struct {
 	WaitingReturn          int                          `json:"waiting_return"`
 	FollowUpDue            int                          `json:"follow_up_due"`
 	Recovered              int                          `json:"recovered"`
+	HistoricalInactive     int                          `json:"historical_inactive"`
+	Excluded               int                          `json:"excluded"`
 	CompletedInterventions int                          `json:"completed_interventions"`
 	ReturnWithin3Days      int                          `json:"return_within_3_days"`
 	ReturnWithin7Days      int                          `json:"return_within_7_days"`
@@ -123,6 +131,12 @@ type RetentionSummaryResponse struct {
 
 type UpdateMembershipStartRequest struct {
 	StartedAt string `json:"started_at" binding:"required"`
+}
+
+type UpdateRetentionMonitoringRequest struct {
+	Status        string  `json:"status" binding:"required"`
+	Reason        string  `json:"reason"`
+	ExcludedUntil *string `json:"excluded_until"`
 }
 
 type OnboardingJourneyResponse struct {

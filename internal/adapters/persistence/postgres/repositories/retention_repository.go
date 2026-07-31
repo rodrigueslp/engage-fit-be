@@ -7,6 +7,7 @@ import (
 
 	"boxengage/backend/internal/adapters/persistence/postgres/models"
 	"boxengage/backend/internal/domain"
+	"gorm.io/gorm"
 )
 
 func (r RetentionGormRepository) ListMetrics(ctx context.Context, boxID domain.ID, recentStart, previousStart, end time.Time) ([]domain.RetentionMetrics, error) {
@@ -31,6 +32,11 @@ func (r RetentionGormRepository) ListMetrics(ctx context.Context, boxID domain.I
 		LastInterventionCreatedAt    *time.Time
 		LastInterventionAssigneeID   string
 		LastInterventionAssigneeName string
+		RetentionMonitoringStatus    string
+		RetentionExclusionReason     string
+		RetentionExcludedUntil       *time.Time
+		RetentionExcludedAt          *time.Time
+		RetentionExcludedByUserID    string
 	}
 	var rows []row
 	err := r.db.WithContext(ctx).Raw(`
@@ -65,6 +71,9 @@ func (r RetentionGormRepository) ListMetrics(ctx context.Context, boxID domain.I
 		       la.created_at AS last_intervention_created_at,
 		       la.assigned_to_user_id AS last_intervention_assignee_id,
 		       assignee.name AS last_intervention_assignee_name
+		       , s.retention_monitoring_status, s.retention_exclusion_reason,
+		       s.retention_excluded_until, s.retention_excluded_at,
+		       s.retention_excluded_by_user_id
 		FROM students s
 		JOIN attendance a ON a.student_id = s.id
 		LEFT JOIN last_action la ON la.student_id = s.id
@@ -100,6 +109,11 @@ func (r RetentionGormRepository) ListMetrics(ctx context.Context, boxID domain.I
 			LastInterventionCreatedAt:    item.LastInterventionCreatedAt,
 			LastInterventionAssigneeID:   domainID(item.LastInterventionAssigneeID),
 			LastInterventionAssigneeName: item.LastInterventionAssigneeName,
+			RetentionMonitoringStatus:    domain.RetentionMonitoringStatus(item.RetentionMonitoringStatus),
+			RetentionExclusionReason:     item.RetentionExclusionReason,
+			RetentionExcludedUntil:       item.RetentionExcludedUntil,
+			RetentionExcludedAt:          item.RetentionExcludedAt,
+			RetentionExcludedByUserID:    domainID(item.RetentionExcludedByUserID),
 		})
 	}
 	return result, nil
@@ -301,10 +315,12 @@ func (r RetentionGormRepository) ListOnboardingMetrics(ctx context.Context, boxI
 		LEFT JOIN source_coverage coverage ON coverage.source = s.source
 		WHERE s.box_id = ?
 		  AND s.anonymized_at IS NULL
+		  AND (s.retention_monitoring_status <> 'excluded'
+		       OR (s.retention_excluded_until IS NOT NULL AND s.retention_excluded_until < ?::date))
 		  AND s.membership_started_at BETWEEN ?::date - 30 AND ?::date
 		GROUP BY s.id, coverage.coverage_start
 		ORDER BY s.membership_started_at DESC, s.name ASC
-	`, stringID(boxID), today, stringID(boxID), stringID(boxID), today, today).Scan(&rows).Error
+	`, stringID(boxID), today, stringID(boxID), stringID(boxID), today, today, today).Scan(&rows).Error
 	if err != nil {
 		return nil, err
 	}
@@ -329,6 +345,44 @@ func (r RetentionGormRepository) UpdateMembershipStart(ctx context.Context, boxI
 		Updates(map[string]any{
 			"membership_started_at": startedAt, "membership_started_source": source, "updated_at": updatedAt,
 		}).Error
+}
+
+func (r RetentionGormRepository) UpdateMonitoring(ctx context.Context, boxID, studentID, actorUserID domain.ID, status domain.RetentionMonitoringStatus, reason string, excludedUntil *time.Time, updatedAt time.Time) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		updates := map[string]any{
+			"retention_monitoring_status": status,
+			"updated_at":                  updatedAt,
+		}
+		if status == domain.RetentionMonitoringExcluded {
+			updates["retention_exclusion_reason"] = reason
+			updates["retention_excluded_until"] = excludedUntil
+			updates["retention_excluded_at"] = updatedAt
+			updates["retention_excluded_by_user_id"] = nullableID(actorUserID)
+		} else {
+			updates["retention_exclusion_reason"] = nil
+			updates["retention_excluded_until"] = nil
+			updates["retention_excluded_at"] = nil
+			updates["retention_excluded_by_user_id"] = nil
+		}
+		result := tx.WithContext(ctx).Model(&models.StudentModel{}).
+			Where("box_id = ? AND id = ? AND anonymized_at IS NULL", stringID(boxID), stringID(studentID)).
+			Updates(updates)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			return gorm.ErrRecordNotFound
+		}
+		id := domain.ID("")
+		if err := ensureID(&id); err != nil {
+			return err
+		}
+		return tx.WithContext(ctx).Table("retention_monitoring_events").Create(map[string]any{
+			"id": stringID(id), "box_id": stringID(boxID), "student_id": stringID(studentID),
+			"actor_user_id": nullableID(actorUserID), "monitoring_status": string(status),
+			"reason": nullableString(reason), "excluded_until": excludedUntil, "created_at": updatedAt,
+		}).Error
+	})
 }
 
 func retentionInterventionToDomain(row models.RetentionInterventionModel) domain.RetentionIntervention {

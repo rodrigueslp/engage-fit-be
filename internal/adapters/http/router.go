@@ -313,6 +313,7 @@ func NewRouter(deps RouterDependencies) *gin.Engine {
 	protected.POST("/students/:id/retention-interventions", retentionHandler.CreateIntervention)
 	protected.PATCH("/retention-interventions/:id", retentionHandler.UpdateIntervention)
 	protected.PATCH("/students/:id/membership-start", retentionHandler.UpdateMembershipStart)
+	protected.PATCH("/students/:id/retention-monitoring", retentionHandler.UpdateMonitoring)
 
 	studentsHandler := handlers.NewStudentsHandler(deps.ListStudentsUseCase, deps.GetStudentUseCase, deps.ListStudentCheckinsUseCase, deps.UpdateStudentRiskStatusUseCase, deps.ExportStudentDataUseCase, deps.UpdateContactPreferenceUseCase, deps.AnonymizeStudentUseCase)
 	protected.GET("/students", studentsHandler.List)

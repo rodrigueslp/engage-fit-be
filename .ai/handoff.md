@@ -6,6 +6,39 @@ Guia operacional consolidado: `docs/application-readiness-guide.md`.
 
 Atualizado em: 2026-07-31 (cadastro inicial, Dashboard e mensageria simplificada em produção)
 
+## Checkpoint local de triagem de retenção em 2026-07-31 — aguardando publicação
+
+- Implementada localmente a migration `045_add_retention_monitoring_controls.sql`.
+  Ela adiciona a linha de base de retenção do box, exclusão reversível por aluno
+  e a trilha auditável `retention_monitoring_events`.
+- O radar continua usando os 90 dias importados, mas casos com mais de 30 dias
+  sem presença passam para o workflow `historical`. Eles ficam na nova fila
+  `Inativos históricos` e deixam de inflar `Precisa de ação`.
+- Na base local anterior, os 25 casos foram separados em 4 ações atuais e 21
+  inativos históricos. Para a base de produção analisada após a importação de
+  90 dias do TotalPass, a projeção com a mesma regra é 52 ações atuais e 43
+  inativos históricos; esses números ainda precisam ser confirmados depois do
+  deploy.
+- A tela ganhou as filas `Inativos históricos` e `Não acompanhados`, além da
+  ação `Não acompanhar`. Motivos disponíveis: visitante/drop-in, ex-aluno,
+  pausa longa, fora do público de retenção e outro. A exclusão pode ser sem
+  prazo ou temporária e oferece `Voltar a acompanhar`.
+- Uma exclusão vigente remove o aluno somente do radar, do Dashboard de
+  retenção e de `Primeiros 30 dias`. Frequência, campanhas, brindes e histórico
+  continuam preservados. Exclusões expiradas retomam o monitoramento
+  automaticamente.
+- A primeira importação bem-sucedida grava `retention_baseline_at` quando a
+  linha de base ainda não existe. Boxes já importados recebem a data de
+  aplicação da migration.
+- Validações locais concluídas: todas as 45 migrations em PostgreSQL vazio,
+  migration `045` aplicada e idempotente no banco local, `go test ./...`, suíte
+  de integração PostgreSQL, build TypeScript/Vite e Playwright com 6 cenários
+  executados e 2 cenários reais corretamente ignorados. O teste E2E novo cobre
+  separação histórica, exclusão de visitante e restauração.
+- Este checkpoint ainda não foi versionado nem publicado em produção. O
+  checkpoint de produção abaixo continua sendo a verdade operacional até um
+  deploy explícito.
+
 ## Checkpoint de Dashboard e mensageria simplificada em 2026-07-31
 
 Este é o checkpoint operacional mais recente. Em caso de conflito com os

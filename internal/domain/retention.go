@@ -34,6 +34,8 @@ const (
 	RetentionWorkflowPaused        RetentionWorkflowStatus = "paused"
 	RetentionWorkflowClosed        RetentionWorkflowStatus = "closed"
 	RetentionWorkflowRecovered     RetentionWorkflowStatus = "recovered"
+	RetentionWorkflowHistorical    RetentionWorkflowStatus = "historical"
+	RetentionWorkflowExcluded      RetentionWorkflowStatus = "excluded"
 )
 
 type RetentionMetrics struct {
@@ -57,6 +59,11 @@ type RetentionMetrics struct {
 	LastInterventionCreatedAt    *time.Time
 	LastInterventionAssigneeID   ID
 	LastInterventionAssigneeName string
+	RetentionMonitoringStatus    RetentionMonitoringStatus
+	RetentionExclusionReason     string
+	RetentionExcludedUntil       *time.Time
+	RetentionExcludedAt          *time.Time
+	RetentionExcludedByUserID    ID
 }
 
 type RetentionRadarItem struct {
@@ -90,6 +97,8 @@ type RetentionRules struct {
 	AttentionDropPercentage int
 	AtRiskDropPercentage    int
 	CriticalDropPercentage  int
+	OperationalInactiveDays int
+	BaselineAt              *time.Time
 }
 
 type RetentionIntervention struct {
@@ -133,6 +142,8 @@ type RetentionSummary struct {
 	WaitingReturn          int
 	FollowUpDue            int
 	Recovered              int
+	HistoricalInactive     int
+	Excluded               int
 	CompletedInterventions int
 	ReturnWithin3Days      int
 	ReturnWithin7Days      int

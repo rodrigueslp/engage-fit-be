@@ -66,4 +66,36 @@ func TestRetentionRepositoryIsolatesInterventionsByTenant(t *testing.T) {
 	if len(items) != 0 {
 		t.Fatalf("cross-tenant list leaked interventions: %+v", items)
 	}
+
+	excludedUntil := now.AddDate(0, 0, 30)
+	if err := repository.UpdateMonitoring(context.Background(), domain.ID(boxOne), domain.ID(studentOne), "", domain.RetentionMonitoringExcluded, "visitor", &excludedUntil, now); err != nil {
+		t.Fatal(err)
+	}
+	var monitored models.StudentModel
+	if err := db.Where("box_id = ? AND id = ?", boxOne, studentOne).First(&monitored).Error; err != nil {
+		t.Fatal(err)
+	}
+	if monitored.RetentionMonitoringStatus != string(domain.RetentionMonitoringExcluded) || monitored.RetentionExclusionReason != "visitor" || monitored.RetentionExcludedUntil == nil {
+		t.Fatalf("unexpected persisted monitoring state: %+v", monitored)
+	}
+	var events int64
+	if err := db.Table("retention_monitoring_events").Where("box_id = ? AND student_id = ?", boxOne, studentOne).Count(&events).Error; err != nil {
+		t.Fatal(err)
+	}
+	if events != 1 {
+		t.Fatalf("expected one monitoring audit event, got %d", events)
+	}
+	if err := repository.UpdateMonitoring(context.Background(), domain.ID(boxOne), domain.ID(studentTwo), "", domain.RetentionMonitoringExcluded, "visitor", nil, now); !errors.Is(err, gorm.ErrRecordNotFound) {
+		t.Fatalf("cross-tenant monitoring update should be hidden, got %v", err)
+	}
+	if err := repository.UpdateMonitoring(context.Background(), domain.ID(boxOne), domain.ID(studentOne), "", domain.RetentionMonitoringMonitored, "", nil, now.Add(time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	monitored = models.StudentModel{}
+	if err := db.Where("box_id = ? AND id = ?", boxOne, studentOne).First(&monitored).Error; err != nil {
+		t.Fatal(err)
+	}
+	if monitored.RetentionMonitoringStatus != string(domain.RetentionMonitoringMonitored) || monitored.RetentionExcludedUntil != nil || monitored.RetentionExclusionReason != "" {
+		t.Fatalf("expected monitoring restoration to clear exclusion, got %+v", monitored)
+	}
 }

@@ -31,9 +31,10 @@ var coachRoutes = map[string]map[string]bool{
 		"/api/v1/students/:id/retention-interventions": true,
 	},
 	http.MethodPatch: {
-		"/api/v1/retention-interventions/:id":   true,
-		"/api/v1/students/:id/membership-start": true,
-		"/api/v1/students/:id/risk-status":      true,
+		"/api/v1/retention-interventions/:id":       true,
+		"/api/v1/students/:id/membership-start":     true,
+		"/api/v1/students/:id/risk-status":          true,
+		"/api/v1/students/:id/retention-monitoring": true,
 	},
 }
 

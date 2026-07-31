@@ -14,6 +14,7 @@ type BoxModel struct {
 	BillingAccessChangedAt  *time.Time
 	RiskInactiveDays        int
 	RiskMessageCooldownDays int
+	RetentionBaselineAt     *time.Time
 	CreatedAt               time.Time
 	UpdatedAt               time.Time
 }
@@ -129,23 +130,28 @@ type UserModel struct {
 }
 
 type StudentModel struct {
-	ID                      string `gorm:"primaryKey"`
-	BoxID                   string `gorm:"index"`
-	Name                    string
-	Email                   string
-	Phone                   string
-	Source                  string `gorm:"index"`
-	ExternalID              string `gorm:"index"`
-	RiskStatus              string
-	RiskLastMessageAt       *time.Time
-	ContactStatus           string
-	ContactStatusUpdatedAt  *time.Time
-	ContactStatusSource     string
-	MembershipStartedAt     *time.Time
-	MembershipStartedSource *string
-	AnonymizedAt            *time.Time
-	CreatedAt               time.Time
-	UpdatedAt               time.Time
+	ID                        string `gorm:"primaryKey"`
+	BoxID                     string `gorm:"index"`
+	Name                      string
+	Email                     string
+	Phone                     string
+	Source                    string `gorm:"index"`
+	ExternalID                string `gorm:"index"`
+	RiskStatus                string
+	RiskLastMessageAt         *time.Time
+	ContactStatus             string
+	ContactStatusUpdatedAt    *time.Time
+	ContactStatusSource       string
+	MembershipStartedAt       *time.Time
+	MembershipStartedSource   *string
+	RetentionMonitoringStatus string `gorm:"default:monitored"`
+	RetentionExclusionReason  string
+	RetentionExcludedUntil    *time.Time
+	RetentionExcludedAt       *time.Time
+	RetentionExcludedByUserID *string
+	AnonymizedAt              *time.Time
+	CreatedAt                 time.Time
+	UpdatedAt                 time.Time
 }
 
 type ImportHistoryModel struct {

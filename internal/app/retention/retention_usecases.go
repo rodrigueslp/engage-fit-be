@@ -21,6 +21,7 @@ const (
 	attentionDropPercentage  = 25
 	atRiskDropPercentage     = 50
 	criticalDropPercentage   = 75
+	operationalInactiveDays  = 30
 )
 
 type Service struct {
@@ -87,6 +88,7 @@ func retentionRules(box domain.Box, now time.Time) domain.RetentionRules {
 		AtRiskInactiveDays:      inactiveDays, CriticalInactiveDays: max(14, inactiveDays*2),
 		AttentionDropPercentage: attentionDropPercentage,
 		AtRiskDropPercentage:    atRiskDropPercentage, CriticalDropPercentage: criticalDropPercentage,
+		OperationalInactiveDays: operationalInactiveDays, BaselineAt: box.RetentionBaselineAt,
 	}
 }
 
@@ -157,6 +159,10 @@ func classify(metric domain.RetentionMetrics, today time.Time, inactiveDays int)
 
 func recommendation(item domain.RetentionRadarItem) domain.RetentionRecommendation {
 	switch item.WorkflowStatus {
+	case domain.RetentionWorkflowExcluded:
+		return domain.RetentionRecommendation{Code: "retention_excluded", Title: "Fora do monitoramento", Message: "O box decidiu não acompanhar este aluno no radar de retenção. Os check-ins continuam preservados."}
+	case domain.RetentionWorkflowHistorical:
+		return domain.RetentionRecommendation{Code: "historical_reactivation", Title: "Tratar como reativação", Message: "A última presença ocorreu há mais de 30 dias. Revise o vínculo antes de realizar uma abordagem de reativação."}
 	case domain.RetentionWorkflowRecovered:
 		return domain.RetentionRecommendation{Code: "acknowledge_return", Title: "Reconhecer o retorno", Message: "Houve uma nova presença após o acompanhamento. Considere reconhecer a retomada sem atribuir causalidade ao contato."}
 	case domain.RetentionWorkflowFollowUpDue:
@@ -189,8 +195,15 @@ func recommendation(item domain.RetentionRadarItem) domain.RetentionRecommendati
 }
 
 func workflowStatus(item domain.RetentionRadarItem, today time.Time) (domain.RetentionWorkflowStatus, *time.Time) {
+	if item.RetentionMonitoringStatus == domain.RetentionMonitoringExcluded &&
+		(item.RetentionExcludedUntil == nil || !dateOnly(*item.RetentionExcludedUntil).Before(today)) {
+		return domain.RetentionWorkflowExcluded, item.RetentionExcludedUntil
+	}
 	if item.LastInterventionID == "" || item.LastInterventionStatus == "cancelled" {
 		if needsAttention(item.Level) {
+			if item.DaysSinceCheckin != nil && *item.DaysSinceCheckin > operationalInactiveDays {
+				return domain.RetentionWorkflowHistorical, nil
+			}
 			return domain.RetentionWorkflowNeedsAction, nil
 		}
 		return domain.RetentionWorkflowNone, nil
@@ -222,6 +235,10 @@ func workflowStatus(item domain.RetentionRadarItem, today time.Time) (domain.Ret
 		return domain.RetentionWorkflowFollowUpDue, dueAt
 	}
 	return domain.RetentionWorkflowWaitingReturn, dueAt
+}
+
+func dateOnly(value time.Time) time.Time {
+	return time.Date(value.Year(), value.Month(), value.Day(), 0, 0, 0, 0, time.UTC)
 }
 
 func dueReached(dueAt, today time.Time) bool {
@@ -286,6 +303,10 @@ func (s Service) Summary(ctx context.Context, boxID domain.ID, start, end time.T
 			result.FollowUpDue++
 		case domain.RetentionWorkflowRecovered:
 			result.Recovered++
+		case domain.RetentionWorkflowHistorical:
+			result.HistoricalInactive++
+		case domain.RetentionWorkflowExcluded:
+			result.Excluded++
 		}
 	}
 	return result, nil
@@ -394,6 +415,41 @@ func (s Service) UpdateMembershipStart(ctx context.Context, boxID, studentID dom
 		return ErrInvalidIntervention
 	}
 	return s.retention.UpdateMembershipStart(ctx, boxID, studentID, startedAt, "manual", now)
+}
+
+func (s Service) UpdateMonitoring(ctx context.Context, boxID, studentID, actorUserID domain.ID, status domain.RetentionMonitoringStatus, reason string, excludedUntil *time.Time) error {
+	if _, err := s.students.FindByID(ctx, boxID, studentID); err != nil {
+		return err
+	}
+	reason = strings.TrimSpace(reason)
+	if status != domain.RetentionMonitoringMonitored && status != domain.RetentionMonitoringExcluded {
+		return ErrInvalidIntervention
+	}
+	if status == domain.RetentionMonitoringExcluded && !validMonitoringReason(reason) {
+		return ErrInvalidIntervention
+	}
+	now := s.now().UTC()
+	today := dateOnly(now)
+	if excludedUntil != nil {
+		value := dateOnly(*excludedUntil)
+		if value.Before(today) {
+			return ErrInvalidIntervention
+		}
+		excludedUntil = &value
+	}
+	if status == domain.RetentionMonitoringMonitored {
+		reason, excludedUntil = "", nil
+	}
+	return s.retention.UpdateMonitoring(ctx, boxID, studentID, actorUserID, status, reason, excludedUntil, now)
+}
+
+func validMonitoringReason(value string) bool {
+	switch value {
+	case "visitor", "former_member", "long_pause", "outside_retention", "other":
+		return true
+	default:
+		return false
+	}
 }
 
 func (s Service) CreateIntervention(ctx context.Context, item *domain.RetentionIntervention) error {

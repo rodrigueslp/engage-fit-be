@@ -153,6 +153,9 @@ func (uc ImportCheckinsUseCase) Execute(ctx context.Context, input ImportCheckin
 	if err := uc.recalculateActiveCampaigns(ctx, input.BoxID); err != nil {
 		return nil, err
 	}
+	if err := uc.imports.SetRetentionBaselineIfEmpty(ctx, input.BoxID, now); err != nil {
+		return nil, err
+	}
 
 	return &ImportCheckinsOutput{
 		ImportID:     importHistory.ID,

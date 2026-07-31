@@ -2,6 +2,7 @@ package repositories
 
 import (
 	"context"
+	"time"
 
 	"boxengage/backend/internal/adapters/persistence/postgres/models"
 	"boxengage/backend/internal/domain"
@@ -15,6 +16,12 @@ func (r ImportHistoryGormRepository) FindByID(ctx context.Context, boxID, id dom
 
 	importHistory := importHistoryToDomain(model)
 	return &importHistory, nil
+}
+
+func (r ImportHistoryGormRepository) SetRetentionBaselineIfEmpty(ctx context.Context, boxID domain.ID, baseline time.Time) error {
+	return r.db.WithContext(ctx).Table("boxes").
+		Where("id = ? AND retention_baseline_at IS NULL", stringID(boxID)).
+		Update("retention_baseline_at", baseline.UTC().Format("2006-01-02")).Error
 }
 
 func (r ImportHistoryGormRepository) List(ctx context.Context, boxID domain.ID) ([]domain.ImportHistory, error) {

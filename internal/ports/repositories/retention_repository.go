@@ -16,4 +16,5 @@ type RetentionRepository interface {
 	SummarizeInterventions(ctx context.Context, boxID domain.ID, start, end time.Time) (*domain.RetentionInterventionSummary, error)
 	ListOnboardingMetrics(ctx context.Context, boxID domain.ID, today time.Time) ([]domain.OnboardingMetrics, error)
 	UpdateMembershipStart(ctx context.Context, boxID, studentID domain.ID, startedAt time.Time, source string, updatedAt time.Time) error
+	UpdateMonitoring(ctx context.Context, boxID, studentID, actorUserID domain.ID, status domain.RetentionMonitoringStatus, reason string, excludedUntil *time.Time, updatedAt time.Time) error
 }

@@ -516,7 +516,7 @@ O fluxo de e-mail inativo exclui paused/not interested e opt-out, mas atualmente
 
 ### 12.4 Radar de retenção V2
 
-Na branch `v2/retention-foundation`, `GET /api/v1/retention/radar` compara os
+`GET /api/v1/retention/radar` compara os
 últimos 28 dias com os 28 anteriores. O resultado é um sinal explicável de
 mudança de engajamento, não uma previsão de cancelamento.
 
@@ -534,6 +534,22 @@ não muda a frequência: o aluno pode continuar `critical`, mas passa de
 `needs_action` para `waiting_return`. Na data de revisão, sem novo check-in,
 passa a `follow_up_due`. Pausa e encerramento saem da fila diária; retorno
 observado fica destacado por até 30 dias.
+
+O histórico importado não é descartado: a recomendação operacional é receber
+90 dias e manter as oito semanas necessárias para comparação. Casos elegíveis
+com mais de 30 dias desde a última presença recebem o workflow `historical` e
+ficam fora de `needs_action`; são oportunidades de reativação, não tarefas da
+fila diária. `boxes.retention_baseline_at`, preenchido na primeira importação,
+registra quando o box começou a ser acompanhado por esta regra.
+
+O box pode retirar explicitamente um aluno do radar por meio de
+`PATCH /api/v1/students/:id/retention-monitoring`. A exclusão exige um motivo
+estruturado (`visitor`, `former_member`, `long_pause`, `outside_retention` ou
+`other`), pode ser permanente ou ter data final e é reversível. Cada alteração
+gera um evento em `retention_monitoring_events` com ator e data. Enquanto a
+exclusão estiver vigente, o aluno não participa do Dashboard de retenção nem da
+jornada dos primeiros 30 dias; check-ins, campanhas, brindes e dados históricos
+continuam preservados.
 
 O frontend reutiliza `GET /api/v1/students/:id/checkins` em um painel lateral
 acessível pelo Radar e pela tela `Check-ins`. O painel mostra a distribuição das
@@ -984,7 +1000,7 @@ O contrato definitivo está em `internal/adapters/http/router.go`. Mapa resumido
 | `/api/v1/capabilities` | público | booleans de disponibilidade |
 | `/api/v1/auth`, `/setup/owner` | público/autenticado | sessão e onboarding |
 | `/api/v1/box`, `/students`, `/checkins` | OWNER/COACH, conforme allowlist | tenant, alunos e frequência |
-| `/api/v1/retention*`, `/team/members` | OWNER/COACH | radar, jornada, ações e consulta da equipe |
+| `/api/v1/retention*`, `/students/:id/retention-monitoring`, `/team/members` | OWNER/COACH | radar, jornada, exclusões reversíveis, ações e consulta da equipe |
 | `/api/v1/imports`, `/checkin-ingestion*` | OWNER ou credencial de ingestão | upload manual e entrada recorrente |
 | `/api/v1/team/coaches*` | OWNER | criação, desativação e senha de coaches |
 | `/api/v1/campaigns`, `/rewards` | OWNER | campanha, meta, progresso e brinde |
