@@ -4,7 +4,55 @@ Manual canônico de arquitetura e negócio: `docs/system-design.md`.
 
 Guia operacional consolidado: `docs/application-readiness-guide.md`.
 
-Atualizado em: 2026-07-30 (ativação consentida no WhatsApp sem telefone nas planilhas)
+Atualizado em: 2026-07-31 (V2 e ativação consentida homologadas em produção)
+
+## Checkpoint de produção da V2 e ativação WhatsApp em 2026-07-31
+
+Este é o checkpoint operacional mais recente. Em caso de conflito com os
+checkpoints históricos abaixo, esta seção prevalece.
+
+- A V2 deixou de estar isolada: as branches `v2/retention-foundation` foram
+  integradas por fast-forward em `main` e publicadas nos dois repositórios.
+- Código efetivamente implantado e sincronizado com `origin/main`:
+  - backend: `b60707f` (`feat: add consented WhatsApp contact activation`);
+  - frontend: `17df4be` (`style: align activation page with EngageFit brand`).
+- Deploys Railway concluídos com `SUCCESS` para `engage-fit-api`,
+  `engage-fit-web` e `engage-fit-billing-reconcile`. As CIs dos commits atuais
+  de backend e frontend concluíram com sucesso; o ajuste visual também passou
+  localmente em TypeScript, build Vite e Playwright antes do deploy.
+- O pre-deploy `/usr/local/bin/engagefit-migrate up` aplicou em produção as
+  migrations `035` a `041` e registrou `migration complete: 7 applied`.
+- Antes do merge foi criado e validado o backup lógico:
+  `/home/luiz-paulo/workspace/engage-fit/production-backups/engagefit-production-pre-v2-20260730-191121.dump`.
+  SHA-256:
+  `69380fb6da810b135c24de64647f1f48871fd12c8d8227e3c490dedad9ed5ef4`.
+  O arquivo é um dump custom PostgreSQL 18, possui 259 entradas e permissão
+  local `600`.
+- No Railway do backend está configurado exatamente:
+  `TWILIO_INBOUND_WEBHOOK_URL=https://www.engagefit.com.br/api/v1/webhooks/twilio/whatsapp`.
+  O pre-deploy permanece ativo, `FEATURE_WHATSAPP_ENABLED=true`,
+  `WHATSAPP_ALLOW_REAL_SEND=true` e `AUTOMATION_WORKER_ENABLED=false`.
+- No sender dedicado da subconta Twilio `Crossfit Alados`, o webhook de
+  mensagens recebidas foi configurado com a mesma URL e método HTTP `POST`.
+  Não há Messaging Service associado; fallback e status callback ficaram
+  vazios nesta etapa.
+- O endpoint público da Alados respondeu HTTP 200 e usa o sender dedicado
+  `+55 18 99671-0587`, coerente com a configuração efetiva do tenant.
+- O proprietário homologou o fluxo real ponta a ponta em produção com o
+  próprio cadastro: identificação, consentimento, abertura do WhatsApp,
+  recebimento assinado pela Twilio, vínculo do telefone e estado `opted_in`.
+  Em seguida enviou `SAIR` e confirmou a atualização para `opted_out`.
+- A página pública passou a usar a logo oficial, azul-marinho e laranja do
+  EngageFit e o co-branding com o CrossFit Alados. O verde ficou reservado ao
+  botão final do WhatsApp.
+- Smoke final confirmou `GET /health` e capabilities com HTTP 200, novo bundle
+  público e endpoint de ativação disponível. Nenhuma automação agendada foi
+  habilitada durante o deploy.
+- TLS do domínio canônico `https://www.engagefit.com.br` está válido e foi
+  confirmado pelo usuário. O apex `engagefit.com.br` ainda não está cadastrado
+  como custom domain no Railway e, em consulta externa, continuava apontando
+  para um balanceador AWS antigo. Usar e divulgar sempre a URL com `www` até
+  que DNS e redirecionamento do apex sejam normalizados.
 
 ## Checkpoint de ativação consentida no WhatsApp em 2026-07-30
 
@@ -33,18 +81,19 @@ Atualizado em: 2026-07-30 (ativação consentida no WhatsApp sem telefone nas pl
 - Configuração nova:
   `TWILIO_INBOUND_WEBHOOK_URL=https://www.engagefit.com.br/api/v1/webhooks/twilio/whatsapp`.
   O valor deve ser idêntico à URL cadastrada no sender Twilio para a assinatura
-  validar. A configuração e o webhook ainda não foram aplicados em produção.
+  validar. A configuração e o webhook foram aplicados e homologados em
+  produção no checkpoint de 31/07 acima.
 - Validações concluídas até este checkpoint: 41 migrations em PostgreSQL vazio,
   idempotência local, integração PostgreSQL do vínculo/consentimento,
   assinatura Twilio unitária, `go test ./...`, TypeScript e build Vite.
 
 ## Checkpoint de importação real e refinamento da retenção em 2026-07-30
 
-Este é o checkpoint mais recente da V2 preparada para o piloto assistido do
-CrossFit Alados. Em caso de conflito com o histórico abaixo, esta seção
-prevalece. O proprietário autorizou preparar a V2 para produção porque a
-operação do primeiro mês ficará nas mãos do próprio operador do EngageFit, mas
-**esta sessão não executou merge nem deploy de produção**.
+Este era o checkpoint da V2 preparada para o piloto assistido do CrossFit
+Alados antes da publicação. O proprietário autorizou preparar a V2 porque a
+operação do primeiro mês ficará nas mãos do próprio operador do EngageFit. O
+merge e o deploy foram executados posteriormente, conforme o checkpoint de
+produção de 31/07 acima.
 
 ### Identidade dos alunos no TotalPass
 
@@ -178,10 +227,11 @@ operação do primeiro mês ficará nas mãos do próprio operador do EngageFit,
   - backend: o commit que contém esta seção;
   - frontend: `cc9bfe5` (`feat: explain retention rules and onboarding confidence`).
 
-## Desenvolvimento V2 isolado do go-live
+## Histórico do desenvolvimento V2 antes do go-live
 
-- A evolução V2 começou nas branches locais `v2/retention-foundation` do
-  backend e frontend; não foi enviada nem implantada em produção.
+- A evolução V2 começou nas branches `v2/retention-foundation` do backend e
+  frontend e permaneceu isolada durante esta fase histórica. Foi integrada e
+  implantada posteriormente, conforme o checkpoint de 31/07.
 - Primeiro recorte: radar explicável de mudança de frequência e registro de
   ações humanas, documentado em `.ai/v2-retention-foundation.md`.
 - O radar compara duas janelas de 28 dias, distingue histórico insuficiente e
@@ -213,10 +263,9 @@ operação do primeiro mês ficará nas mãos do próprio operador do EngageFit,
   navegação Playwright pelos dois pontos de entrada e `git diff --check`.
 - O desenvolvimento local aplicou a migration 035; a segunda execução aplicou
   zero migrations.
-- O conjunto permanece isolado da `main` nas branches
-  `v2/retention-foundation` dos dois repositórios. Este checkpoint será
-  versionado e enviado para essas branches remotas, sem merge nem deploy; a V1
-  do go-live permanece inalterada.
+- Naquele checkpoint, o conjunto permanecia isolado da `main` nas branches
+  `v2/retention-foundation` dos dois repositórios. Esse isolamento terminou no
+  deploy de produção registrado em 31/07.
 - A continuidade da V2 implementou os itens priorizados até operação por
   coaches: painel de resultados, motivos estruturados, recomendações por
   regras, jornada dos primeiros 30 dias, entrada recorrente idempotente de
@@ -284,8 +333,8 @@ prevalece esta seção.
 - A aplicação pública, o proxy para a API e os healthchecks responderam
   corretamente durante a conferência.
 - Código implantado e CI confirmada como verde:
-  - backend: `525bd21`;
-  - frontend: `b6b790c`.
+  - backend: `b60707f`;
+  - frontend: `17df4be`.
 - O frontend possui a opção de desativar planos comerciais. Por padrão exibe
   somente planos ativos e oferece filtros para ativos, desativados ou todos.
 - `OWNER_SETUP_ENABLED=false` foi confirmado e o setup token foi
@@ -293,8 +342,8 @@ prevalece esta seção.
 - `Serverless/App Sleeping` está desligado na API.
 - Custom Start Command está vazio.
 - Pre-deploy configurado como
-  `/usr/local/bin/engagefit-migrate up`; deploy validado com
-  `migration complete: 0 applied`.
+  `/usr/local/bin/engagefit-migrate up`; no deploy da V2 foram aplicadas as
+  migrations `035` a `041` com `migration complete: 7 applied`.
 - A política de restart da API foi revisada no Railway.
 
 ### Observabilidade, disponibilidade e alertas
@@ -311,9 +360,10 @@ prevalece esta seção.
   encaminhar os alertas por e-mail.
 - Monitorar nos primeiros dias se os alertas estão chegando de fato e fazer um
   teste controlado de notificação quando conveniente.
-- Domínio, redirecionamento do apex para `www` e certificado TLS foram
-  verificados. Também estão presentes CSP, `X-Frame-Options`,
-  `X-Content-Type-Options`, política de referrer e permissions policy.
+- O domínio canônico `www`, o certificado TLS e HTTPS foram verificados.
+  Também estão presentes CSP, `X-Frame-Options`, `X-Content-Type-Options`,
+  política de referrer e permissions policy. O apex ainda depende de
+  normalização de DNS/redirecionamento, conforme o checkpoint de 31/07.
 - O header HSTS ainda não está presente. Isso é uma melhoria de segurança, não
   um bloqueador imediato do piloto. Quando for habilitado, começar de forma
   gradual e não usar `includeSubDomains` ou `preload` até validar HTTPS em todos
@@ -340,6 +390,10 @@ prevalece esta seção.
   `/home/luiz-paulo/workspace/engage-fit/production-backups/engagefit-production-pre-cleanup-20260728.dump`.
 - SHA-256 do backup:
   `32640d8ed298bf4791803adca65ca08af582fe56b8ff834aa37c3e855932aec7`.
+- Antes do deploy da V2 foi criado um segundo backup lógico validado em:
+  `/home/luiz-paulo/workspace/engage-fit/production-backups/engagefit-production-pre-v2-20260730-191121.dump`,
+  com SHA-256
+  `69380fb6da810b135c24de64647f1f48871fd12c8d8227e3c490dedad9ed5ef4`.
 - O arquivo temporário que continha a credencial do banco foi removido.
 - Não é necessário preservar histórico financeiro dos testes.
 - Backup automático/PITR e teste recorrente de restore permanecem adiados até
