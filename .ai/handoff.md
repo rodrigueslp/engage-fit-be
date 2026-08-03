@@ -4,7 +4,39 @@ Manual canônico de arquitetura e negócio: `docs/system-design.md`.
 
 Guia operacional consolidado: `docs/application-readiness-guide.md`.
 
-Atualizado em: 2026-07-31 (triagem e exclusões de retenção homologadas em produção)
+Atualizado em: 2026-08-03 (acesso financeiro e explicações da retenção revisados)
+
+## Checkpoint de revisão operacional em 2026-08-03
+
+- Os repositórios backend e frontend estavam limpos e sincronizados com
+  `origin/main`; não havia implementação pendente após a publicação da triagem
+  de retenção.
+- Uma verificação somente leitura no ambiente `production` do Railway confirmou
+  que o Crossfit Alados está `active`, sem cliente financeiro e sem assinatura,
+  com `billing_access_blocked=false`. O proprietário cadastrado em produção é
+  Guilherme Bispo (`aladoscrossfit@gmail.com`); `owner@example.com` pertence
+  somente ao banco/demo local e não representa a conta de produção.
+- A autorização atual verifica `boxes.status` e
+  `boxes.billing_access_blocked`; a ausência de uma assinatura não bloqueia uma
+  academia automaticamente. O campo financeiro nasceu com `FALSE` por padrão,
+  e a conciliação periódica processa apenas assinaturas existentes. Portanto,
+  uma academia sem assinatura permanece com acesso enquanto não for bloqueada
+  explicitamente.
+- Decisão de produto: manter esse comportamento por enquanto, sem alterar dados
+  ou código. Revisitar futuramente a regra para decidir se a ausência de
+  assinatura deve bloquear automaticamente e como representar exceções
+  explícitas, como piloto, cortesia e conta demo.
+- Também foi conferido que o frontend publicado da Retenção já atualizou
+  `Entenda os cálculos` para a nova triagem. O painel mostra a fila operacional,
+  separa ausências acima do limite como reativação histórica e informa a linha
+  de base do box, além das regras de histórico e rotina mínimos.
+- A descrição de `Inativos históricos`, `Não acompanhados`,
+  `Pausados/encerrados` e das demais filas está em `Como usar`, pois esses itens
+  representam workflows operacionais e não fórmulas de cálculo. O deploy
+  `engage-fit-web` `289cbdcd-9a4d-4d36-b6a9-8f98f7fea7e4`, de
+  2026-07-31 14:58 -03:00, contém essa versão.
+- Todas as verificações desta revisão foram somente leitura. Nenhum dado de
+  produção, regra de acesso ou código funcional foi alterado.
 
 ## Checkpoint de produção da triagem de retenção em 2026-07-31
 
