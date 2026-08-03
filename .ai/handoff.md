@@ -4,7 +4,60 @@ Manual canônico de arquitetura e negócio: `docs/system-design.md`.
 
 Guia operacional consolidado: `docs/application-readiness-guide.md`.
 
-Atualizado em: 2026-08-03 (acesso financeiro e explicações da retenção revisados)
+Atualizado em: 2026-08-03 (ativação resiliente a nomes e importação D-1 publicada)
+
+## Checkpoint de ativação resiliente a nomes e importação D-1 em 2026-08-03
+
+- A ativação pública deixou de exigir simultaneamente nome idêntico e check-in
+  já importado. O matching continua determinístico e isolado por academia e
+  origem, sem IA ou exposição da lista de alunos na página pública.
+- Nomes agora ignoram caixa, acentos, pontuação, espaços e partículas como
+  `de`, `da` e `do`. Nome parcial somente vincula automaticamente quando existe
+  um único candidato com check-in na data informada. Assim, `Vitor Lima` pode
+  corresponder a `Vitor Lima de Oliveira`, mas homônimos continuam em revisão.
+- Nome completo exato e único pode vincular mesmo sem o check-in informado
+  quando essa data é posterior ao último dado importado da plataforma. Isso
+  cobre o TotalPass D-1 sem transformar uma data já disponível e divergente em
+  confirmação automática.
+- Nomes parciais cuja data ainda está à frente da origem entram em
+  `pending_sync` (`Aguardando importação`), não em revisão humana. Cada nova
+  importação da mesma origem reprocessa esses pedidos; correspondência única
+  ativa o aluno e ambiguidade persistente passa para `needs_review`.
+- A migration `046_add_contact_activation_matching.sql` adicionou
+  `match_strategy` para auditoria e o estado `pending_sync`. O frontend mostra
+  a nova métrica e uma fila separada, com a explicação de que o vínculo será
+  tentado automaticamente após a próxima importação.
+- Código publicado:
+  - backend funcional: `2b67e5e` (`feat: improve contact activation matching`);
+  - correção do smoke mensal: `c7dfd39` (`test: keep API smoke checkin in current month`);
+  - frontend: `003ad1d` (`feat: show activation import sync status`).
+- Deploys Railway finais com `SUCCESS`:
+  - `engage-fit-api`: `563686f7-9af8-4d53-9a66-9e86a37ef684`;
+  - `engage-fit-billing-reconcile`: `7bef5ace-d2d2-426a-b719-b78c10ac3d56`;
+  - `engage-fit-web`: `eeb463e5-3c6a-4025-be42-94bb56965df8`.
+- Antes da migration foi criado e validado o backup lógico
+  `/home/luiz-paulo/workspace/engage-fit/production-backups/engagefit-production-pre-activation-matching-20260803-151515.dump`.
+  É um dump custom PostgreSQL 18.4, com 313 entradas, 468.896 bytes,
+  permissão `600` e SHA-256
+  `c0568335987adc6f742fe7d54834550df073db96d4dacddd84ee3bbdc415f446`.
+  A inspeção do schema no arquivo confirmou que ele antecede `match_strategy`
+  e `pending_sync`.
+- O primeiro pre-deploy aplicou a migration `046` uma vez; o deploy final
+  registrou `migration complete: 0 applied`. Produção expõe as migrations `001`
+  a `046`, a coluna `match_strategy` e a constraint contendo `pending_sync`.
+- Validações locais: 46 migrations em PostgreSQL vazio, idempotência, suíte Go
+  com integração PostgreSQL, `go vet`, builds dos binários, TypeScript/Vite e
+  Playwright com 6 cenários aprovados e 2 cenários reais corretamente
+  ignorados. As CIs finais de backend e frontend concluíram com sucesso,
+  incluindo o E2E real do frontend contra PostgreSQL e API temporária.
+- A primeira CI do backend funcional falhou somente porque o smoke usava a
+  data fixa `2026-07-20`; após a virada para agosto, o resumo mensal retornou
+  corretamente zero. O commit `c7dfd39` passou a usar a data corrente, o smoke
+  local passou e a CI completa final ficou verde.
+- Smoke público confirmou HTTP 200 em `/health` e `/api/v1/capabilities`; o
+  bundle publicado contém `Aguardando importação`, `Aguardando dados` e a
+  explicação do reprocessamento. Nenhum cadastro fictício ou nova ativação foi
+  criado em produção durante a homologação técnica.
 
 ## Checkpoint de revisão operacional em 2026-08-03
 
