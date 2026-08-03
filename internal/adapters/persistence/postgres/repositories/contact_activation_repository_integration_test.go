@@ -3,6 +3,7 @@ package repositories
 import (
 	"context"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -128,6 +129,80 @@ func TestContactActivationCreatesStudentAfterWhatsappConfirmation(t *testing.T) 
 	}
 	if student.Name != "Pessoa Nova" || student.Phone != "5511977776666" || student.Source != domain.SourceBoxMember || student.ContactStatus != domain.ContactStatusOptedIn || student.MembershipStartedSource != "self_registration" {
 		t.Fatalf("unexpected student: %+v", student)
+	}
+}
+
+func TestContactActivationReviewCanCreateStudentOrBeCancelled(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL is not configured")
+	}
+	db, err := postgres.Open(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC().Truncate(time.Second)
+	claimedDate := now.AddDate(0, 0, -2).Truncate(24 * time.Hour)
+	boxID := uuid.NewString()
+	if err := db.Create(&models.BoxModel{ID: boxID, Name: "Review Action Test", Status: "active", RiskInactiveDays: 7, RiskMessageCooldownDays: 14, CreatedAt: now, UpdatedAt: now}).Error; err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Exec("DELETE FROM boxes WHERE id = ?", boxID).Error })
+	repository := NewContactActivationGormRepository(db)
+	activation := &domain.ContactActivationRequest{
+		ID: domain.ID(uuid.NewString()), BoxID: domain.ID(boxID), ClaimedName: "Marcio Estevans",
+		Source: domain.SourceBoxMember, RecentCheckinDate: &claimedDate, SenderPhone: "5511999999999",
+		Phone: "5511955555471", TokenHash: strings.Repeat("d", 64), MatchStrategy: "no_matching_checkin",
+		Status: domain.ContactActivationNeedsReview, ConsentVersion: "v1", ConsentText: "consent",
+		ConsentedAt: &now, ExpiresAt: now.Add(time.Hour), CreatedAt: now, UpdatedAt: now,
+	}
+	if err := repository.CreateActivation(context.Background(), activation); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Table("contact_consent_events").Create(map[string]any{
+		"id": uuid.NewString(), "box_id": boxID, "activation_request_id": string(activation.ID),
+		"phone": activation.Phone, "action": "opted_in", "source": "whatsapp_self_activation",
+		"consent_version": "v1", "consent_text": "consent", "created_at": now,
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+	created, err := repository.CreateStudentFromReview(context.Background(), domain.ID(boxID), activation.ID, now.Add(time.Minute))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created.Status != domain.ContactActivationConfirmed || created.StudentID == "" || created.MatchStrategy != "manual_create_box_member" {
+		t.Fatalf("unexpected review creation: %+v", created)
+	}
+	student, err := NewStudentGormRepository(db).FindByID(context.Background(), domain.ID(boxID), created.StudentID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if student.Name != "Marcio Estevans" || student.Source != domain.SourceBoxMember || student.ContactStatus != domain.ContactStatusOptedIn || student.MembershipStartedAt == nil || !student.MembershipStartedAt.Equal(claimedDate) {
+		t.Fatalf("unexpected created student: %+v", student)
+	}
+	var linkedEvents int64
+	if err := db.Table("contact_consent_events").Where("activation_request_id = ? AND student_id = ?", string(activation.ID), string(created.StudentID)).Count(&linkedEvents).Error; err != nil {
+		t.Fatal(err)
+	}
+	if linkedEvents != 1 {
+		t.Fatalf("expected consent link, got %d", linkedEvents)
+	}
+
+	cancelActivation := &domain.ContactActivationRequest{
+		ID: domain.ID(uuid.NewString()), BoxID: domain.ID(boxID), ClaimedName: "Solicitação Incorreta",
+		Source: domain.SourceBoxMember, SenderPhone: "5511999999999", Phone: "5511944443333",
+		TokenHash: strings.Repeat("e", 64), MatchStrategy: "no_matching_checkin", Status: domain.ContactActivationNeedsReview,
+		ConsentVersion: "v1", ConsentText: "consent", ConsentedAt: &now, ExpiresAt: now.Add(time.Hour), CreatedAt: now, UpdatedAt: now,
+	}
+	if err := repository.CreateActivation(context.Background(), cancelActivation); err != nil {
+		t.Fatal(err)
+	}
+	cancelled, err := repository.CancelReview(context.Background(), domain.ID(boxID), cancelActivation.ID, now.Add(2*time.Minute))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cancelled.Status != domain.ContactActivationCancelled || cancelled.MatchStrategy != "manual_discard" || cancelled.ResolvedAt == nil {
+		t.Fatalf("unexpected cancellation: %+v", cancelled)
 	}
 }
 

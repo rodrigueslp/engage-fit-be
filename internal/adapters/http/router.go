@@ -345,6 +345,10 @@ func NewRouter(deps RouterDependencies) *gin.Engine {
 		protected.GET("/contact-activations", activationHandler.List)
 		protected.POST("/students/:id/contact-activation", activationHandler.StartForStudent)
 		protected.POST("/contact-activations/:id/resolve", activationHandler.Resolve)
+		ownerActivation := protected.Group("")
+		ownerActivation.Use(middleware.Owner())
+		ownerActivation.POST("/contact-activations/:id/create-student", activationHandler.CreateStudentFromReview)
+		ownerActivation.POST("/contact-activations/:id/cancel", activationHandler.CancelReview)
 	}
 
 	importsHandler := handlers.NewImportsHandler(deps.ImportCheckinsUseCase, deps.ListImportsUseCase, deps.GetImportUseCase)

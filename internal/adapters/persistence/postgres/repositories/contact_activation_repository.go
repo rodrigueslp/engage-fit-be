@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"boxengage/backend/internal/domain"
+	portrepositories "boxengage/backend/internal/ports/repositories"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -329,6 +330,94 @@ func (r ContactActivationGormRepository) ResolveActivation(ctx context.Context, 
 		if status == domain.ContactActivationConfirmed || row.Phone == "" {
 			row.ResolvedAt = &resolvedAt
 		}
+		result = activationToDomain(row)
+		return nil
+	})
+	return &result, err
+}
+
+func (r ContactActivationGormRepository) CreateStudentFromReview(ctx context.Context, boxID, activationID domain.ID, resolvedAt time.Time) (*domain.ContactActivationRequest, error) {
+	var result domain.ContactActivationRequest
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var row contactActivationRow
+		if err := activationQuery(tx).Clauses(activationLock()).
+			Where("contact_activation_requests.box_id = ? AND contact_activation_requests.id = ?", stringID(boxID), stringID(activationID)).
+			Take(&row).Error; err != nil {
+			return err
+		}
+		if row.Status != string(domain.ContactActivationNeedsReview) || row.Source != string(domain.SourceBoxMember) || row.StudentID != nil || strings.TrimSpace(row.Phone) == "" {
+			return gorm.ErrRecordNotFound
+		}
+		var conflicts int64
+		if err := tx.Table("students").
+			Where("box_id = ? AND source = ? AND anonymized_at IS NULL", row.BoxID, row.Source).
+			Where("phone = ? OR LOWER(REGEXP_REPLACE(BTRIM(name), '[[:space:]]+', ' ', 'g')) = ?", row.Phone, normalizeActivationName(row.ClaimedName)).
+			Count(&conflicts).Error; err != nil {
+			return err
+		}
+		if conflicts > 0 {
+			return portrepositories.ErrContactActivationConflict
+		}
+		studentID := uuid.NewString()
+		membershipStartedAt := resolvedAt
+		if row.RecentCheckinDate != nil {
+			membershipStartedAt = *row.RecentCheckinDate
+		}
+		if err := tx.Table("students").Create(map[string]any{
+			"id": studentID, "box_id": row.BoxID, "name": row.ClaimedName, "phone": row.Phone,
+			"source": row.Source, "external_id": "self-registration:" + studentID,
+			"risk_status": string(domain.StudentRiskStatusActive), "contact_status": string(domain.ContactStatusOptedIn),
+			"contact_status_source": "whatsapp_self_activation", "contact_status_updated_at": resolvedAt,
+			"membership_started_at": membershipStartedAt, "membership_started_source": "self_registration",
+			"created_at": resolvedAt, "updated_at": resolvedAt,
+		}).Error; err != nil {
+			return err
+		}
+		if err := tx.Table("contact_activation_requests").Where("id = ?", row.ID).Updates(map[string]any{
+			"student_id": studentID, "status": string(domain.ContactActivationConfirmed),
+			"match_strategy": "manual_create_box_member", "resolved_at": resolvedAt, "updated_at": resolvedAt,
+		}).Error; err != nil {
+			return err
+		}
+		if err := tx.Table("contact_consent_events").
+			Where("activation_request_id = ? AND student_id IS NULL", row.ID).
+			Update("student_id", studentID).Error; err != nil {
+			return err
+		}
+		row.StudentID = pointerString(studentID)
+		row.StudentName = row.ClaimedName
+		row.Status = string(domain.ContactActivationConfirmed)
+		row.MatchStrategy = "manual_create_box_member"
+		row.ResolvedAt = &resolvedAt
+		row.UpdatedAt = resolvedAt
+		result = activationToDomain(row)
+		return nil
+	})
+	return &result, err
+}
+
+func (r ContactActivationGormRepository) CancelReview(ctx context.Context, boxID, activationID domain.ID, resolvedAt time.Time) (*domain.ContactActivationRequest, error) {
+	var result domain.ContactActivationRequest
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var row contactActivationRow
+		if err := activationQuery(tx).Clauses(activationLock()).
+			Where("contact_activation_requests.box_id = ? AND contact_activation_requests.id = ?", stringID(boxID), stringID(activationID)).
+			Take(&row).Error; err != nil {
+			return err
+		}
+		if row.Status != string(domain.ContactActivationNeedsReview) {
+			return gorm.ErrRecordNotFound
+		}
+		if err := tx.Table("contact_activation_requests").Where("id = ?", row.ID).Updates(map[string]any{
+			"status": string(domain.ContactActivationCancelled), "match_strategy": "manual_discard",
+			"resolved_at": resolvedAt, "updated_at": resolvedAt,
+		}).Error; err != nil {
+			return err
+		}
+		row.Status = string(domain.ContactActivationCancelled)
+		row.MatchStrategy = "manual_discard"
+		row.ResolvedAt = &resolvedAt
+		row.UpdatedAt = resolvedAt
 		result = activationToDomain(row)
 		return nil
 	})

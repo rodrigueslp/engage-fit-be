@@ -2,10 +2,13 @@ package repositories
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"boxengage/backend/internal/domain"
 )
+
+var ErrContactActivationConflict = errors.New("contact activation conflicts with an existing student")
 
 type ContactActivationRepository interface {
 	FindPublicBox(ctx context.Context, activationCode string) (domain.ID, string, error)
@@ -19,6 +22,8 @@ type ContactActivationRepository interface {
 	ListActivations(ctx context.Context, boxID domain.ID) ([]domain.ContactActivationRequest, error)
 	ListPendingSyncActivations(ctx context.Context, boxID domain.ID, source domain.Source) ([]domain.ContactActivationRequest, error)
 	ResolveActivation(ctx context.Context, boxID, activationID, studentID domain.ID, matchStrategy string, resolvedAt time.Time) (*domain.ContactActivationRequest, error)
+	CreateStudentFromReview(ctx context.Context, boxID, activationID domain.ID, resolvedAt time.Time) (*domain.ContactActivationRequest, error)
+	CancelReview(ctx context.Context, boxID, activationID domain.ID, resolvedAt time.Time) (*domain.ContactActivationRequest, error)
 	MarkActivationNeedsReview(ctx context.Context, boxID, activationID domain.ID, matchStrategy string, updatedAt time.Time) error
 	Summary(ctx context.Context, boxID domain.ID) (domain.ContactActivationSummary, error)
 }

@@ -158,6 +158,34 @@ func (h ContactActivationHandler) Resolve(c *gin.Context) {
 	c.JSON(http.StatusOK, contactActivationResponse(*item))
 }
 
+func (h ContactActivationHandler) CreateStudentFromReview(c *gin.Context) {
+	boxID, err := middleware.BoxID(c)
+	if err != nil {
+		respondUnauthorized(c)
+		return
+	}
+	item, err := h.service.CreateStudentFromReview(c.Request.Context(), boxID, domain.ID(c.Param("id")))
+	if err != nil {
+		respondContactActivationError(c, err)
+		return
+	}
+	c.JSON(http.StatusCreated, contactActivationResponse(*item))
+}
+
+func (h ContactActivationHandler) CancelReview(c *gin.Context) {
+	boxID, err := middleware.BoxID(c)
+	if err != nil {
+		respondUnauthorized(c)
+		return
+	}
+	item, err := h.service.CancelReview(c.Request.Context(), boxID, domain.ID(c.Param("id")))
+	if err != nil {
+		respondContactActivationError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, contactActivationResponse(*item))
+}
+
 func contactActivationResponse(item domain.ContactActivationRequest) dto.ContactActivationResponse {
 	return dto.ContactActivationResponse{
 		ID: string(item.ID), StudentID: string(item.StudentID), StudentName: item.StudentName,
@@ -176,6 +204,8 @@ func respondContactActivationError(c *gin.Context, err error) {
 		respondPublicError(c, http.StatusConflict, "whatsapp_unavailable", "A ativação pelo WhatsApp ainda não está disponível para esta academia.")
 	case errors.Is(err, contactactivation.ErrInvalidSignature):
 		respondPublicError(c, http.StatusForbidden, "invalid_signature", "invalid webhook signature")
+	case errors.Is(err, contactactivation.ErrReviewConflict):
+		respondPublicError(c, http.StatusConflict, "activation_review_conflict", "Já existe um cadastro semelhante. Atualize a página e selecione o aluno correto.")
 	case errors.Is(err, gorm.ErrRecordNotFound):
 		respondPublicError(c, http.StatusNotFound, "activation_not_found", "Ativação não encontrada.")
 	default:

@@ -32,6 +32,7 @@ var (
 	ErrInvalidSignature    = errors.New("invalid twilio signature")
 	ErrActivationExpired   = errors.New("contact activation expired")
 	ErrUnsupportedMessage  = errors.New("unsupported inbound message")
+	ErrReviewConflict      = errors.New("activation review conflicts with an existing student")
 )
 
 type SettingsResolver interface {
@@ -180,6 +181,24 @@ func (s *Service) Resolve(ctx context.Context, boxID, activationID, studentID do
 	}
 	return s.repository.ResolveActivation(ctx, boxID, activationID, studentID, "manual_review", s.now().UTC())
 
+}
+
+func (s *Service) CreateStudentFromReview(ctx context.Context, boxID, activationID domain.ID) (*domain.ContactActivationRequest, error) {
+	if boxID == "" || activationID == "" {
+		return nil, ErrInvalidInput
+	}
+	item, err := s.repository.CreateStudentFromReview(ctx, boxID, activationID, s.now().UTC())
+	if errors.Is(err, repositories.ErrContactActivationConflict) {
+		return nil, ErrReviewConflict
+	}
+	return item, err
+}
+
+func (s *Service) CancelReview(ctx context.Context, boxID, activationID domain.ID) (*domain.ContactActivationRequest, error) {
+	if boxID == "" || activationID == "" {
+		return nil, ErrInvalidInput
+	}
+	return s.repository.CancelReview(ctx, boxID, activationID, s.now().UTC())
 }
 
 func (s *Service) ReprocessPending(ctx context.Context, boxID domain.ID, source domain.Source) error {

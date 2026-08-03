@@ -5,6 +5,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha1"
 	"encoding/base64"
+	"errors"
 	"net/url"
 	"sort"
 	"strings"
@@ -168,6 +169,37 @@ func TestStartNewStudentDoesNotRequirePreviousCheckin(t *testing.T) {
 	}
 }
 
+func TestCreateStudentFromReviewAndCancel(t *testing.T) {
+	now := time.Date(2026, 8, 3, 18, 0, 0, 0, time.UTC)
+	repository := &activationRepositoryStub{}
+	service := NewService(repository, studentRepositoryStub{}, settingsResolverStub{}, "")
+	service.now = func() time.Time { return now }
+
+	created, err := service.CreateStudentFromReview(context.Background(), "box-1", "activation-1")
+	if err != nil {
+		t.Fatalf("create student from review: %v", err)
+	}
+	if !repository.createFromReviewCalled || created.Status != domain.ContactActivationConfirmed {
+		t.Fatalf("unexpected create result: %+v", created)
+	}
+	cancelled, err := service.CancelReview(context.Background(), "box-1", "activation-2")
+	if err != nil {
+		t.Fatalf("cancel review: %v", err)
+	}
+	if !repository.cancelReviewCalled || cancelled.Status != domain.ContactActivationCancelled {
+		t.Fatalf("unexpected cancel result: %+v", cancelled)
+	}
+}
+
+func TestCreateStudentFromReviewMapsConflict(t *testing.T) {
+	repository := &activationRepositoryStub{createFromReviewErr: repositories.ErrContactActivationConflict}
+	service := NewService(repository, studentRepositoryStub{}, settingsResolverStub{}, "")
+	_, err := service.CreateStudentFromReview(context.Background(), "box-1", "activation-1")
+	if !errors.Is(err, ErrReviewConflict) {
+		t.Fatalf("expected review conflict, got %v", err)
+	}
+}
+
 func TestInboundRejectsInvalidSignature(t *testing.T) {
 	repository := &activationRepositoryStub{
 		boxID: domain.ID("box-1"),
@@ -240,16 +272,19 @@ func (studentRepositoryStub) UpdateContactPreference(context.Context, domain.ID,
 }
 
 type activationRepositoryStub struct {
-	boxID             domain.ID
-	boxName           string
-	activationCode    string
-	matchData         domain.ContactActivationMatchData
-	created           *domain.ContactActivationRequest
-	confirmedPhone    string
-	matchCalls        int
-	pendingItems      []domain.ContactActivationRequest
-	resolvedStudentID domain.ID
-	resolvedStrategy  string
+	boxID                  domain.ID
+	boxName                string
+	activationCode         string
+	matchData              domain.ContactActivationMatchData
+	created                *domain.ContactActivationRequest
+	confirmedPhone         string
+	matchCalls             int
+	pendingItems           []domain.ContactActivationRequest
+	resolvedStudentID      domain.ID
+	resolvedStrategy       string
+	createFromReviewCalled bool
+	cancelReviewCalled     bool
+	createFromReviewErr    error
 }
 
 func (r *activationRepositoryStub) FindPublicBox(context.Context, string) (domain.ID, string, error) {
@@ -300,6 +335,17 @@ func (r *activationRepositoryStub) ResolveActivation(_ context.Context, _ domain
 	r.resolvedStudentID = studentID
 	r.resolvedStrategy = strategy
 	return &domain.ContactActivationRequest{StudentID: studentID, MatchStrategy: strategy}, nil
+}
+func (r *activationRepositoryStub) CreateStudentFromReview(context.Context, domain.ID, domain.ID, time.Time) (*domain.ContactActivationRequest, error) {
+	r.createFromReviewCalled = true
+	if r.createFromReviewErr != nil {
+		return nil, r.createFromReviewErr
+	}
+	return &domain.ContactActivationRequest{Status: domain.ContactActivationConfirmed}, nil
+}
+func (r *activationRepositoryStub) CancelReview(context.Context, domain.ID, domain.ID, time.Time) (*domain.ContactActivationRequest, error) {
+	r.cancelReviewCalled = true
+	return &domain.ContactActivationRequest{Status: domain.ContactActivationCancelled}, nil
 }
 func (r *activationRepositoryStub) MarkActivationNeedsReview(context.Context, domain.ID, domain.ID, string, time.Time) error {
 	return nil
