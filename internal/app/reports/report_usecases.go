@@ -47,7 +47,7 @@ func (uc MonthlyFrequencyReportUseCase) Execute(ctx context.Context, boxID domai
 }
 
 func EligibleStudentsCSV(rows []domain.EligibleStudentReportRow) ([]string, [][]string) {
-	headers := []string{"campanha", "aluno", "telefone", "plataforma", "checkins", "meta", "faltam", "progresso", "brinde"}
+	headers := []string{"campanha", "aluno", "telefone", "origem", "checkins", "meta", "faltam", "progresso", "brinde"}
 	csvRows := make([][]string, 0, len(rows))
 	for _, row := range rows {
 		csvRows = append(csvRows, []string{
@@ -81,7 +81,7 @@ func PendingRewardsCSV(rows []domain.RewardDelivery) ([]string, [][]string) {
 }
 
 func MonthlyFrequencyCSV(rows []domain.MonthlyFrequencyReportRow) ([]string, [][]string) {
-	headers := []string{"aluno", "telefone", "plataforma", "checkins", "primeiro_checkin", "ultimo_checkin"}
+	headers := []string{"aluno", "telefone", "origem", "checkins", "primeiro_checkin", "ultimo_checkin"}
 	csvRows := make([][]string, 0, len(rows))
 	for _, row := range rows {
 		csvRows = append(csvRows, []string{

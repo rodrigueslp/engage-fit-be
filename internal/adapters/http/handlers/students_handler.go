@@ -47,7 +47,7 @@ func (h StudentsHandler) ExportData(c *gin.Context) {
 	}
 	response := dto.StudentPrivacyExportResponse{Student: studentResponse(result.Student), ExportedAt: result.ExportedAt.Format(time.RFC3339), Checkins: []dto.CheckinResponse{}, Progress: []dto.CampaignProgressResponse{}, Communications: []dto.PrivacyCommunicationResponse{}, ContactConsents: []dto.ContactConsentResponse{}, RetentionInterventions: []dto.RetentionInterventionResponse{}}
 	for _, checkin := range result.Checkins {
-		item := dto.CheckinResponse{ID: string(checkin.ID), StudentID: string(checkin.StudentID), CheckinDate: checkin.CheckinDate.Format("2006-01-02"), Source: string(checkin.Source)}
+		item := dto.CheckinResponse{ID: string(checkin.ID), StudentID: string(checkin.StudentID), CheckinDate: checkin.CheckinDate.Format("2006-01-02"), Source: string(checkin.Source), EntryMethod: string(checkin.EntryMethod)}
 		if checkin.CheckinTime != nil {
 			item.CheckinTime = checkin.CheckinTime.Format("15:04:05")
 		}
@@ -207,6 +207,7 @@ func (h StudentsHandler) Checkins(c *gin.Context) {
 			StudentID:   string(checkin.StudentID),
 			CheckinDate: checkin.CheckinDate.Format("2006-01-02"),
 			Source:      string(checkin.Source),
+			EntryMethod: string(checkin.EntryMethod),
 		}
 		if checkin.CheckinTime != nil {
 			item.CheckinTime = checkin.CheckinTime.Format("15:04:05")

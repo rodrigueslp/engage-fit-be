@@ -380,7 +380,7 @@ func (s Service) ListOnboardingJourney(ctx context.Context, boxID domain.ID) ([]
 }
 
 func onboardingStartConfidence(metric domain.OnboardingMetrics) (domain.MembershipStartConfidence, bool) {
-	if metric.MembershipStartedSource == "manual" || metric.MembershipStartedSource == "integration" {
+	if metric.MembershipStartedSource == "manual" || metric.MembershipStartedSource == "integration" || metric.MembershipStartedSource == "self_registration" {
 		return domain.MembershipStartConfirmed, true
 	}
 	if metric.MembershipStartedSource == "first_checkin_inferred" && metric.ObservationDaysBeforeStart >= retentionHistoryDays {

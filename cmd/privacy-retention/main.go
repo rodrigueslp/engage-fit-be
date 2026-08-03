@@ -37,10 +37,12 @@ func main() {
 		{name: "workout recipients", table: "workout_message_recipients", column: "created_at", days: envDays("PRIVACY_RETENTION_COMMUNICATION_DAYS", 365)},
 		{name: "LLM logs", table: "llm_generation_logs", column: "created_at", days: envDays("PRIVACY_RETENTION_LLM_LOG_DAYS", 90)},
 		{name: "automation runs", table: "automation_runs", column: "started_at", days: envDays("PRIVACY_RETENTION_AUTOMATION_RUN_DAYS", 180)},
-		{name: "imports and checkins", table: "import_histories", column: "imported_at", days: envDays("PRIVACY_RETENTION_CHECKIN_DAYS", 730)},
+		{name: "checkins", table: "checkins", column: "created_at", days: envDays("PRIVACY_RETENTION_CHECKIN_DAYS", 730)},
+		{name: "import histories", table: "import_histories", column: "imported_at", days: envDays("PRIVACY_RETENTION_CHECKIN_DAYS", 730)},
 		{name: "privacy audit", table: "privacy_audit_events", column: "created_at", days: envDays("PRIVACY_RETENTION_AUDIT_DAYS", 1825)},
 		{name: "contact activation requests", table: "contact_activation_requests", column: "created_at", days: envDays("PRIVACY_RETENTION_AUDIT_DAYS", 1825)},
 		{name: "contact consent events", table: "contact_consent_events", column: "created_at", days: envDays("PRIVACY_RETENTION_AUDIT_DAYS", 1825)},
+		{name: "expired self checkin sessions", table: "self_checkin_sessions", column: "expires_at", days: 1},
 		{name: "billing webhook payloads", table: "billing_webhook_events", column: "received_at", days: envDays("PRIVACY_RETENTION_BILLING_WEBHOOK_DAYS", 365)},
 	}
 	mode := "dry-run"

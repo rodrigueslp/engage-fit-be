@@ -22,6 +22,7 @@ import (
 	reportadapters "boxengage/backend/internal/adapters/reports"
 	"boxengage/backend/internal/adapters/security"
 	"boxengage/backend/internal/adapters/whatsapp"
+	"boxengage/backend/internal/app/attendance"
 	"boxengage/backend/internal/app/auth"
 	"boxengage/backend/internal/app/automation"
 	billingapp "boxengage/backend/internal/app/billing"
@@ -125,6 +126,7 @@ func main() {
 	privacyRepository := pgrepo.NewPrivacyGormRepository(db)
 	contactActivationRepository := pgrepo.NewContactActivationGormRepository(db)
 	checkinRepository := pgrepo.NewCheckinGormRepository(db)
+	attendanceRepository := pgrepo.NewAttendanceGormRepository(db)
 	retentionRepository := pgrepo.NewRetentionGormRepository(db)
 	importRepository := pgrepo.NewImportHistoryGormRepository(db)
 	checkinIngestionRepository := pgrepo.NewCheckinIngestionGormRepository(db)
@@ -208,6 +210,7 @@ func main() {
 	deleteCampaignGoalUseCase := campaigns.NewDeleteCampaignGoalUseCase(campaignRepository)
 	listCampaignProgressUseCase := campaigns.NewListCampaignProgressUseCase(campaignRepository)
 	recalculateCampaignProgressUseCase := campaigns.NewRecalculateCampaignProgressUseCase(campaignRepository, studentRepository, checkinRepository, rewardRepository)
+	attendanceService := attendance.NewService(attendanceRepository, campaignRepository, recalculateCampaignProgressUseCase)
 
 	listRewardsUseCase := rewards.NewListRewardsUseCase(rewardRepository, campaignRepository)
 	createRewardUseCase := rewards.NewCreateRewardUseCase(rewardRepository, campaignRepository)
@@ -305,6 +308,7 @@ func main() {
 		UpdateContactPreferenceUseCase: updateContactPreferenceUseCase,
 		AnonymizeStudentUseCase:        anonymizeStudentUseCase,
 		ContactActivationService:       contactActivationService,
+		AttendanceService:              attendanceService,
 
 		ListImportsUseCase:      listImportsUseCase,
 		GetImportUseCase:        getImportUseCase,

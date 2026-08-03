@@ -6,6 +6,48 @@ Guia operacional consolidado: `docs/application-readiness-guide.md`.
 
 Atualizado em: 2026-08-03 (ativação resiliente a nomes e importação D-1 publicada)
 
+## Checkpoint em desenvolvimento: mensalistas e check-in próprio em 2026-08-03
+
+- Trabalho isolado nas branches `feature/box-members-and-self-checkin` dos
+  repositórios backend e frontend. Este recorte ainda não foi publicado nem
+  aplicado em produção.
+- O domínio passa a aceitar a terceira origem `box_member`, exibida como
+  `Mensalista do box`, sem classificar mensalistas artificialmente como
+  Wellhub ou TotalPass.
+- O QR público de ativação oferece as três origens. Um mensalista em primeiro
+  treino cria o cadastro somente depois de confirmar o WhatsApp, com início
+  `self_registration`, telefone consentido e isolamento por academia/origem.
+- Campanhas novas configuram metas independentes para Wellhub, TotalPass e
+  mensalistas. Progresso, mensagens de campanha, relatórios e brindes usam a
+  mesma regra para as três populações: presença dentro do período e meta para
+  a origem.
+- Mensalistas possuem duas entradas próprias de frequência:
+  - check-in manual pelo owner, selecionando aluno e data;
+  - autoatendimento por QR Code exibido na recepção. Cada sessão usa token
+    aleatório persistido somente como SHA-256, vale 10 minutos, exige nome e
+    WhatsApp de um mensalista já ativado e box ativo.
+- Um índice parcial limita mensalistas a um check-in por dia, inclusive quando
+  os dois canais são usados. Cada tentativa válida recalcula imediatamente as
+  campanhas ativas que cobrem a data, sincronizando progresso e brindes; um
+  retry após falha também refaz o recálculo.
+- Check-ins registram `entry_method` (`import`, `manual` ou `self_service`),
+  usuário responsável quando manual e sessão quando público. O histórico do
+  aluno mostra a origem e o método da presença.
+- Telefones locais brasileiros com DDD recebem o prefixo `55` antes do match.
+  Nome ignora caixa, acentos, pontuação, espaços e partículas nominais. A
+  página pública e o endpoint possuem resposta genérica e rate limit para não
+  expor a base de mensalistas.
+- As migrations `047_add_box_members_and_checkins.sql` e
+  `048_allow_box_member_privacy_suppression.sql` ampliam constraints, tornam
+  `import_history_id` opcional, adicionam auditoria da presença e criam as
+  sessões. Anonimização/LGPD e retenção também cobrem mensalistas, check-ins
+  próprios e sessões expiradas.
+- Validações concluídas até este checkpoint: 48 migrations em PostgreSQL vazio
+  e idempotência, migration local até 048, suíte Go, integração PostgreSQL de
+  ativação/privacidade/check-in diário, `go vet`, TypeScript/build Vite e
+  Playwright dos fluxos público e operacional. O aviso conhecido de chunk Vite
+  acima de 500 kB permanece sem regressão funcional.
+
 ## Checkpoint de ativação resiliente a nomes e importação D-1 em 2026-08-03
 
 - A ativação pública deixou de exigir simultaneamente nome idêntico e check-in

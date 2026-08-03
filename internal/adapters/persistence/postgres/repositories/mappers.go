@@ -226,28 +226,45 @@ func stringPointer(value string) *string {
 
 func checkinToDomain(model models.CheckinModel) domain.Checkin {
 	return domain.Checkin{
-		ID:              domainID(model.ID),
-		BoxID:           domainID(model.BoxID),
-		StudentID:       domainID(model.StudentID),
-		CheckinDate:     model.CheckinDate,
-		CheckinTime:     parseCheckinTime(model.CheckinTime),
-		Source:          domain.Source(model.Source),
-		ImportHistoryID: domainID(model.ImportHistoryID),
-		CreatedAt:       model.CreatedAt,
+		ID:                   domainID(model.ID),
+		BoxID:                domainID(model.BoxID),
+		StudentID:            domainID(model.StudentID),
+		CheckinDate:          model.CheckinDate,
+		CheckinTime:          parseCheckinTime(model.CheckinTime),
+		Source:               domain.Source(model.Source),
+		ImportHistoryID:      domainID(valueOrEmpty(model.ImportHistoryID)),
+		EntryMethod:          domain.CheckinEntryMethod(model.EntryMethod),
+		RecordedByUserID:     domainID(valueOrEmpty(model.RecordedByUserID)),
+		SelfCheckinSessionID: domainID(valueOrEmpty(model.SelfCheckinSessionID)),
+		CreatedAt:            model.CreatedAt,
 	}
 }
 
 func checkinToModel(checkin domain.Checkin) models.CheckinModel {
-	return models.CheckinModel{
-		ID:              stringID(checkin.ID),
-		BoxID:           stringID(checkin.BoxID),
-		StudentID:       stringID(checkin.StudentID),
-		CheckinDate:     checkin.CheckinDate,
-		CheckinTime:     formatCheckinTime(checkin.CheckinTime),
-		Source:          string(checkin.Source),
-		ImportHistoryID: stringID(checkin.ImportHistoryID),
-		CreatedAt:       checkin.CreatedAt,
+	entryMethod := checkin.EntryMethod
+	if entryMethod == "" {
+		entryMethod = domain.CheckinEntryImport
 	}
+	return models.CheckinModel{
+		ID:                   stringID(checkin.ID),
+		BoxID:                stringID(checkin.BoxID),
+		StudentID:            stringID(checkin.StudentID),
+		CheckinDate:          checkin.CheckinDate,
+		CheckinTime:          formatCheckinTime(checkin.CheckinTime),
+		Source:               string(checkin.Source),
+		ImportHistoryID:      stringPointer(stringID(checkin.ImportHistoryID)),
+		EntryMethod:          string(entryMethod),
+		RecordedByUserID:     stringPointer(stringID(checkin.RecordedByUserID)),
+		SelfCheckinSessionID: stringPointer(stringID(checkin.SelfCheckinSessionID)),
+		CreatedAt:            checkin.CreatedAt,
+	}
+}
+
+func valueOrEmpty(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
 }
 
 func parseCheckinTime(value *string) *time.Time {

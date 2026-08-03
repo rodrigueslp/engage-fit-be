@@ -9,6 +9,7 @@ type Source string
 const (
 	SourceWellhub   Source = "wellhub"
 	SourceTotalPass Source = "totalpass"
+	SourceBoxMember Source = "box_member"
 )
 
 type UserRole string

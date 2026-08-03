@@ -122,6 +122,10 @@ func (s *Service) Start(ctx context.Context, input StartInput) (*StartResult, er
 			return nil, matchErr
 		}
 		decision := decideActivationMatch(name, *input.RecentCheckinDate, matchData)
+		if input.Source == domain.SourceBoxMember && decision.pending {
+			decision.pending = false
+			decision.strategy = "no_matching_checkin"
+		}
 		studentID, matchStrategy = decision.studentID, decision.strategy
 	}
 	return s.createRequest(ctx, boxID, studentID, name, input.Source, input.RecentCheckinDate, input.IsNewStudent, matchStrategy, sender)
@@ -517,7 +521,7 @@ func isOptOut(value string) bool {
 }
 
 func validSource(source domain.Source) bool {
-	return source == domain.SourceWellhub || source == domain.SourceTotalPass
+	return source == domain.SourceWellhub || source == domain.SourceTotalPass || source == domain.SourceBoxMember
 }
 
 func firstName(value string) string {

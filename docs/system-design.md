@@ -1,6 +1,6 @@
 # EngageFit — manual de engenharia e design do sistema
 
-Atualizado em: 2026-07-21
+Atualizado em: 2026-08-03
 
 Status: documento canônico da arquitetura atual.
 
@@ -34,9 +34,9 @@ Uma trilha prática, com exercícios executáveis localmente e critérios para s
 
 ## 2. O produto em uma frase
 
-O EngageFit transforma check-ins exportados por Wellhub e TotalPass em acompanhamento de frequência, campanhas de engajamento, metas, entregas de brindes e públicos de comunicação para academias ou boxes.
+O EngageFit transforma a frequência de alunos Wellhub, TotalPass e mensalistas do box em campanhas de engajamento, metas, entregas de brindes e públicos de comunicação.
 
-O produto não é a fonte primária dos check-ins. Hoje ele ingere arquivos CSV/XLSX gerados por outras plataformas. Também não é um CRM genérico: campanha, meta, progresso e comunicação estão centrados na frequência do aluno.
+Para Wellhub e TotalPass, o produto ingere arquivos CSV/XLSX. Para mensalistas, também é fonte de check-ins registrados pela recepção ou pelo próprio aluno em uma sessão curta de QR Code. Não é um CRM genérico: campanha, meta, progresso e comunicação estão centrados na frequência do aluno.
 
 ## 3. Atores, tenancy e responsabilidades
 
@@ -421,6 +421,22 @@ importação. Uma queda depois do claim conserva semântica at-most-once: batch
 incerta. Isso é uma porta para conectores; não representa integração nativa
 com APIs da Wellhub ou TotalPass.
 
+### 10.6 Check-ins próprios dos mensalistas
+
+Mensalistas usam `source=box_member`. Seus check-ins não dependem de
+`import_history_id` e registram `entry_method`:
+
+- `manual`: o owner seleciona o mensalista e a data na tela de Check-ins;
+- `self_service`: o owner gera uma sessão aleatória de 10 minutos e exibe o QR
+  Code na recepção. O aluno informa nome e o WhatsApp já ativado.
+
+O token da sessão é persistido somente como SHA-256. A consulta pública exige
+box ativo, o aluno precisa estar consentido e nome/telefone devem produzir uma
+correspondência única. Um índice parcial limita mensalistas a uma presença por
+dia, independentemente do canal. Cada inserção recalcula as campanhas ativas
+que incluem a data, sincronizando progresso e brindes imediatamente. Sessões
+expiradas são elegíveis à rotina de retenção após um dia.
+
 ## 11. Campanhas, metas, progresso e brindes
 
 ### 11.1 Campanha
@@ -429,7 +445,7 @@ Uma campanha define nome, descrição, início, fim e estado ativo. Datas são i
 
 ### 11.2 Meta por origem
 
-Cada campanha pode ter uma meta diferente para Wellhub e TotalPass. Um aluno só recebe progresso se existir goal para sua `source`.
+Cada campanha pode ter uma meta diferente para Wellhub, TotalPass e mensalistas do box (`box_member`). Um aluno só recebe progresso se existir goal para sua `source`.
 
 ### 11.3 Progresso materializado
 
@@ -484,7 +500,7 @@ O resumo combina:
 
 - total de alunos;
 - check-ins do mês UTC atual;
-- check-ins por plataforma;
+- check-ins por origem;
 - alunos únicos elegíveis e próximos da meta nas campanhas ativas;
 - alunos em risco;
 - brindes pendentes e entregues.
@@ -512,7 +528,7 @@ O fluxo de e-mail inativo exclui paused/not interested e opt-out, mas atualmente
 - elegíveis: progressos `achieved`, campanha, aluno, meta e reward;
 - brindes pendentes: deliveries não entregues;
 - frequência mensal: contagem e primeira/última visita por aluno;
-- consulta de check-ins por intervalo: contagem e primeira/última visita por aluno, com busca, plataforma, ordenação e paginação locais na tela `Check-ins`;
+- consulta de check-ins por intervalo: contagem e primeira/última visita por aluno, com busca, origem, ordenação e paginação locais na tela `Check-ins`;
 
 ### 12.4 Radar de retenção V2
 
@@ -663,11 +679,14 @@ Hoje essa governança cobre campanhas WhatsApp e drafts de Treino do dia. Campan
 
 ### 13.4 Ativação consentida no WhatsApp
 
-As planilhas de Wellhub e TotalPass podem não fornecer telefone. A ativação
+As planilhas de Wellhub e TotalPass podem não fornecer telefone. Mensalistas
+também entram pela base consentida, sem serem classificados como uma plataforma
+externa. A ativação
 separa a identidade comportamental importada do canal de comunicação:
 
 1. cada box possui `contact_activation_code` aleatório;
-2. o aluno abre `#/activate/:code`, informa nome, origem e uma presença recente;
+2. o aluno abre `#/activate/:code`, informa nome e origem; no primeiro treino
+   pode criar o cadastro sem presença anterior, inclusive como mensalista;
 3. a API procura correspondência determinística, sempre isolada por box e
    origem: nome exato com check-in na data; nome exato e único quando a data
    está à frente da última presença importada da plataforma; ou nome compatível
@@ -865,7 +884,9 @@ Padrões:
 | auditoria de privacidade | 1.825 |
 | ativações e consentimentos | 1.825 |
 
-Supressões não expiram automaticamente. A deleção ocorre em transação. Import history possui cascade para check-ins.
+Supressões não expiram automaticamente. A deleção ocorre em transação. Check-ins
+importados e próprios seguem o mesmo prazo; remover um import history também
+possui cascade para os check-ins ainda associados.
 
 ## 16. Criptografia de segredos
 
@@ -1018,6 +1039,8 @@ O contrato definitivo está em `internal/adapters/http/router.go`. Mapa resumido
 | `/api/v1/message-*`, `/whatsapp` | OWNER + capability | comunicação WhatsApp |
 | `/api/v1/public/contact-activation*`, `/webhooks/twilio/whatsapp` | público + capability | início e confirmação assinada da ativação |
 | `/api/v1/contact-activations*` | OWNER + capability | cobertura, fila e vínculo assistido |
+| `/api/v1/public/self-checkin/:token` | público com sessão curta | consulta da sessão e presença do mensalista |
+| `/api/v1/self-checkin-sessions`, `/students/:id/checkins/manual` | OWNER | QR temporário e check-in pela recepção |
 | `/api/v1/email*` | OWNER + capability | e-mail |
 | `/api/v1/workouts*` | OWNER + capability | treino/LLM/WhatsApp |
 | `/api/v1/automation*` | OWNER + capability | schedules e runs |
@@ -1270,7 +1293,7 @@ Você domina o núcleo quando consegue explicar:
 | Termo | Significado no EngageFit |
 |---|---|
 | Box | tenant/academia |
-| Source | origem do check-in: Wellhub ou TotalPass |
+| Source | origem do aluno e do check-in: Wellhub, TotalPass ou mensalista do box (`box_member`) |
 | Goal | meta de check-ins de uma campanha para uma source |
 | Progress | snapshot materializado por aluno/campanha |
 | Reward | tipo/estoque informativo de brinde |

@@ -34,7 +34,7 @@ func TestPrivacyAnonymizationSuppressesIdentityAndContact(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer db.Where("id = ?", boxID).Delete(&models.BoxModel{})
-	if err := db.Create(&models.StudentModel{ID: studentID, BoxID: boxID, Name: "Personal Name", Email: "person@example.test", Phone: "+5511999999999", Source: "totalpass", ExternalID: "external-person", RiskStatus: "active", ContactStatus: "unknown", CreatedAt: now, UpdatedAt: now}).Error; err != nil {
+	if err := db.Create(&models.StudentModel{ID: studentID, BoxID: boxID, Name: "Personal Name", Email: "person@example.test", Phone: "+5511999999999", Source: "box_member", ExternalID: "self-registration:" + studentID, RiskStatus: "active", ContactStatus: "unknown", CreatedAt: now, UpdatedAt: now}).Error; err != nil {
 		t.Fatal(err)
 	}
 
@@ -46,7 +46,7 @@ func TestPrivacyAnonymizationSuppressesIdentityAndContact(t *testing.T) {
 	if err := privacy.AnonymizeStudent(context.Background(), domain.ID(boxID), domain.ID(studentID), "", "requested erasure"); err != nil {
 		t.Fatal(err)
 	}
-	suppressed, err := privacy.IsIdentitySuppressed(context.Background(), domain.ID(boxID), domain.SourceTotalPass, "external-person")
+	suppressed, err := privacy.IsIdentitySuppressed(context.Background(), domain.ID(boxID), domain.SourceBoxMember, "self-registration:"+studentID)
 	if err != nil || !suppressed {
 		t.Fatalf("identity should be suppressed: suppressed=%v err=%v", suppressed, err)
 	}

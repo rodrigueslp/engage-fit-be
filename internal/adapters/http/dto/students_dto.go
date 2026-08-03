@@ -66,4 +66,5 @@ type CheckinResponse struct {
 	CheckinDate string `json:"checkin_date"`
 	CheckinTime string `json:"checkin_time,omitempty"`
 	Source      string `json:"source"`
+	EntryMethod string `json:"entry_method"`
 }

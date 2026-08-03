@@ -34,7 +34,7 @@ func TestContactActivationMatchesAndConfirmsStudent(t *testing.T) {
 	if err := db.Create(&models.StudentModel{ID: studentID, BoxID: boxID, Name: "Adriana  Segatelli", Source: "totalpass", ExternalID: "adriana segatelli", RiskStatus: "active", ContactStatus: "unknown", CreatedAt: now, UpdatedAt: now}).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Create(&models.CheckinModel{ID: uuid.NewString(), BoxID: boxID, StudentID: studentID, CheckinDate: checkinDate, Source: "totalpass", ImportHistoryID: importID, CreatedAt: now}).Error; err != nil {
+	if err := db.Create(&models.CheckinModel{ID: uuid.NewString(), BoxID: boxID, StudentID: studentID, CheckinDate: checkinDate, Source: "totalpass", ImportHistoryID: &importID, EntryMethod: "import", CreatedAt: now}).Error; err != nil {
 		t.Fatal(err)
 	}
 
@@ -107,7 +107,7 @@ func TestContactActivationCreatesStudentAfterWhatsappConfirmation(t *testing.T) 
 	repository := NewContactActivationGormRepository(db)
 	activation := &domain.ContactActivationRequest{
 		ID: domain.ID(uuid.NewString()), BoxID: domain.ID(boxID), ClaimedName: "Pessoa Nova",
-		Source: domain.SourceWellhub, IsNewStudent: true, SenderPhone: "5511999999999",
+		Source: domain.SourceBoxMember, IsNewStudent: true, SenderPhone: "5511999999999",
 		TokenHash: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
 		Status:    domain.ContactActivationAwaitingMessage, ConsentVersion: "v1", ConsentText: "consent",
 		ExpiresAt: now.Add(time.Hour), CreatedAt: now, UpdatedAt: now,
@@ -126,7 +126,7 @@ func TestContactActivationCreatesStudentAfterWhatsappConfirmation(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if student.Name != "Pessoa Nova" || student.Phone != "5511977776666" || student.ContactStatus != domain.ContactStatusOptedIn || student.MembershipStartedSource != "self_registration" {
+	if student.Name != "Pessoa Nova" || student.Phone != "5511977776666" || student.Source != domain.SourceBoxMember || student.ContactStatus != domain.ContactStatusOptedIn || student.MembershipStartedSource != "self_registration" {
 		t.Fatalf("unexpected student: %+v", student)
 	}
 }
@@ -171,7 +171,7 @@ func TestContactActivationPendingSyncResolvesAfterCheckinImport(t *testing.T) {
 	if confirmed.Status != domain.ContactActivationPendingSync {
 		t.Fatalf("expected pending sync, got %+v", confirmed)
 	}
-	if err := db.Create(&models.CheckinModel{ID: uuid.NewString(), BoxID: boxID, StudentID: studentID, CheckinDate: claimedDate, Source: "totalpass", ImportHistoryID: importID, CreatedAt: now}).Error; err != nil {
+	if err := db.Create(&models.CheckinModel{ID: uuid.NewString(), BoxID: boxID, StudentID: studentID, CheckinDate: claimedDate, Source: "totalpass", ImportHistoryID: &importID, EntryMethod: "import", CreatedAt: now}).Error; err != nil {
 		t.Fatal(err)
 	}
 	resolved, err := repository.ResolveActivation(context.Background(), domain.ID(boxID), activation.ID, domain.ID(studentID), "after_import_compatible_name_checkin", now.Add(time.Minute))

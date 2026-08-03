@@ -10,6 +10,7 @@ import (
 
 	"boxengage/backend/internal/adapters/http/handlers"
 	"boxengage/backend/internal/adapters/http/middleware"
+	"boxengage/backend/internal/app/attendance"
 	"boxengage/backend/internal/app/auth"
 	"boxengage/backend/internal/app/automation"
 	billingapp "boxengage/backend/internal/app/billing"
@@ -56,6 +57,7 @@ type RouterDependencies struct {
 	UpdateContactPreferenceUseCase students.UpdateContactPreferenceUseCase
 	AnonymizeStudentUseCase        students.AnonymizeStudentUseCase
 	ContactActivationService       *contactactivation.Service
+	AttendanceService              *attendance.Service
 
 	ListImportsUseCase      imports.ListImportsUseCase
 	GetImportUseCase        imports.GetImportUseCase
@@ -238,6 +240,12 @@ func NewRouter(deps RouterDependencies) *gin.Engine {
 		api.POST("/public/contact-activation/:code", middleware.JSONRateLimit(activationLimiter, "name"), activationHandler.Start)
 		api.POST("/webhooks/twilio/whatsapp", activationHandler.Inbound)
 	}
+	if deps.AttendanceService != nil {
+		attendanceHandler := handlers.NewAttendanceHandler(deps.AttendanceService)
+		selfCheckinLimiter := middleware.NewWindowRateLimiter(60, time.Minute)
+		api.GET("/public/self-checkin/:token", attendanceHandler.PublicSession)
+		api.POST("/public/self-checkin/:token", middleware.JSONRateLimit(selfCheckinLimiter, "phone"), attendanceHandler.SelfCheckin)
+	}
 
 	authenticated := api.Group("")
 	authenticated.Use(middleware.Auth(deps.TokenService, deps.UserRepository, deps.BoxRepository, deps.SessionConfig), middleware.CSRF(deps.SessionConfig))
@@ -320,6 +328,13 @@ func NewRouter(deps RouterDependencies) *gin.Engine {
 	protected.GET("/students/:id", studentsHandler.Get)
 	protected.PATCH("/students/:id/risk-status", studentsHandler.UpdateRiskStatus)
 	protected.GET("/students/:id/checkins", studentsHandler.Checkins)
+	if deps.AttendanceService != nil {
+		attendanceHandler := handlers.NewAttendanceHandler(deps.AttendanceService)
+		ownerAttendance := protected.Group("")
+		ownerAttendance.Use(middleware.Owner())
+		ownerAttendance.POST("/self-checkin-sessions", attendanceHandler.CreateSession)
+		ownerAttendance.POST("/students/:id/checkins/manual", attendanceHandler.ManualCheckin)
+	}
 	protected.GET("/students/:id/campaign-progress", studentsHandler.CampaignProgress)
 	protected.GET("/students/:id/privacy-export", studentsHandler.ExportData)
 	protected.PATCH("/students/:id/contact-preference", studentsHandler.UpdateContactPreference)

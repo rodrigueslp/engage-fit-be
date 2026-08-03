@@ -191,13 +191,25 @@ type CheckinIngestionBatchModel struct {
 }
 
 type CheckinModel struct {
+	ID                   string `gorm:"primaryKey"`
+	BoxID                string `gorm:"index"`
+	StudentID            string `gorm:"index"`
+	CheckinDate          time.Time
+	CheckinTime          *string
+	Source               string `gorm:"index"`
+	ImportHistoryID      *string
+	EntryMethod          string
+	RecordedByUserID     *string
+	SelfCheckinSessionID *string
+	CreatedAt            time.Time
+}
+
+type SelfCheckinSessionModel struct {
 	ID              string `gorm:"primaryKey"`
 	BoxID           string `gorm:"index"`
-	StudentID       string `gorm:"index"`
-	CheckinDate     time.Time
-	CheckinTime     *string
-	Source          string `gorm:"index"`
-	ImportHistoryID string
+	CreatedByUserID *string
+	TokenHash       string    `gorm:"uniqueIndex"`
+	ExpiresAt       time.Time `gorm:"index"`
 	CreatedAt       time.Time
 }
 

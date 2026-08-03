@@ -26,6 +26,10 @@ func (CheckinModel) TableName() string {
 	return "checkins"
 }
 
+func (SelfCheckinSessionModel) TableName() string {
+	return "self_checkin_sessions"
+}
+
 func (RetentionInterventionModel) TableName() string {
 	return "retention_interventions"
 }
