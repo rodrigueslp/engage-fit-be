@@ -64,6 +64,15 @@ Atualizado em: 2026-08-03 (ativação resiliente a nomes e importação D-1 publ
   temporários foram removidos ao final com verificação de ausência.
 - Não foi criado backup antes deste deploy por decisão explícita do responsável
   pelo produto, que aceitou esse risco para o estágio atual do piloto.
+- Revisões de ativação sem candidato deixaram de exibir um seletor vazio. Para
+  `box_member`, o owner pode criar com confirmação um novo cadastro usando o
+  nome e telefone já consentidos ou descartar a solicitação. A criação é
+  bloqueada se surgir aluno semelhante, vincula o evento de consentimento e
+  preserva a presença informada apenas como início de vínculo, sem gerar
+  check-in não verificado. Solicitações descartadas ficam auditáveis como
+  `cancelled`/`manual_discard`. Backend `4f2812d`, frontend `294dbc5`; deploys
+  funcionais `dbd04b68-1660-42b0-92fb-d7f344467d2d` e
+  `5d70148f-3467-46f5-ba7a-394488513efe`.
 
 ## Checkpoint de ativação resiliente a nomes e importação D-1 em 2026-08-03
 
