@@ -24,6 +24,7 @@ type contactActivationRow struct {
 	SenderPhone       string
 	Phone             string
 	TokenHash         string
+	MatchStrategy     string
 	Status            string
 	ConsentVersion    string
 	ConsentText       string
@@ -58,30 +59,40 @@ func (r ContactActivationGormRepository) ActivationCode(ctx context.Context, box
 	return code, err
 }
 
-func (r ContactActivationGormRepository) FindMatchingStudents(ctx context.Context, boxID domain.ID, source domain.Source, name string, recentCheckinDate time.Time) ([]domain.Student, error) {
+func (r ContactActivationGormRepository) FindActivationMatchData(ctx context.Context, boxID domain.ID, source domain.Source, recentCheckinDate time.Time) (domain.ContactActivationMatchData, error) {
 	var rows []struct {
-		ID string
+		ID               string
+		Name             string
+		HasRecentCheckin bool
 	}
-	normalized := normalizeActivationName(name)
 	err := r.db.WithContext(ctx).Table("students").
-		Select("students.id").
-		Joins("JOIN checkins ON checkins.student_id = students.id AND checkins.box_id = students.box_id").
+		Select(`students.id, students.name, EXISTS (
+			SELECT 1 FROM checkins
+			WHERE checkins.box_id = students.box_id
+			  AND checkins.student_id = students.id
+			  AND checkins.source = students.source
+			  AND checkins.checkin_date = ?
+		) AS has_recent_checkin`, recentCheckinDate.Format("2006-01-02")).
 		Where("students.box_id = ? AND students.source = ? AND students.anonymized_at IS NULL", stringID(boxID), string(source)).
-		Where("LOWER(REGEXP_REPLACE(BTRIM(students.name), '[[:space:]]+', ' ', 'g')) = ?", normalized).
-		Where("checkins.checkin_date = ?", recentCheckinDate.Format("2006-01-02")).
-		Group("students.id").
 		Find(&rows).Error
 	if err != nil {
-		return nil, err
+		return domain.ContactActivationMatchData{}, err
 	}
-	result := make([]domain.Student, 0, len(rows))
+	result := domain.ContactActivationMatchData{Candidates: make([]domain.ContactActivationCandidate, 0, len(rows))}
 	for _, row := range rows {
-		student, findErr := NewStudentGormRepository(r.db).FindByID(ctx, boxID, domain.ID(row.ID))
-		if findErr != nil {
-			return nil, findErr
-		}
-		result = append(result, *student)
+		result.Candidates = append(result.Candidates, domain.ContactActivationCandidate{
+			Student:          domain.Student{ID: domain.ID(row.ID), BoxID: boxID, Name: row.Name, Source: source},
+			HasRecentCheckin: row.HasRecentCheckin,
+		})
 	}
+	var latest struct{ Date *time.Time }
+	if err := r.db.WithContext(ctx).Table("checkins").
+		Select("MAX(checkin_date) AS date").
+		Where("box_id = ? AND source = ?", stringID(boxID), string(source)).
+		Scan(&latest).Error; err != nil {
+		return domain.ContactActivationMatchData{}, err
+	}
+	result.LatestCheckinDate = latest.Date
 	return result, nil
 }
 
@@ -133,6 +144,9 @@ func (r ContactActivationGormRepository) ConfirmActivation(ctx context.Context, 
 			return nil
 		}
 		status := domain.ContactActivationNeedsReview
+		if row.StudentID == nil && row.MatchStrategy == "awaiting_source_sync" {
+			status = domain.ContactActivationPendingSync
+		}
 		if row.StudentID == nil && row.IsNewStudent {
 			studentID, createErr := findOrCreateSelfRegisteredStudent(tx, row, phone, confirmedAt)
 			if createErr != nil {
@@ -175,7 +189,11 @@ func (r ContactActivationGormRepository) ConfirmActivation(ctx context.Context, 
 				return err
 			}
 		}
-		if err := createConsentEvent(tx, row, phone, "opted_in", "whatsapp_self_activation", confirmedAt); err != nil {
+		consentRow := row
+		if status != domain.ContactActivationConfirmed {
+			consentRow.StudentID = nil
+		}
+		if err := createConsentEvent(tx, consentRow, phone, "opted_in", "whatsapp_self_activation", confirmedAt); err != nil {
 			return err
 		}
 		row.Phone = phone
@@ -238,7 +256,23 @@ func (r ContactActivationGormRepository) ListActivations(ctx context.Context, bo
 	return result, nil
 }
 
-func (r ContactActivationGormRepository) ResolveActivation(ctx context.Context, boxID, activationID, studentID domain.ID, resolvedAt time.Time) (*domain.ContactActivationRequest, error) {
+func (r ContactActivationGormRepository) ListPendingSyncActivations(ctx context.Context, boxID domain.ID, source domain.Source) ([]domain.ContactActivationRequest, error) {
+	var rows []contactActivationRow
+	err := activationQuery(r.db.WithContext(ctx)).
+		Where("contact_activation_requests.box_id = ? AND contact_activation_requests.source = ? AND contact_activation_requests.status = ?", stringID(boxID), string(source), string(domain.ContactActivationPendingSync)).
+		Order("contact_activation_requests.created_at ASC").
+		Find(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	result := make([]domain.ContactActivationRequest, 0, len(rows))
+	for _, row := range rows {
+		result = append(result, activationToDomain(row))
+	}
+	return result, nil
+}
+
+func (r ContactActivationGormRepository) ResolveActivation(ctx context.Context, boxID, activationID, studentID domain.ID, matchStrategy string, resolvedAt time.Time) (*domain.ContactActivationRequest, error) {
 	var result domain.ContactActivationRequest
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var row contactActivationRow
@@ -256,20 +290,33 @@ func (r ContactActivationGormRepository) ResolveActivation(ctx context.Context, 
 		}
 		status := domain.ContactActivationAwaitingMessage
 		if row.Phone != "" {
-			status = domain.ContactActivationConfirmed
-			if err := activateStudent(tx, row.BoxID, stringID(studentID), row.Phone, resolvedAt); err != nil {
+			var phoneConflicts int64
+			if err := tx.Table("students").
+				Where("box_id = ? AND id <> ? AND phone = ? AND anonymized_at IS NULL", row.BoxID, stringID(studentID), row.Phone).
+				Count(&phoneConflicts).Error; err != nil {
 				return err
 			}
+			status = domain.ContactActivationNeedsReview
+			if phoneConflicts == 0 {
+				status = domain.ContactActivationConfirmed
+				if err := activateStudent(tx, row.BoxID, stringID(studentID), row.Phone, resolvedAt); err != nil {
+					return err
+				}
+			}
 		}
-		if err := tx.Table("contact_activation_requests").Where("id = ?", row.ID).Updates(map[string]any{
-			"student_id":  stringID(studentID),
-			"status":      string(status),
-			"resolved_at": resolvedAt,
-			"updated_at":  resolvedAt,
-		}).Error; err != nil {
+		updates := map[string]any{
+			"student_id":     stringID(studentID),
+			"status":         string(status),
+			"match_strategy": matchStrategy,
+			"updated_at":     resolvedAt,
+		}
+		if status == domain.ContactActivationConfirmed || row.Phone == "" {
+			updates["resolved_at"] = resolvedAt
+		}
+		if err := tx.Table("contact_activation_requests").Where("id = ?", row.ID).Updates(updates).Error; err != nil {
 			return err
 		}
-		if row.Phone != "" {
+		if row.Phone != "" && status == domain.ContactActivationConfirmed {
 			if err := tx.Table("contact_consent_events").
 				Where("activation_request_id = ? AND student_id IS NULL", row.ID).
 				Update("student_id", stringID(studentID)).Error; err != nil {
@@ -278,11 +325,20 @@ func (r ContactActivationGormRepository) ResolveActivation(ctx context.Context, 
 		}
 		row.StudentID = pointerString(stringID(studentID))
 		row.Status = string(status)
-		row.ResolvedAt = &resolvedAt
+		row.MatchStrategy = matchStrategy
+		if status == domain.ContactActivationConfirmed || row.Phone == "" {
+			row.ResolvedAt = &resolvedAt
+		}
 		result = activationToDomain(row)
 		return nil
 	})
 	return &result, err
+}
+
+func (r ContactActivationGormRepository) MarkActivationNeedsReview(ctx context.Context, boxID, activationID domain.ID, matchStrategy string, updatedAt time.Time) error {
+	return r.db.WithContext(ctx).Table("contact_activation_requests").
+		Where("box_id = ? AND id = ? AND status = ?", stringID(boxID), stringID(activationID), string(domain.ContactActivationPendingSync)).
+		Updates(map[string]any{"status": string(domain.ContactActivationNeedsReview), "match_strategy": matchStrategy, "updated_at": updatedAt}).Error
 }
 
 func (r ContactActivationGormRepository) Summary(ctx context.Context, boxID domain.ID) (domain.ContactActivationSummary, error) {
@@ -292,6 +348,7 @@ func (r ContactActivationGormRepository) Summary(ctx context.Context, boxID doma
 		OptedIn         int64
 		OptedOut        int64
 		PendingReview   int64
+		PendingSync     int64
 		AwaitingMessage int64
 	}
 	err := r.db.WithContext(ctx).Raw(`
@@ -301,13 +358,14 @@ func (r ContactActivationGormRepository) Summary(ctx context.Context, boxID doma
 			COUNT(*) FILTER (WHERE s.anonymized_at IS NULL AND s.contact_status = 'opted_in') AS opted_in,
 			COUNT(*) FILTER (WHERE s.anonymized_at IS NULL AND s.contact_status = 'opted_out') AS opted_out,
 			(SELECT COUNT(*) FROM contact_activation_requests car WHERE car.box_id = ? AND car.status = 'needs_review') AS pending_review,
+			(SELECT COUNT(*) FROM contact_activation_requests car WHERE car.box_id = ? AND car.status = 'pending_sync') AS pending_sync,
 			(SELECT COUNT(*) FROM contact_activation_requests car WHERE car.box_id = ? AND car.status = 'awaiting_message' AND car.expires_at > NOW()) AS awaiting_message
 		FROM students s
 		WHERE s.box_id = ?
-	`, stringID(boxID), stringID(boxID), stringID(boxID)).Scan(&row).Error
+	`, stringID(boxID), stringID(boxID), stringID(boxID), stringID(boxID)).Scan(&row).Error
 	return domain.ContactActivationSummary{
 		TotalStudents: row.TotalStudents, WithPhone: row.WithPhone, OptedIn: row.OptedIn,
-		OptedOut: row.OptedOut, PendingReview: row.PendingReview, AwaitingMessage: row.AwaitingMessage,
+		OptedOut: row.OptedOut, PendingReview: row.PendingReview, PendingSync: row.PendingSync, AwaitingMessage: row.AwaitingMessage,
 	}, err
 }
 
@@ -330,6 +388,7 @@ func activationToRow(value domain.ContactActivationRequest) contactActivationRow
 		ID: stringID(value.ID), BoxID: stringID(value.BoxID), StudentID: studentID,
 		ClaimedName: value.ClaimedName, Source: string(value.Source), RecentCheckinDate: value.RecentCheckinDate, IsNewStudent: value.IsNewStudent,
 		SenderPhone: value.SenderPhone, Phone: value.Phone, TokenHash: value.TokenHash, Status: string(value.Status),
+		MatchStrategy:  value.MatchStrategy,
 		ConsentVersion: value.ConsentVersion, ConsentText: value.ConsentText, ConsentedAt: value.ConsentedAt,
 		ExpiresAt: value.ExpiresAt, ResolvedAt: value.ResolvedAt, CreatedAt: value.CreatedAt, UpdatedAt: value.UpdatedAt,
 	}
@@ -343,7 +402,7 @@ func activationToDomain(row contactActivationRow) domain.ContactActivationReques
 	return domain.ContactActivationRequest{
 		ID: domain.ID(row.ID), BoxID: domain.ID(row.BoxID), StudentID: studentID, StudentName: row.StudentName,
 		ClaimedName: row.ClaimedName, Source: domain.Source(row.Source), RecentCheckinDate: row.RecentCheckinDate, IsNewStudent: row.IsNewStudent,
-		SenderPhone: row.SenderPhone, Phone: row.Phone, TokenHash: row.TokenHash,
+		SenderPhone: row.SenderPhone, Phone: row.Phone, TokenHash: row.TokenHash, MatchStrategy: row.MatchStrategy,
 		Status: domain.ContactActivationStatus(row.Status), ConsentVersion: row.ConsentVersion,
 		ConsentText: row.ConsentText, ConsentedAt: row.ConsentedAt, ExpiresAt: row.ExpiresAt,
 		ResolvedAt: row.ResolvedAt, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,

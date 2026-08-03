@@ -668,13 +668,24 @@ separa a identidade comportamental importada do canal de comunicação:
 
 1. cada box possui `contact_activation_code` aleatório;
 2. o aluno abre `#/activate/:code`, informa nome, origem e uma presença recente;
-3. a API procura correspondência exata por box, origem, nome normalizado e data;
+3. a API procura correspondência determinística, sempre isolada por box e
+   origem: nome exato com check-in na data; nome exato e único quando a data
+   está à frente da última presença importada da plataforma; ou nome compatível
+   e único confirmado por check-in na data. A normalização ignora caixa,
+   acentos, pontuação, espaços e partículas nominais como `de`, `da` e `do`;
 4. um token aleatório de 30 minutos é persistido somente como SHA-256;
 5. o aluno abre `wa.me` e envia a mensagem pronta;
 6. o webhook valida `X-Twilio-Signature` com o Auth Token da conexão efetiva;
 7. somente então o telefone inbound é gravado e o aluno vira `opted_in`;
-8. ausência ou ambiguidade de correspondência produz `needs_review`, resolvido
-   pelo owner sem expor a lista de alunos na página pública.
+8. quando um nome compatível informa uma data posterior ao último dado da
+   plataforma, o pedido fica em `pending_sync` e é reprocessado depois de cada
+   importação da mesma origem; somente ausência ou ambiguidade persistente
+   produz `needs_review`, resolvido pelo owner sem expor a lista de alunos na
+   página pública.
+
+Cada pedido registra `match_strategy` para auditoria. Correspondências por nome
+parcial nunca são aceitas sem um check-in confirmador e qualquer conjunto com
+mais de um candidato válido permanece para revisão humana.
 
 O modo assistido gera um QR já ligado a um aluno selecionado pelo owner. A
 confirmação é idempotente sob lock de linha. `SAIR`, `PARAR`, `CANCELAR` e

@@ -19,7 +19,10 @@ func TestStartAndConfirmActivation(t *testing.T) {
 	now := time.Date(2026, 7, 30, 12, 0, 0, 0, time.UTC)
 	repository := &activationRepositoryStub{
 		boxID: domain.ID("box-1"), boxName: "CrossFit Alados", activationCode: "activation-code",
-		matches: []domain.Student{{ID: domain.ID("student-1"), BoxID: domain.ID("box-1"), Name: "Adriana Segatelli", Source: domain.SourceTotalPass}},
+		matchData: domain.ContactActivationMatchData{Candidates: []domain.ContactActivationCandidate{{
+			Student:          domain.Student{ID: domain.ID("student-1"), BoxID: domain.ID("box-1"), Name: "Adriana Segatelli", Source: domain.SourceTotalPass},
+			HasRecentCheckin: true,
+		}}},
 	}
 	service := NewService(repository, studentRepositoryStub{}, settingsResolverStub{}, "")
 	service.now = func() time.Time { return now }
@@ -57,6 +60,85 @@ func TestStartAndConfirmActivation(t *testing.T) {
 	}
 	if !strings.Contains(result.Message, "Adriana") || !strings.Contains(result.Message, "SAIR") {
 		t.Fatalf("unexpected confirmation: %q", result.Message)
+	}
+}
+
+func TestDecideActivationMatchAcceptsCompatibleNameWithExactCheckin(t *testing.T) {
+	checkinDate := time.Date(2026, 8, 2, 0, 0, 0, 0, time.UTC)
+	decision := decideActivationMatch("Vítor Lima", checkinDate, domain.ContactActivationMatchData{
+		Candidates: []domain.ContactActivationCandidate{{
+			Student: domain.Student{ID: "student-1", Name: "Vitor Lima de Oliveira"}, HasRecentCheckin: true,
+		}},
+		LatestCheckinDate: &checkinDate,
+	})
+	if decision.studentID != "student-1" || decision.strategy != "compatible_name_checkin" {
+		t.Fatalf("unexpected decision: %+v", decision)
+	}
+}
+
+func TestDecideActivationMatchAcceptsExactUniqueNameWhenSourceIsDelayed(t *testing.T) {
+	latestDate := time.Date(2026, 8, 2, 0, 0, 0, 0, time.UTC)
+	claimedDate := latestDate.AddDate(0, 0, 1)
+	decision := decideActivationMatch("João Paulo da Rocha", claimedDate, domain.ContactActivationMatchData{
+		Candidates:        []domain.ContactActivationCandidate{{Student: domain.Student{ID: "student-1", Name: "Joao Paulo da Rocha"}}},
+		LatestCheckinDate: &latestDate,
+	})
+	if decision.studentID != "student-1" || decision.strategy != "exact_unique_source_lag" {
+		t.Fatalf("unexpected decision: %+v", decision)
+	}
+}
+
+func TestDecideActivationMatchWaitsForImportWhenPartialNameHasNoImportedCheckin(t *testing.T) {
+	latestDate := time.Date(2026, 8, 2, 0, 0, 0, 0, time.UTC)
+	claimedDate := latestDate.AddDate(0, 0, 1)
+	decision := decideActivationMatch("Vitor Lima", claimedDate, domain.ContactActivationMatchData{
+		Candidates: []domain.ContactActivationCandidate{
+			{Student: domain.Student{ID: "student-1", Name: "Vitor Lima de Oliveira"}},
+			{Student: domain.Student{ID: "student-2", Name: "Vitor Lima Santos"}},
+		},
+		LatestCheckinDate: &latestDate,
+	})
+	if !decision.pending || decision.studentID != "" || decision.strategy != "awaiting_source_sync" {
+		t.Fatalf("unexpected decision: %+v", decision)
+	}
+}
+
+func TestDecideActivationMatchKeepsAmbiguousImportedNamesForReview(t *testing.T) {
+	checkinDate := time.Date(2026, 8, 2, 0, 0, 0, 0, time.UTC)
+	decision := decideActivationMatch("Vitor Lima", checkinDate, domain.ContactActivationMatchData{
+		Candidates: []domain.ContactActivationCandidate{
+			{Student: domain.Student{ID: "student-1", Name: "Vitor Lima de Oliveira"}, HasRecentCheckin: true},
+			{Student: domain.Student{ID: "student-2", Name: "Vitor Lima Santos"}, HasRecentCheckin: true},
+		},
+		LatestCheckinDate: &checkinDate,
+	})
+	if decision.pending || decision.studentID != "" || decision.strategy != "ambiguous_name" {
+		t.Fatalf("unexpected decision: %+v", decision)
+	}
+}
+
+func TestReprocessPendingResolvesAfterImportedCheckin(t *testing.T) {
+	checkinDate := time.Date(2026, 8, 3, 0, 0, 0, 0, time.UTC)
+	repository := &activationRepositoryStub{
+		pendingItems: []domain.ContactActivationRequest{{
+			ID: "activation-1", BoxID: "box-1", ClaimedName: "Vitor Lima", Source: domain.SourceTotalPass,
+			RecentCheckinDate: &checkinDate, Status: domain.ContactActivationPendingSync,
+		}},
+		matchData: domain.ContactActivationMatchData{
+			Candidates: []domain.ContactActivationCandidate{{
+				Student: domain.Student{ID: "student-1", Name: "Vitor Lima de Oliveira"}, HasRecentCheckin: true,
+			}},
+			LatestCheckinDate: &checkinDate,
+		},
+	}
+	service := NewService(repository, studentRepositoryStub{}, settingsResolverStub{}, "")
+	service.now = func() time.Time { return checkinDate.Add(12 * time.Hour) }
+
+	if err := service.ReprocessPending(context.Background(), "box-1", domain.SourceTotalPass); err != nil {
+		t.Fatal(err)
+	}
+	if repository.resolvedStudentID != "student-1" || repository.resolvedStrategy != "after_import_compatible_name_checkin" {
+		t.Fatalf("unexpected resolution: student=%s strategy=%s", repository.resolvedStudentID, repository.resolvedStrategy)
 	}
 }
 
@@ -158,13 +240,16 @@ func (studentRepositoryStub) UpdateContactPreference(context.Context, domain.ID,
 }
 
 type activationRepositoryStub struct {
-	boxID          domain.ID
-	boxName        string
-	activationCode string
-	matches        []domain.Student
-	created        *domain.ContactActivationRequest
-	confirmedPhone string
-	matchCalls     int
+	boxID             domain.ID
+	boxName           string
+	activationCode    string
+	matchData         domain.ContactActivationMatchData
+	created           *domain.ContactActivationRequest
+	confirmedPhone    string
+	matchCalls        int
+	pendingItems      []domain.ContactActivationRequest
+	resolvedStudentID domain.ID
+	resolvedStrategy  string
 }
 
 func (r *activationRepositoryStub) FindPublicBox(context.Context, string) (domain.ID, string, error) {
@@ -173,9 +258,9 @@ func (r *activationRepositoryStub) FindPublicBox(context.Context, string) (domai
 func (r *activationRepositoryStub) ActivationCode(context.Context, domain.ID) (string, error) {
 	return r.activationCode, nil
 }
-func (r *activationRepositoryStub) FindMatchingStudents(context.Context, domain.ID, domain.Source, string, time.Time) ([]domain.Student, error) {
+func (r *activationRepositoryStub) FindActivationMatchData(context.Context, domain.ID, domain.Source, time.Time) (domain.ContactActivationMatchData, error) {
 	r.matchCalls++
-	return r.matches, nil
+	return r.matchData, nil
 }
 func (r *activationRepositoryStub) CreateActivation(_ context.Context, activation *domain.ContactActivationRequest) error {
 	copy := *activation
@@ -208,8 +293,16 @@ func (r *activationRepositoryStub) OptOutActivations(context.Context, []domain.I
 func (r *activationRepositoryStub) ListActivations(context.Context, domain.ID) ([]domain.ContactActivationRequest, error) {
 	return nil, nil
 }
-func (r *activationRepositoryStub) ResolveActivation(context.Context, domain.ID, domain.ID, domain.ID, time.Time) (*domain.ContactActivationRequest, error) {
-	return nil, nil
+func (r *activationRepositoryStub) ListPendingSyncActivations(context.Context, domain.ID, domain.Source) ([]domain.ContactActivationRequest, error) {
+	return r.pendingItems, nil
+}
+func (r *activationRepositoryStub) ResolveActivation(_ context.Context, _ domain.ID, _ domain.ID, studentID domain.ID, strategy string, _ time.Time) (*domain.ContactActivationRequest, error) {
+	r.resolvedStudentID = studentID
+	r.resolvedStrategy = strategy
+	return &domain.ContactActivationRequest{StudentID: studentID, MatchStrategy: strategy}, nil
+}
+func (r *activationRepositoryStub) MarkActivationNeedsReview(context.Context, domain.ID, domain.ID, string, time.Time) error {
+	return nil
 }
 func (r *activationRepositoryStub) Summary(context.Context, domain.ID) (domain.ContactActivationSummary, error) {
 	return domain.ContactActivationSummary{}, nil

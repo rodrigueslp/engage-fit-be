@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -30,17 +31,22 @@ type ImportCheckinsOutput struct {
 }
 
 type ImportCheckinsUseCase struct {
-	parser    services.CheckinFileParser
-	imports   repositories.ImportHistoryRepository
-	students  repositories.StudentRepository
-	checkins  repositories.CheckinRepository
-	campaigns repositories.CampaignRepository
-	rewards   repositories.RewardRepository
-	privacy   repositories.PrivacyRepository
+	parser      services.CheckinFileParser
+	imports     repositories.ImportHistoryRepository
+	students    repositories.StudentRepository
+	checkins    repositories.CheckinRepository
+	campaigns   repositories.CampaignRepository
+	rewards     repositories.RewardRepository
+	privacy     repositories.PrivacyRepository
+	activations ContactActivationReprocessor
 }
 
-func NewImportCheckinsUseCase(parser services.CheckinFileParser, imports repositories.ImportHistoryRepository, students repositories.StudentRepository, checkins repositories.CheckinRepository, campaigns repositories.CampaignRepository, rewards repositories.RewardRepository, privacy repositories.PrivacyRepository) ImportCheckinsUseCase {
-	return ImportCheckinsUseCase{parser: parser, imports: imports, students: students, checkins: checkins, campaigns: campaigns, rewards: rewards, privacy: privacy}
+type ContactActivationReprocessor interface {
+	ReprocessPending(ctx context.Context, boxID domain.ID, source domain.Source) error
+}
+
+func NewImportCheckinsUseCase(parser services.CheckinFileParser, imports repositories.ImportHistoryRepository, students repositories.StudentRepository, checkins repositories.CheckinRepository, campaigns repositories.CampaignRepository, rewards repositories.RewardRepository, privacy repositories.PrivacyRepository, activations ContactActivationReprocessor) ImportCheckinsUseCase {
+	return ImportCheckinsUseCase{parser: parser, imports: imports, students: students, checkins: checkins, campaigns: campaigns, rewards: rewards, privacy: privacy, activations: activations}
 }
 
 func (uc ImportCheckinsUseCase) Execute(ctx context.Context, input ImportCheckinsInput) (output *ImportCheckinsOutput, resultErr error) {
@@ -155,6 +161,11 @@ func (uc ImportCheckinsUseCase) Execute(ctx context.Context, input ImportCheckin
 	}
 	if err := uc.imports.SetRetentionBaselineIfEmpty(ctx, input.BoxID, now); err != nil {
 		return nil, err
+	}
+	if uc.activations != nil {
+		if err := uc.activations.ReprocessPending(ctx, input.BoxID, input.Source); err != nil {
+			slog.WarnContext(ctx, "contact_activation_reprocess_failed", "box_id", input.BoxID, "source", input.Source, "error", err)
+		}
 	}
 
 	return &ImportCheckinsOutput{

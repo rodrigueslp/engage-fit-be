@@ -194,7 +194,7 @@ func main() {
 
 	listImportsUseCase := imports.NewListImportsUseCase(importRepository)
 	getImportUseCase := imports.NewGetImportUseCase(importRepository)
-	importCheckinsUseCase := imports.NewImportCheckinsUseCase(checkinParser, importRepository, studentRepository, checkinRepository, campaignRepository, rewardRepository, privacyRepository)
+	importCheckinsUseCase := imports.NewImportCheckinsUseCase(checkinParser, importRepository, studentRepository, checkinRepository, campaignRepository, rewardRepository, privacyRepository, contactActivationService)
 	checkinIngestionService := checkiningestion.NewService(checkinIngestionRepository, importCheckinsUseCase)
 
 	listCampaignsUseCase := campaigns.NewListCampaignsUseCase(campaignRepository)

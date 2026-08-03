@@ -99,7 +99,7 @@ func (h ContactActivationHandler) Summary(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, dto.ContactActivationSummaryResponse{
 		TotalStudents: summary.TotalStudents, WithPhone: summary.WithPhone, OptedIn: summary.OptedIn,
-		OptedOut: summary.OptedOut, PendingReview: summary.PendingReview,
+		OptedOut: summary.OptedOut, PendingReview: summary.PendingReview, PendingSync: summary.PendingSync,
 		AwaitingMessage: summary.AwaitingMessage, ActivationCode: summary.ActivationCode,
 		SenderPhone: summary.SenderPhone, WhatsappReady: summary.WhatsappReady,
 	})
@@ -163,7 +163,7 @@ func contactActivationResponse(item domain.ContactActivationRequest) dto.Contact
 		ID: string(item.ID), StudentID: string(item.StudentID), StudentName: item.StudentName,
 		ClaimedName: item.ClaimedName, Source: string(item.Source), RecentCheckinDate: item.RecentCheckinDate,
 		IsNewStudent: item.IsNewStudent,
-		Phone:        item.Phone, Status: string(item.Status), ConsentedAt: item.ConsentedAt,
+		Phone:        item.Phone, MatchStrategy: item.MatchStrategy, Status: string(item.Status), ConsentedAt: item.ConsentedAt,
 		ExpiresAt: item.ExpiresAt, ResolvedAt: item.ResolvedAt, CreatedAt: item.CreatedAt,
 	}
 }

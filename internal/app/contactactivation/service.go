@@ -13,9 +13,11 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode"
 
 	"boxengage/backend/internal/domain"
 	"boxengage/backend/internal/ports/repositories"
+	"golang.org/x/text/unicode/norm"
 	"gorm.io/gorm"
 )
 
@@ -60,6 +62,12 @@ type StartResult struct {
 
 type InboundResult struct {
 	Message string
+}
+
+type matchDecision struct {
+	studentID domain.ID
+	strategy  string
+	pending   bool
 }
 
 func NewService(repository repositories.ContactActivationRepository, students repositories.StudentRepository, settings SettingsResolver, webhookURL string) *Service {
@@ -107,16 +115,16 @@ func (s *Service) Start(ctx context.Context, input StartInput) (*StartResult, er
 		return nil, err
 	}
 	studentID := domain.ID("")
+	matchStrategy := "new_student"
 	if !input.IsNewStudent {
-		matches, matchErr := s.repository.FindMatchingStudents(ctx, boxID, input.Source, name, *input.RecentCheckinDate)
+		matchData, matchErr := s.repository.FindActivationMatchData(ctx, boxID, input.Source, *input.RecentCheckinDate)
 		if matchErr != nil {
 			return nil, matchErr
 		}
-		if len(matches) == 1 {
-			studentID = matches[0].ID
-		}
+		decision := decideActivationMatch(name, *input.RecentCheckinDate, matchData)
+		studentID, matchStrategy = decision.studentID, decision.strategy
 	}
-	return s.createRequest(ctx, boxID, studentID, name, input.Source, input.RecentCheckinDate, input.IsNewStudent, sender)
+	return s.createRequest(ctx, boxID, studentID, name, input.Source, input.RecentCheckinDate, input.IsNewStudent, matchStrategy, sender)
 }
 
 func (s *Service) StartForStudent(ctx context.Context, boxID, studentID domain.ID) (*StartResult, error) {
@@ -128,7 +136,7 @@ func (s *Service) StartForStudent(ctx context.Context, boxID, studentID domain.I
 	if err != nil {
 		return nil, err
 	}
-	return s.createRequest(ctx, boxID, student.ID, student.Name, student.Source, nil, false, sender)
+	return s.createRequest(ctx, boxID, student.ID, student.Name, student.Source, nil, false, "assisted_student", sender)
 }
 
 func (s *Service) AdminSummary(ctx context.Context, boxID domain.ID) (*domain.ContactActivationSummary, error) {
@@ -166,7 +174,40 @@ func (s *Service) Resolve(ctx context.Context, boxID, activationID, studentID do
 	if activationID == "" || studentID == "" {
 		return nil, ErrInvalidInput
 	}
-	return s.repository.ResolveActivation(ctx, boxID, activationID, studentID, s.now().UTC())
+	return s.repository.ResolveActivation(ctx, boxID, activationID, studentID, "manual_review", s.now().UTC())
+
+}
+
+func (s *Service) ReprocessPending(ctx context.Context, boxID domain.ID, source domain.Source) error {
+	items, err := s.repository.ListPendingSyncActivations(ctx, boxID, source)
+	if err != nil {
+		return err
+	}
+	for _, item := range items {
+		if item.RecentCheckinDate == nil {
+			if err := s.repository.MarkActivationNeedsReview(ctx, boxID, item.ID, "missing_checkin_date", s.now().UTC()); err != nil {
+				return err
+			}
+			continue
+		}
+		matchData, matchErr := s.repository.FindActivationMatchData(ctx, boxID, source, *item.RecentCheckinDate)
+		if matchErr != nil {
+			return matchErr
+		}
+		decision := decideActivationMatch(item.ClaimedName, *item.RecentCheckinDate, matchData)
+		if decision.studentID != "" {
+			if _, resolveErr := s.repository.ResolveActivation(ctx, boxID, item.ID, decision.studentID, "after_import_"+decision.strategy, s.now().UTC()); resolveErr != nil {
+				return resolveErr
+			}
+			continue
+		}
+		if !decision.pending {
+			if err := s.repository.MarkActivationNeedsReview(ctx, boxID, item.ID, decision.strategy, s.now().UTC()); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func (s *Service) HandleInbound(ctx context.Context, requestURL, signature string, values url.Values) (*InboundResult, error) {
@@ -196,6 +237,9 @@ func (s *Service) HandleInbound(ctx context.Context, requestURL, signature strin
 		}
 		if confirmed.Status == domain.ContactActivationNeedsReview {
 			return &InboundResult{Message: "Recebemos sua ativação. A academia vai conferir o vínculo e avisaremos quando estiver pronto."}, nil
+		}
+		if confirmed.Status == domain.ContactActivationPendingSync {
+			return &InboundResult{Message: "Recebemos sua ativação. Seu check-in mais recente ainda será importado pela academia e o vínculo será conferido automaticamente."}, nil
 		}
 		name := firstName(confirmed.StudentName)
 		if name == "" {
@@ -234,7 +278,7 @@ func (s *Service) HandleInbound(ctx context.Context, requestURL, signature strin
 	return nil, ErrUnsupportedMessage
 }
 
-func (s *Service) createRequest(ctx context.Context, boxID, studentID domain.ID, name string, source domain.Source, recentCheckinDate *time.Time, isNewStudent bool, sender string) (*StartResult, error) {
+func (s *Service) createRequest(ctx context.Context, boxID, studentID domain.ID, name string, source domain.Source, recentCheckinDate *time.Time, isNewStudent bool, matchStrategy, sender string) (*StartResult, error) {
 	token, err := randomToken()
 	if err != nil {
 		return nil, err
@@ -243,7 +287,7 @@ func (s *Service) createRequest(ctx context.Context, boxID, studentID domain.ID,
 	activation := domain.ContactActivationRequest{
 		BoxID: boxID, StudentID: studentID, ClaimedName: strings.TrimSpace(name), Source: source,
 		RecentCheckinDate: recentCheckinDate, IsNewStudent: isNewStudent, SenderPhone: sender, TokenHash: tokenHash(token),
-		Status: domain.ContactActivationAwaitingMessage, ConsentVersion: ConsentVersion,
+		MatchStrategy: matchStrategy, Status: domain.ContactActivationAwaitingMessage, ConsentVersion: ConsentVersion,
 		ConsentText: ConsentText, ExpiresAt: now.Add(30 * time.Minute), CreatedAt: now, UpdatedAt: now,
 	}
 	if err := s.repository.CreateActivation(ctx, &activation); err != nil {
@@ -254,6 +298,118 @@ func (s *Service) createRequest(ctx context.Context, boxID, studentID domain.ID,
 		WhatsappURL: "https://wa.me/" + sender + "?text=" + url.QueryEscape(message),
 		ExpiresAt:   activation.ExpiresAt,
 	}, nil
+}
+
+func decideActivationMatch(claimedName string, recentCheckinDate time.Time, data domain.ContactActivationMatchData) matchDecision {
+	claimed := activationNameTokens(claimedName)
+	if len(claimed) < 2 {
+		return matchDecision{strategy: "name_too_short"}
+	}
+	exact := make([]domain.ContactActivationCandidate, 0, 1)
+	compatible := make([]domain.ContactActivationCandidate, 0, 1)
+	for _, candidate := range data.Candidates {
+		candidateTokens := activationNameTokens(candidate.Student.Name)
+		if equalTokens(claimed, candidateTokens) {
+			exact = append(exact, candidate)
+		}
+		if orderedSubset(claimed, candidateTokens) {
+			compatible = append(compatible, candidate)
+		}
+	}
+	if match := uniqueCandidateWithCheckin(exact); match != nil {
+		return matchDecision{studentID: match.Student.ID, strategy: "exact_name_checkin"}
+	}
+	if len(exact) == 1 && data.LatestCheckinDate != nil && recentCheckinDate.After(dateOnly(*data.LatestCheckinDate)) {
+		return matchDecision{studentID: exact[0].Student.ID, strategy: "exact_unique_source_lag"}
+	}
+	if match := uniqueCandidateWithCheckin(compatible); match != nil {
+		return matchDecision{studentID: match.Student.ID, strategy: "compatible_name_checkin"}
+	}
+	if len(compatible) > 0 && (data.LatestCheckinDate == nil || recentCheckinDate.After(dateOnly(*data.LatestCheckinDate))) {
+		return matchDecision{strategy: "awaiting_source_sync", pending: true}
+	}
+	if len(compatible) > 1 {
+		return matchDecision{strategy: "ambiguous_name"}
+	}
+	return matchDecision{strategy: "no_matching_checkin"}
+}
+
+func uniqueCandidateWithCheckin(candidates []domain.ContactActivationCandidate) *domain.ContactActivationCandidate {
+	var match *domain.ContactActivationCandidate
+	for index := range candidates {
+		if !candidates[index].HasRecentCheckin {
+			continue
+		}
+		if match != nil {
+			return nil
+		}
+		match = &candidates[index]
+	}
+	return match
+}
+
+func activationNameTokens(value string) []string {
+	decomposed := norm.NFD.String(strings.ToLower(strings.TrimSpace(value)))
+	var normalized strings.Builder
+	for _, char := range decomposed {
+		switch {
+		case unicode.Is(unicode.Mn, char):
+			continue
+		case unicode.IsLetter(char) || unicode.IsDigit(char):
+			normalized.WriteRune(char)
+		default:
+			normalized.WriteByte(' ')
+		}
+	}
+	all := strings.Fields(normalized.String())
+	result := make([]string, 0, len(all))
+	for _, token := range all {
+		if !activationNameParticle(token) {
+			result = append(result, token)
+		}
+	}
+	return result
+}
+
+func activationNameParticle(value string) bool {
+	switch value {
+	case "da", "das", "de", "do", "dos", "e":
+		return true
+	default:
+		return false
+	}
+}
+
+func equalTokens(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for index := range left {
+		if left[index] != right[index] {
+			return false
+		}
+	}
+	return true
+}
+
+func orderedSubset(claimed, candidate []string) bool {
+	if len(claimed) < 2 || len(claimed) > len(candidate) {
+		return false
+	}
+	position := 0
+	for _, token := range candidate {
+		if token == claimed[position] {
+			position++
+			if position == len(claimed) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func dateOnly(value time.Time) time.Time {
+	return time.Date(value.UTC().Year(), value.UTC().Month(), value.UTC().Day(), 0, 0, 0, 0, time.UTC)
 }
 
 func (s *Service) activationSettings(ctx context.Context, boxID domain.ID) (*domain.WhatsappSettings, string, error) {

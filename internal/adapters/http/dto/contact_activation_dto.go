@@ -33,6 +33,7 @@ type ContactActivationSummaryResponse struct {
 	OptedIn         int64  `json:"opted_in"`
 	OptedOut        int64  `json:"opted_out"`
 	PendingReview   int64  `json:"pending_review"`
+	PendingSync     int64  `json:"pending_sync"`
 	AwaitingMessage int64  `json:"awaiting_message"`
 	ActivationCode  string `json:"activation_code"`
 	SenderPhone     string `json:"sender_phone"`
@@ -48,6 +49,7 @@ type ContactActivationResponse struct {
 	RecentCheckinDate *time.Time `json:"recent_checkin_date,omitempty"`
 	IsNewStudent      bool       `json:"is_new_student"`
 	Phone             string     `json:"phone,omitempty"`
+	MatchStrategy     string     `json:"match_strategy,omitempty"`
 	Status            string     `json:"status"`
 	ConsentedAt       *time.Time `json:"consented_at,omitempty"`
 	ExpiresAt         time.Time  `json:"expires_at"`
