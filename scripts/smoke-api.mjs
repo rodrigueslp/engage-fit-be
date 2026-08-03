@@ -1,6 +1,7 @@
 const baseURL = process.env.API_BASE_URL || 'http://localhost:18080';
 const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 const password = 'Smoke-test-password-2026!';
+const smokeCheckinDate = new Date().toISOString().slice(0, 10);
 
 async function request(path, options = {}, expectedStatus = 200) {
   const response = await fetch(`${baseURL}${path}`, {
@@ -81,7 +82,7 @@ if (meA.box_id === meB.box_id) throw new Error('smoke tenants unexpectedly share
 async function importSingleStudent() {
   const form = new FormData();
   form.set('source', 'totalpass');
-  form.set('file', new Blob(['nome,email,telefone,data,hora\nPrivacy Smoke,privacy-smoke@example.test,+5511999999999,2026-07-20,08:30\n'], { type: 'text/csv' }), 'smoke.csv');
+  form.set('file', new Blob([`nome,email,telefone,data,hora\nPrivacy Smoke,privacy-smoke@example.test,+5511999999999,${smokeCheckinDate},08:30\n`], { type: 'text/csv' }), 'smoke.csv');
   return request('/api/v1/imports', authenticated(tenantB.token, 'POST', form), 201);
 }
 
