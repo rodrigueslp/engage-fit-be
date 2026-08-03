@@ -6,11 +6,18 @@ Guia operacional consolidado: `docs/application-readiness-guide.md`.
 
 Atualizado em: 2026-08-03 (ativação resiliente a nomes e importação D-1 publicada)
 
-## Checkpoint em desenvolvimento: mensalistas e check-in próprio em 2026-08-03
+## Checkpoint de produção: mensalistas e check-in próprio em 2026-08-03
 
-- Trabalho isolado nas branches `feature/box-members-and-self-checkin` dos
-  repositórios backend e frontend. Este recorte ainda não foi publicado nem
-  aplicado em produção.
+- As branches `feature/box-members-and-self-checkin` foram integradas por
+  fast-forward em `main` e publicadas nos dois repositórios. Código funcional
+  implantado: backend `0fe76c4` e frontend `fbf7866`.
+- Deploys Railway concluídos com `SUCCESS`:
+  - `engage-fit-api`: `09a62135-9f26-46b1-a347-1196ca1ecece`;
+  - `engage-fit-billing-reconcile`: `0f7acc51-ce24-4750-96e3-a27b078a9e34`;
+  - `engage-fit-web`: `9ed21644-9888-4e95-976f-ec461dbff147`.
+- As CIs de backend e frontend concluíram todos os passos com sucesso. API,
+  frontend, `/health`, `/api/v1/capabilities` e a página pública de ativação
+  responderam corretamente pelo domínio canônico.
 - O domínio passa a aceitar a terceira origem `box_member`, exibida como
   `Mensalista do box`, sem classificar mensalistas artificialmente como
   Wellhub ou TotalPass.
@@ -47,6 +54,16 @@ Atualizado em: 2026-08-03 (ativação resiliente a nomes e importação D-1 publ
   ativação/privacidade/check-in diário, `go vet`, TypeScript/build Vite e
   Playwright dos fluxos público e operacional. O aviso conhecido de chunk Vite
   acima de 500 kB permanece sem regressão funcional.
+- O status do PostgreSQL de produção confirmou as migrations `001` a `048`
+  como aplicadas. O novo endpoint público respondeu corretamente para sessão
+  inválida e a página real exibiu `Mensalista do box` em `Meu primeiro treino`.
+- Uma homologação controlada criou temporariamente owner, mensalista e campanha
+  exclusivos de teste. Foram confirmados check-in manual, check-in por QR,
+  bloqueio de duplicidade diária, progresso `2/2`, meta atingida, brinde
+  pendente e auditoria `manual`/`self_service`. Todos os dados e o acesso
+  temporários foram removidos ao final com verificação de ausência.
+- Não foi criado backup antes deste deploy por decisão explícita do responsável
+  pelo produto, que aceitou esse risco para o estágio atual do piloto.
 
 ## Checkpoint de ativação resiliente a nomes e importação D-1 em 2026-08-03
 
