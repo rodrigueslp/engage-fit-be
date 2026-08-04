@@ -4,7 +4,60 @@ Manual canônico de arquitetura e negócio: `docs/system-design.md`.
 
 Guia operacional consolidado: `docs/application-readiness-guide.md`.
 
-Atualizado em: 2026-08-03 (ativação resiliente a nomes e importação D-1 publicada)
+Atualizado em: 2026-08-04 (importação atômica e histórico reconciliado em produção)
+
+## Checkpoint de importação atômica e diagnóstico seguro em 2026-08-04
+
+- Uma importação real do TotalPass com 5.986 registros falhava porque o backend
+  tentava inserir 65.846 parâmetros em um único comando, acima do limite de
+  65.535 do protocolo PostgreSQL. Não era timeout: as quatro requisições
+  terminaram em cerca de 4 segundos e a consulta final foi rejeitada em 19 a
+  81 ms.
+- O backend `db3cf0e` (`fix: make checkin imports atomic and observable`) usa
+  lotes de 500 check-ins, mantém cache de identidade por arquivo e executa
+  alunos, check-ins, campanhas, brindes, linha de base e finalização na mesma
+  transação. Uma falha desfaz todos esses efeitos e marca o histórico como
+  `failed` por uma operação independente.
+- A migration `049_add_import_processing_status.sql` adicionou estados
+  `processing`, `completed` e `failed`, contagens efetivamente confirmadas,
+  horário de conclusão e código normalizado da falha. O deploy da API
+  `4506505f-347c-430f-9d1d-eeb84e9784c0` concluiu com `SUCCESS` e aplicou a
+  migration uma vez.
+- Logs de banco agora incluem `error_kind` e `sqlstate` sem SQL, parâmetros ou
+  mensagem bruta. Falhas de importação acrescentam fase, `import_id`, `box_id`,
+  origem, registros e latência, preservando `request_id` e trace.
+- O frontend `6d3fb25` (`fix: show reliable import processing status`) exibe o
+  estado real, check-ins novos, alunos novos e uma explicação segura da falha.
+  Depois de um HTTP 500, a tela recarrega o histórico em vez de manter uma visão
+  desatualizada. Deploy `baba69ec-3cc9-4a38-ad2f-059ec37b36bf` com `SUCCESS`.
+- Antes da migration foi criado e validado o backup lógico
+  `/home/luiz-paulo/workspace/engage-fit/production-backups/engagefit-production-pre-import-consistency-fix-20260804-124234.dump`.
+  É um dump custom PostgreSQL 18 com 335 entradas, 468 KB, permissão `600` e
+  SHA-256
+  `764ae249ec0e2ca9bce9ddd4a9b822a487dce8dfd181bbfc24e815911a18a7cc`.
+- A auditoria de produção encontrou exatamente quatro históricos da planilha
+  `04-08-2026_tokens.xlsx`, todos com zero check-ins, e seis alunos criados na
+  primeira tentativa, todos sem qualquer presença ou dependência em campanhas,
+  mensagens, consentimento, retenção, brindes ou treinos. Nenhum aluno
+  preexistente foi atualizado durante as falhas.
+- A reconciliação protegida por contagens e executada em uma única transação
+  marcou os quatro históricos como `failed/database_parameter_limit` e removeu
+  somente os seis alunos sem dependências. A verificação posterior confirmou
+  zero desses alunos, quatro históricos falhos, migration 049 presente e zero
+  importações presas em `processing`.
+- A mesma planilha real passou localmente pelo endpoint completo em 1,85 s:
+  5.986 check-ins e 262 alunos em banco vazio de negócio. A repetição
+  idempotente levou 0,42 s e criou zero alunos/check-ins. Também passaram teste
+  PostgreSQL com lote de 5.986 registros, rollback forçado, 49 migrations em
+  banco vazio e idempotência, suíte Go, `go vet`, TypeScript/Vite, nove cenários
+  Playwright mockados e os dois fluxos reais.
+- Smoke público final confirmou HTTP 200 em `/health` e capabilities; o bundle
+  publicado contém os estados e resumos novos. Os timeouts HTTP permanecem nos
+  defaults (`read=30s`, `write=300s`); o incidente não exigiu ampliá-los.
+- Próximo teste operacional: o owner pode reenviar a mesma planilha em produção.
+  O resultado esperado é sucesso, com somente os check-ins ainda ausentes
+  inseridos; as quatro tentativas anteriores permanecerão auditáveis como
+  falhas.
 
 ## Checkpoint de produção: mensalistas e check-in próprio em 2026-08-03
 
