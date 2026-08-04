@@ -13,7 +13,7 @@ import (
 
 func (r RewardGormRepository) ListByCampaign(ctx context.Context, boxID, campaignID domain.ID) ([]domain.Reward, error) {
 	var modelsList []models.RewardModel
-	if err := r.db.WithContext(ctx).
+	if err := databaseForContext(r.db, ctx).
 		Model(&models.RewardModel{}).
 		Select(`
 			rewards.*,
@@ -38,7 +38,7 @@ func (r RewardGormRepository) ListByCampaign(ctx context.Context, boxID, campaig
 
 func (r RewardGormRepository) FindByID(ctx context.Context, boxID, id domain.ID) (*domain.Reward, error) {
 	var model models.RewardModel
-	if err := r.db.WithContext(ctx).
+	if err := databaseForContext(r.db, ctx).
 		Select("rewards.*").
 		Joins("JOIN campaigns ON campaigns.id = rewards.campaign_id").
 		Where("campaigns.box_id = ? AND rewards.id = ?", stringID(boxID), stringID(id)).
@@ -56,12 +56,12 @@ func (r RewardGormRepository) Save(ctx context.Context, reward *domain.Reward) e
 	}
 
 	model := rewardToModel(*reward)
-	return r.db.WithContext(ctx).Create(&model).Error
+	return databaseForContext(r.db, ctx).Create(&model).Error
 }
 
 func (r RewardGormRepository) Update(ctx context.Context, boxID domain.ID, reward domain.Reward) error {
 	model := rewardToModel(reward)
-	result := r.db.WithContext(ctx).
+	result := databaseForContext(r.db, ctx).
 		Model(&models.RewardModel{}).
 		Where("id = ? AND campaign_id IN (?)", stringID(reward.ID), r.campaignIDsForBox(boxID)).
 		Updates(&model)
@@ -75,7 +75,7 @@ func (r RewardGormRepository) Update(ctx context.Context, boxID domain.ID, rewar
 }
 
 func (r RewardGormRepository) Delete(ctx context.Context, boxID, id domain.ID) error {
-	result := r.db.WithContext(ctx).
+	result := databaseForContext(r.db, ctx).
 		Where("id = ? AND campaign_id IN (?)", stringID(id), r.campaignIDsForBox(boxID)).
 		Delete(&models.RewardModel{})
 	if result.Error != nil {
@@ -123,7 +123,7 @@ func (r RewardGormRepository) ListPendingDeliveries(ctx context.Context, boxID d
 }
 
 func (r RewardGormRepository) deliveryQuery(ctx context.Context, boxID domain.ID) *gorm.DB {
-	return r.db.WithContext(ctx).
+	return databaseForContext(r.db, ctx).
 		Model(&models.RewardDeliveryModel{}).
 		Select(`
 			reward_deliveries.*,
@@ -141,7 +141,7 @@ func (r RewardGormRepository) deliveryQuery(ctx context.Context, boxID domain.ID
 
 func (r RewardGormRepository) CountDeliveries(ctx context.Context, boxID domain.ID, delivered bool) (int, error) {
 	var count int64
-	if err := r.db.WithContext(ctx).
+	if err := databaseForContext(r.db, ctx).
 		Model(&models.RewardDeliveryModel{}).
 		Joins("JOIN rewards ON rewards.id = reward_deliveries.reward_id").
 		Joins("JOIN campaigns ON campaigns.id = rewards.campaign_id").
@@ -169,7 +169,7 @@ func (r RewardGormRepository) SyncPendingDeliveries(ctx context.Context, rewardI
 		storedStudentIDs = append(storedStudentIDs, stringID(studentID))
 	}
 
-	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return databaseForContext(r.db, ctx).Transaction(func(tx *gorm.DB) error {
 		stale := tx.Where("reward_id = ? AND delivered = ?", stringID(rewardID), false)
 		if len(storedStudentIDs) > 0 {
 			stale = stale.Where("student_id NOT IN ?", storedStudentIDs)
@@ -190,7 +190,7 @@ func (r RewardGormRepository) SyncPendingDeliveries(ctx context.Context, rewardI
 
 func (r RewardGormRepository) MarkDelivered(ctx context.Context, boxID domain.ID, deliveryID domain.ID) error {
 	now := time.Now()
-	return r.db.WithContext(ctx).
+	return databaseForContext(r.db, ctx).
 		Model(&models.RewardDeliveryModel{}).
 		Where("id = ? AND reward_id IN (?)",
 			stringID(deliveryID),

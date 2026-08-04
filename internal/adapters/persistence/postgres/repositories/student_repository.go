@@ -12,7 +12,7 @@ import (
 
 func (r StudentGormRepository) FindByID(ctx context.Context, boxID, id domain.ID) (*domain.Student, error) {
 	var model models.StudentModel
-	if err := r.db.WithContext(ctx).Where("box_id = ? AND id = ?", stringID(boxID), stringID(id)).First(&model).Error; err != nil {
+	if err := databaseForContext(r.db, ctx).Where("box_id = ? AND id = ?", stringID(boxID), stringID(id)).First(&model).Error; err != nil {
 		return nil, err
 	}
 
@@ -22,7 +22,7 @@ func (r StudentGormRepository) FindByID(ctx context.Context, boxID, id domain.ID
 
 func (r StudentGormRepository) FindByExternalID(ctx context.Context, boxID domain.ID, source domain.Source, externalID string) (*domain.Student, error) {
 	var model models.StudentModel
-	if err := r.db.WithContext(ctx).
+	if err := databaseForContext(r.db, ctx).
 		Where("box_id = ? AND source = ? AND external_id = ?", stringID(boxID), string(source), externalID).
 		First(&model).Error; err != nil {
 		return nil, err
@@ -33,7 +33,7 @@ func (r StudentGormRepository) FindByExternalID(ctx context.Context, boxID domai
 }
 
 func (r StudentGormRepository) List(ctx context.Context, boxID domain.ID, filters portrepo.StudentFilters) ([]domain.Student, error) {
-	query := r.db.WithContext(ctx).Model(&models.StudentModel{}).Where("box_id = ?", stringID(boxID))
+	query := databaseForContext(r.db, ctx).Model(&models.StudentModel{}).Where("box_id = ?", stringID(boxID))
 	if filters.ContactableOnly {
 		query = query.Where("contact_status = ? AND anonymized_at IS NULL", string(domain.ContactStatusOptedIn))
 	}
@@ -75,7 +75,7 @@ func (r StudentGormRepository) List(ctx context.Context, boxID domain.ID, filter
 }
 
 func (r StudentGormRepository) UpdateContactPreference(ctx context.Context, boxID, id domain.ID, status domain.ContactStatus, source string, updatedAt time.Time) error {
-	return r.db.WithContext(ctx).
+	return databaseForContext(r.db, ctx).
 		Model(&models.StudentModel{}).
 		Where("box_id = ? AND id = ? AND anonymized_at IS NULL", stringID(boxID), stringID(id)).
 		Updates(map[string]any{
@@ -87,7 +87,7 @@ func (r StudentGormRepository) UpdateContactPreference(ctx context.Context, boxI
 }
 
 func (r StudentGormRepository) UpdateMembershipStart(ctx context.Context, boxID, id domain.ID, startedAt time.Time, source string, updatedAt time.Time) error {
-	return r.db.WithContext(ctx).
+	return databaseForContext(r.db, ctx).
 		Model(&models.StudentModel{}).
 		Where("box_id = ? AND id = ? AND anonymized_at IS NULL", stringID(boxID), stringID(id)).
 		Updates(map[string]any{
@@ -98,7 +98,7 @@ func (r StudentGormRepository) UpdateMembershipStart(ctx context.Context, boxID,
 }
 
 func (r StudentGormRepository) SetEarlierInferredMembershipStart(ctx context.Context, boxID, id domain.ID, startedAt time.Time, updatedAt time.Time) error {
-	return r.db.WithContext(ctx).
+	return databaseForContext(r.db, ctx).
 		Model(&models.StudentModel{}).
 		Where("box_id = ? AND id = ? AND anonymized_at IS NULL", stringID(boxID), stringID(id)).
 		Where("membership_started_at IS NULL OR (membership_started_source = ? AND membership_started_at > ?)", "first_checkin_inferred", startedAt).
@@ -118,18 +118,18 @@ func (r StudentGormRepository) Save(ctx context.Context, student *domain.Student
 	}
 
 	model := studentToModel(*student)
-	return r.db.WithContext(ctx).Save(&model).Error
+	return databaseForContext(r.db, ctx).Save(&model).Error
 }
 
 func (r StudentGormRepository) UpdateRiskStatus(ctx context.Context, boxID, id domain.ID, status domain.StudentRiskStatus) error {
-	return r.db.WithContext(ctx).
+	return databaseForContext(r.db, ctx).
 		Model(&models.StudentModel{}).
 		Where("box_id = ? AND id = ?", stringID(boxID), stringID(id)).
 		Update("risk_status", string(status)).Error
 }
 
 func (r StudentGormRepository) MarkRiskMessageSent(ctx context.Context, boxID, id domain.ID, sentAt time.Time) error {
-	return r.db.WithContext(ctx).
+	return databaseForContext(r.db, ctx).
 		Model(&models.StudentModel{}).
 		Where("box_id = ? AND id = ?", stringID(boxID), stringID(id)).
 		Updates(map[string]any{

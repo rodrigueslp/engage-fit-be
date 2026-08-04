@@ -10,9 +10,11 @@ import (
 	"boxengage/backend/internal/domain"
 )
 
+const checkinInsertBatchSize = 500
+
 func (r CheckinGormRepository) ListByStudent(ctx context.Context, boxID, studentID domain.ID) ([]domain.Checkin, error) {
 	var modelsList []models.CheckinModel
-	if err := r.db.WithContext(ctx).
+	if err := databaseForContext(r.db, ctx).
 		Where("box_id = ? AND student_id = ?", stringID(boxID), stringID(studentID)).
 		Order("checkin_date DESC, checkin_time DESC").
 		Find(&modelsList).Error; err != nil {
@@ -24,7 +26,7 @@ func (r CheckinGormRepository) ListByStudent(ctx context.Context, boxID, student
 
 func (r CheckinGormRepository) ListByRange(ctx context.Context, boxID domain.ID, period domain.TimeRange) ([]domain.Checkin, error) {
 	var modelsList []models.CheckinModel
-	if err := r.db.WithContext(ctx).
+	if err := databaseForContext(r.db, ctx).
 		Where("box_id = ? AND checkin_date BETWEEN ? AND ?", stringID(boxID), period.Start, period.End).
 		Order("checkin_date DESC, checkin_time DESC").
 		Find(&modelsList).Error; err != nil {
@@ -46,7 +48,7 @@ func (r CheckinGormRepository) ListMonthlyFrequency(ctx context.Context, boxID d
 	}
 
 	var rows []frequencyRow
-	if err := r.db.WithContext(ctx).
+	if err := databaseForContext(r.db, ctx).
 		Model(&models.CheckinModel{}).
 		Select(`
 			students.id AS student_id,
@@ -87,7 +89,7 @@ func (r CheckinGormRepository) CountBySource(ctx context.Context, boxID domain.I
 	}
 
 	var rows []countBySource
-	if err := r.db.WithContext(ctx).
+	if err := databaseForContext(r.db, ctx).
 		Model(&models.CheckinModel{}).
 		Select("source, COUNT(*) AS total").
 		Where("box_id = ? AND checkin_date BETWEEN ? AND ?", stringID(boxID), period.Start, period.End).
@@ -105,7 +107,7 @@ func (r CheckinGormRepository) CountBySource(ctx context.Context, boxID domain.I
 
 func (r CheckinGormRepository) LastCheckinDate(ctx context.Context, boxID, studentID domain.ID) (*time.Time, error) {
 	var model models.CheckinModel
-	if err := r.db.WithContext(ctx).
+	if err := databaseForContext(r.db, ctx).
 		Where("box_id = ? AND student_id = ?", stringID(boxID), stringID(studentID)).
 		Order("checkin_date DESC").
 		First(&model).Error; err != nil {
@@ -128,7 +130,7 @@ func (r CheckinGormRepository) SaveMany(ctx context.Context, checkins []domain.C
 		return 0, nil
 	}
 
-	result := r.db.WithContext(ctx).Clauses(clause.OnConflict{
+	result := databaseForContext(r.db, ctx).Clauses(clause.OnConflict{
 		Columns: []clause.Column{
 			{Name: "box_id"},
 			{Name: "source"},
@@ -137,7 +139,7 @@ func (r CheckinGormRepository) SaveMany(ctx context.Context, checkins []domain.C
 			{Name: "checkin_time"},
 		},
 		DoNothing: true,
-	}).Create(&modelsList)
+	}).CreateInBatches(&modelsList, checkinInsertBatchSize)
 	return int(result.RowsAffected), result.Error
 }
 

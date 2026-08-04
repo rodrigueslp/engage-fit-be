@@ -12,6 +12,7 @@ var (
 	_ portrepo.ImportHistoryRepository       = ImportHistoryGormRepository{}
 	_ portrepo.CampaignRepository            = CampaignGormRepository{}
 	_ portrepo.RewardRepository              = RewardGormRepository{}
+	_ portrepo.TransactionManager            = GormTransactionManager{}
 	_ portrepo.WhatsappSettingsRepository    = WhatsappSettingsGormRepository{}
 	_ portrepo.MessageRepository             = MessageGormRepository{}
 	_ portrepo.MessagingGovernanceRepository = MessagingGovernanceGormRepository{}

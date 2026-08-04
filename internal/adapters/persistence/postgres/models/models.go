@@ -155,12 +155,17 @@ type StudentModel struct {
 }
 
 type ImportHistoryModel struct {
-	ID           string `gorm:"primaryKey"`
-	BoxID        string `gorm:"index"`
-	Filename     string
-	Source       string
-	TotalRecords int
-	ImportedAt   time.Time
+	ID              string `gorm:"primaryKey"`
+	BoxID           string `gorm:"index"`
+	Filename        string
+	Source          string
+	Status          string
+	TotalRecords    int
+	StudentsCreated *int
+	CheckinsCreated *int
+	ImportedAt      time.Time
+	CompletedAt     *time.Time
+	ErrorCode       string
 }
 
 type CheckinIngestionSourceModel struct {

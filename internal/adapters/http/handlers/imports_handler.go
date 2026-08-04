@@ -3,6 +3,7 @@ package handlers
 import (
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -67,9 +68,10 @@ func (h ImportsHandler) Create(c *gin.Context) {
 	c.JSON(http.StatusCreated, dto.ImportResponse{
 		ID:           string(output.ImportID),
 		Source:       string(source),
+		Status:       string(domain.ImportStatusCompleted),
 		TotalRecords: output.TotalRecords,
-		Students:     output.Students,
-		Checkins:     output.Checkins,
+		Students:     intPointer(output.Students),
+		Checkins:     intPointer(output.Checkins),
 	})
 }
 
@@ -114,7 +116,23 @@ func importResponse(item domain.ImportHistory) dto.ImportResponse {
 		ID:           string(item.ID),
 		Filename:     item.Filename,
 		Source:       string(item.Source),
+		Status:       string(item.Status),
 		TotalRecords: item.TotalRecords,
+		Students:     item.StudentsCreated,
+		Checkins:     item.CheckinsCreated,
 		ImportedAt:   item.ImportedAt.Format("2006-01-02T15:04:05Z07:00"),
+		CompletedAt:  formatOptionalTime(item.CompletedAt),
+		ErrorCode:    item.ErrorCode,
 	}
+}
+
+func intPointer(value int) *int {
+	return &value
+}
+
+func formatOptionalTime(value *time.Time) string {
+	if value == nil {
+		return ""
+	}
+	return value.Format("2006-01-02T15:04:05Z07:00")
 }

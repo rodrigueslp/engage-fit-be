@@ -289,23 +289,33 @@ func formatCheckinTime(value *time.Time) *string {
 
 func importHistoryToDomain(model models.ImportHistoryModel) domain.ImportHistory {
 	return domain.ImportHistory{
-		ID:           domainID(model.ID),
-		BoxID:        domainID(model.BoxID),
-		Filename:     model.Filename,
-		Source:       domain.Source(model.Source),
-		TotalRecords: model.TotalRecords,
-		ImportedAt:   model.ImportedAt,
+		ID:              domainID(model.ID),
+		BoxID:           domainID(model.BoxID),
+		Filename:        model.Filename,
+		Source:          domain.Source(model.Source),
+		Status:          domain.ImportStatus(model.Status),
+		TotalRecords:    model.TotalRecords,
+		StudentsCreated: model.StudentsCreated,
+		CheckinsCreated: model.CheckinsCreated,
+		ImportedAt:      model.ImportedAt,
+		CompletedAt:     model.CompletedAt,
+		ErrorCode:       model.ErrorCode,
 	}
 }
 
 func importHistoryToModel(importHistory domain.ImportHistory) models.ImportHistoryModel {
 	return models.ImportHistoryModel{
-		ID:           stringID(importHistory.ID),
-		BoxID:        stringID(importHistory.BoxID),
-		Filename:     importHistory.Filename,
-		Source:       string(importHistory.Source),
-		TotalRecords: importHistory.TotalRecords,
-		ImportedAt:   importHistory.ImportedAt,
+		ID:              stringID(importHistory.ID),
+		BoxID:           stringID(importHistory.BoxID),
+		Filename:        importHistory.Filename,
+		Source:          string(importHistory.Source),
+		Status:          string(importHistory.Status),
+		TotalRecords:    importHistory.TotalRecords,
+		StudentsCreated: importHistory.StudentsCreated,
+		CheckinsCreated: importHistory.CheckinsCreated,
+		ImportedAt:      importHistory.ImportedAt,
+		CompletedAt:     importHistory.CompletedAt,
+		ErrorCode:       importHistory.ErrorCode,
 	}
 }
 

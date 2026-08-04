@@ -132,6 +132,7 @@ func main() {
 	checkinIngestionRepository := pgrepo.NewCheckinIngestionGormRepository(db)
 	campaignRepository := pgrepo.NewCampaignGormRepository(db)
 	rewardRepository := pgrepo.NewRewardGormRepository(db)
+	transactionManager := pgrepo.NewGormTransactionManager(db)
 	whatsappSettingsRepository := pgrepo.NewWhatsappSettingsGormRepository(db, secretCipher)
 	messageRepository := pgrepo.NewMessageGormRepository(db)
 	emailSettingsRepository := pgrepo.NewEmailSettingsGormRepository(db, secretCipher)
@@ -196,7 +197,7 @@ func main() {
 
 	listImportsUseCase := imports.NewListImportsUseCase(importRepository)
 	getImportUseCase := imports.NewGetImportUseCase(importRepository)
-	importCheckinsUseCase := imports.NewImportCheckinsUseCase(checkinParser, importRepository, studentRepository, checkinRepository, campaignRepository, rewardRepository, privacyRepository, contactActivationService)
+	importCheckinsUseCase := imports.NewImportCheckinsUseCase(checkinParser, importRepository, studentRepository, checkinRepository, campaignRepository, rewardRepository, privacyRepository, transactionManager, contactActivationService)
 	checkinIngestionService := checkiningestion.NewService(checkinIngestionRepository, importCheckinsUseCase)
 
 	listCampaignsUseCase := campaigns.NewListCampaignsUseCase(campaignRepository)

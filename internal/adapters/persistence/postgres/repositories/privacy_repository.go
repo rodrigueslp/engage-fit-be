@@ -42,7 +42,7 @@ func (r PrivacyGormRepository) ExportStudent(ctx context.Context, boxID, student
 		return nil, err
 	}
 	var progressModels []models.CampaignProgressModel
-	if err := r.db.WithContext(ctx).Where("student_id = ?", stringID(studentID)).Order("updated_at DESC").Find(&progressModels).Error; err != nil {
+	if err := databaseForContext(r.db, ctx).Where("student_id = ?", stringID(studentID)).Order("updated_at DESC").Find(&progressModels).Error; err != nil {
 		return nil, err
 	}
 	progress := make([]domain.CampaignProgress, 0, len(progressModels))
@@ -63,7 +63,7 @@ func (r PrivacyGormRepository) ExportStudent(ctx context.Context, boxID, student
 		FROM workout_message_recipients wr JOIN workout_message_drafts wd ON wd.id = wr.workout_message_draft_id
 		WHERE wd.box_id = ? AND wr.student_id = ?
 		ORDER BY created_at DESC`
-	if err := r.db.WithContext(ctx).Raw(query, stringID(boxID), stringID(studentID), stringID(boxID), stringID(studentID), stringID(boxID), stringID(studentID)).Scan(&rows).Error; err != nil {
+	if err := databaseForContext(r.db, ctx).Raw(query, stringID(boxID), stringID(studentID), stringID(boxID), stringID(studentID), stringID(boxID), stringID(studentID)).Scan(&rows).Error; err != nil {
 		return nil, err
 	}
 	communications := make([]domain.PrivacyCommunication, 0, len(rows))
@@ -75,7 +75,7 @@ func (r PrivacyGormRepository) ExportStudent(ctx context.Context, boxID, student
 		return nil, err
 	}
 	var consentRows []contactConsentRow
-	if err := r.db.WithContext(ctx).Table("contact_consent_events").
+	if err := databaseForContext(r.db, ctx).Table("contact_consent_events").
 		Select("action, source, phone, consent_version, consent_text, created_at").
 		Where("box_id = ? AND student_id = ?", stringID(boxID), stringID(studentID)).
 		Order("created_at DESC").
@@ -93,7 +93,7 @@ func (r PrivacyGormRepository) ExportStudent(ctx context.Context, boxID, student
 }
 
 func (r PrivacyGormRepository) AnonymizeStudent(ctx context.Context, boxID, studentID, actorUserID domain.ID, reason string) error {
-	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return databaseForContext(r.db, ctx).Transaction(func(tx *gorm.DB) error {
 		var student models.StudentModel
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("box_id = ? AND id = ?", stringID(boxID), stringID(studentID)).First(&student).Error; err != nil {
 			return err
@@ -135,7 +135,7 @@ func (r PrivacyGormRepository) AnonymizeStudent(ctx context.Context, boxID, stud
 
 func (r PrivacyGormRepository) IsIdentitySuppressed(ctx context.Context, boxID domain.ID, source domain.Source, externalID string) (bool, error) {
 	var count int64
-	err := r.db.WithContext(ctx).Table("privacy_suppressions").Where("box_id = ? AND source = ? AND external_id_hash = ?", stringID(boxID), string(source), privacyIdentityHash(externalID)).Count(&count).Error
+	err := databaseForContext(r.db, ctx).Table("privacy_suppressions").Where("box_id = ? AND source = ? AND external_id_hash = ?", stringID(boxID), string(source), privacyIdentityHash(externalID)).Count(&count).Error
 	return count > 0, err
 }
 
@@ -148,7 +148,7 @@ func (r PrivacyGormRepository) recordAudit(ctx context.Context, boxID, studentID
 	if err != nil {
 		return err
 	}
-	return r.db.WithContext(ctx).Table("privacy_audit_events").Create(map[string]any{"id": stringID(id), "box_id": stringID(boxID), "student_id": nullableID(studentID), "actor_user_id": nullableID(actorUserID), "action": action, "reason": reason, "created_at": time.Now().UTC()}).Error
+	return databaseForContext(r.db, ctx).Table("privacy_audit_events").Create(map[string]any{"id": stringID(id), "box_id": stringID(boxID), "student_id": nullableID(studentID), "actor_user_id": nullableID(actorUserID), "action": action, "reason": reason, "created_at": time.Now().UTC()}).Error
 }
 
 func privacyIdentityHash(value string) string {

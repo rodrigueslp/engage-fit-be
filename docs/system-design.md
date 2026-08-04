@@ -359,15 +359,21 @@ sequenceDiagram
     O->>API: POST /imports (source + CSV/XLSX)
     API->>P: validar extensão, limites, colunas e datas
     P-->>API: check-ins normalizados
-    API->>DB: criar import_history
+    API->>DB: criar import_history como processing
+    API->>DB: iniciar transação
     loop cada linha
         API->>DB: consultar supressão de identidade
         API->>DB: localizar/criar student
     end
-    API->>DB: inserir check-ins com deduplicação
+    API->>DB: inserir check-ins em lotes com deduplicação
     API->>DB: recalcular campanhas ativas
     API->>DB: materializar progressos
     API->>DB: criar reward deliveries idempotentes
+    API->>DB: marcar histórico completed e confirmar transação
+    alt qualquer etapa falha
+        API->>DB: rollback de alunos, check-ins e derivados
+        API->>DB: marcar histórico failed fora da transação
+    end
     API-->>O: totais lidos, alunos criados e check-ins inseridos
 ```
 
@@ -400,11 +406,28 @@ Antes de criar um aluno, o import consulta `privacy_suppressions`. Identidades a
 
 A intenção de unicidade é `(box_id, source, student_id, checkin_date, checkin_time)` e o insert usa `ON CONFLICT DO NOTHING`.
 
+Os inserts usam lotes de até 500 registros. Esse limite mantém a quantidade de
+parâmetros bem abaixo do máximo de 65.535 do protocolo PostgreSQL, inclusive
+quando o modelo de check-in ganhar novas colunas.
+
 Atenção: `checkin_time` pode ser nulo. No PostgreSQL, valores `NULL` não colidem em um unique index convencional, portanto reimportar visitas sem horário pode duplicá-las. Isso está listado como dívida conhecida.
 
-### 10.4 Consistência da importação
+### 10.4 Consistência e histórico da importação
 
-A importação inteira não roda hoje em uma única transação. Histórico, novos alunos, check-ins e recálculo são passos sequenciais. Uma falha intermediária pode deixar efeitos parciais, embora reexecução e upserts reduzam parte do impacto.
+O histórico nasce como `processing`. Alunos, check-ins, recálculo de campanhas,
+brindes, linha de base de retenção e a transição para `completed` usam a mesma
+transação. Qualquer erro desfaz esses efeitos; em seguida o histórico é marcado
+como `failed` por uma operação independente e recebe somente um `error_code`
+normalizado. Assim, a tela nunca infere sucesso pela mera existência do
+histórico.
+
+O histórico registra `students_created`, `checkins_created`, `completed_at` e
+o estado final. Reimportações continuam idempotentes: um arquivo repetido pode
+terminar com zero check-ins novos sem ser considerado falha.
+
+Durante uma execução, consultas de supressão e identidade são armazenadas em
+cache por identidade. Isso evita repetir milhares de consultas quando o mesmo
+aluno possui muitas visitas no arquivo.
 
 ### 10.5 Entrada recorrente
 
@@ -994,6 +1017,12 @@ Labels usam enums/rotas normalizadas; IDs de box, aluno, campanha e request não
 Toda requisição recebe `request_id`, preservando um valor seguro fornecido pelo cliente ou gerando um novo. O mesmo ID aparece em header, erro e log.
 
 Primeiro passo de suporte: pedir somente o código de suporte, nunca senha, token, planilha ou corpo completo da mensagem.
+
+Falhas de banco registram `error_kind` e `sqlstate` quando disponível, sem SQL,
+parâmetros ou mensagem bruta do PostgreSQL. Falhas de importação acrescentam
+`import_id`, `box_id`, `source`, `phase`, quantidade de registros e latência.
+Esses campos permitem distinguir parsing, reconciliação de alunos, persistência
+de check-ins, recálculo e finalização sem expor PII.
 
 ### 19.4 Stack local e alertas
 

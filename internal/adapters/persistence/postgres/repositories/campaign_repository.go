@@ -12,7 +12,7 @@ import (
 
 func (r CampaignGormRepository) FindByID(ctx context.Context, boxID, id domain.ID) (*domain.Campaign, error) {
 	var model models.CampaignModel
-	if err := r.db.WithContext(ctx).Where("box_id = ? AND id = ?", stringID(boxID), stringID(id)).First(&model).Error; err != nil {
+	if err := databaseForContext(r.db, ctx).Where("box_id = ? AND id = ?", stringID(boxID), stringID(id)).First(&model).Error; err != nil {
 		return nil, err
 	}
 
@@ -22,7 +22,7 @@ func (r CampaignGormRepository) FindByID(ctx context.Context, boxID, id domain.I
 
 func (r CampaignGormRepository) List(ctx context.Context, boxID domain.ID) ([]domain.Campaign, error) {
 	var modelsList []models.CampaignModel
-	if err := r.db.WithContext(ctx).Where("box_id = ?", stringID(boxID)).Order("created_at DESC").Find(&modelsList).Error; err != nil {
+	if err := databaseForContext(r.db, ctx).Where("box_id = ?", stringID(boxID)).Order("created_at DESC").Find(&modelsList).Error; err != nil {
 		return nil, err
 	}
 
@@ -31,7 +31,7 @@ func (r CampaignGormRepository) List(ctx context.Context, boxID domain.ID) ([]do
 
 func (r CampaignGormRepository) ListActive(ctx context.Context, boxID domain.ID) ([]domain.Campaign, error) {
 	var modelsList []models.CampaignModel
-	if err := r.db.WithContext(ctx).Where("box_id = ? AND active = ?", stringID(boxID), true).Order("end_date ASC").Find(&modelsList).Error; err != nil {
+	if err := databaseForContext(r.db, ctx).Where("box_id = ? AND active = ?", stringID(boxID), true).Order("end_date ASC").Find(&modelsList).Error; err != nil {
 		return nil, err
 	}
 
@@ -44,21 +44,21 @@ func (r CampaignGormRepository) Save(ctx context.Context, campaign *domain.Campa
 	}
 
 	model := campaignToModel(*campaign)
-	return r.db.WithContext(ctx).Create(&model).Error
+	return databaseForContext(r.db, ctx).Create(&model).Error
 }
 
 func (r CampaignGormRepository) Update(ctx context.Context, campaign domain.Campaign) error {
 	model := campaignToModel(campaign)
-	return r.db.WithContext(ctx).Save(&model).Error
+	return databaseForContext(r.db, ctx).Save(&model).Error
 }
 
 func (r CampaignGormRepository) Delete(ctx context.Context, boxID, id domain.ID) error {
-	return r.db.WithContext(ctx).Where("box_id = ? AND id = ?", stringID(boxID), stringID(id)).Delete(&models.CampaignModel{}).Error
+	return databaseForContext(r.db, ctx).Where("box_id = ? AND id = ?", stringID(boxID), stringID(id)).Delete(&models.CampaignModel{}).Error
 }
 
 func (r CampaignGormRepository) ListGoals(ctx context.Context, campaignID domain.ID) ([]domain.CampaignGoal, error) {
 	var modelsList []models.CampaignGoalModel
-	if err := r.db.WithContext(ctx).Where("campaign_id = ?", stringID(campaignID)).Order("source ASC").Find(&modelsList).Error; err != nil {
+	if err := databaseForContext(r.db, ctx).Where("campaign_id = ?", stringID(campaignID)).Order("source ASC").Find(&modelsList).Error; err != nil {
 		return nil, err
 	}
 
@@ -75,21 +75,21 @@ func (r CampaignGormRepository) UpsertGoal(ctx context.Context, goal *domain.Cam
 	}
 
 	model := campaignGoalToModel(*goal)
-	return r.db.WithContext(ctx).Clauses(clause.OnConflict{
+	return databaseForContext(r.db, ctx).Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "campaign_id"}, {Name: "source"}},
 		DoUpdates: clause.AssignmentColumns([]string{"target_checkins"}),
 	}).Create(&model).Error
 }
 
 func (r CampaignGormRepository) DeleteGoal(ctx context.Context, campaignID, goalID domain.ID) error {
-	return r.db.WithContext(ctx).
+	return databaseForContext(r.db, ctx).
 		Where("campaign_id = ? AND id = ?", stringID(campaignID), stringID(goalID)).
 		Delete(&models.CampaignGoalModel{}).Error
 }
 
 func (r CampaignGormRepository) ListProgress(ctx context.Context, campaignID domain.ID) ([]domain.CampaignProgress, error) {
 	var modelsList []models.CampaignProgressModel
-	if err := r.db.WithContext(ctx).Where("campaign_id = ?", stringID(campaignID)).Order("progress_percentage DESC, current_checkins DESC, student_id ASC").Find(&modelsList).Error; err != nil {
+	if err := databaseForContext(r.db, ctx).Where("campaign_id = ?", stringID(campaignID)).Order("progress_percentage DESC, current_checkins DESC, student_id ASC").Find(&modelsList).Error; err != nil {
 		return nil, err
 	}
 
@@ -116,7 +116,7 @@ func (r CampaignGormRepository) ListEligibleReportRows(ctx context.Context, boxI
 	}
 
 	var rows []eligibleReportRow
-	if err := r.db.WithContext(ctx).
+	if err := databaseForContext(r.db, ctx).
 		Model(&models.CampaignProgressModel{}).
 		Select(`
 			campaigns.id AS campaign_id,
@@ -171,7 +171,7 @@ func (r CampaignGormRepository) ReplaceProgress(ctx context.Context, campaignID 
 		studentIDs = append(studentIDs, stringID(progress[i].StudentID))
 	}
 
-	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return databaseForContext(r.db, ctx).Transaction(func(tx *gorm.DB) error {
 		stale := tx.Where("campaign_id = ?", stringID(campaignID))
 		if len(studentIDs) > 0 {
 			stale = stale.Where("student_id NOT IN ?", studentIDs)

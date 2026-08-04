@@ -425,6 +425,17 @@ Ela não será repetida automaticamente por segurança. Depois do período de st
 
 Hoje o sistema registra primeiro a aceitação do provedor. A confirmação final assinada via StatusCallback da Twilio ainda é uma evolução pendente.
 
+### Importação aparece como `Falhou`
+
+Use o código de suporte para localizar `checkin_import_failed`. Confira
+`phase`, `error_kind`, `sqlstate`, `import_id`, `records` e `latency_ms`; não é
+necessário coletar a planilha ou dados pessoais para a primeira triagem.
+
+O histórico com estado `failed` não confirma alunos, check-ins, campanhas ou
+brindes daquela tentativa: esses efeitos são revertidos juntos. Depois de
+corrigir a causa, reimporte o mesmo arquivo. A deduplicação torna o retry seguro
+e o novo histórico informa quantos check-ins foram realmente adicionados.
+
 ## O que ainda não está resolvido por código
 
 Antes do go-live ainda será necessário decidir/configurar:
