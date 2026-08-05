@@ -425,16 +425,19 @@ type AutomationScheduleModel struct {
 }
 
 type WorkoutModel struct {
-	ID          string `gorm:"primaryKey"`
-	BoxID       string `gorm:"index"`
-	WorkoutDate time.Time
-	Title       string
-	Goal        string
-	Movements   string
-	CoachNotes  string
-	Status      string
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	ID             string `gorm:"primaryKey"`
+	BoxID          string `gorm:"index"`
+	WorkoutDate    time.Time
+	Title          string
+	Goal           string
+	Movements      string
+	CoachNotes     string
+	RawText        string
+	Classification []byte `gorm:"type:jsonb"`
+	ClassifiedAt   *time.Time
+	Status         string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
 }
 
 type WorkoutMessageDraftModel struct {

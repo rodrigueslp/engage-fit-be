@@ -12,6 +12,10 @@ import (
 	"boxengage/backend/internal/ports/services"
 )
 
+var ErrInvalidWorkout = errors.New("invalid workout")
+
+const maxWorkoutRawTextLength = 20000
+
 type ListWorkoutsUseCase struct {
 	workouts repositories.WorkoutRepository
 }
@@ -42,6 +46,9 @@ func NewCreateWorkoutUseCase(workouts repositories.WorkoutRepository) CreateWork
 	return CreateWorkoutUseCase{workouts: workouts}
 }
 func (uc CreateWorkoutUseCase) Execute(ctx context.Context, workout *domain.Workout) error {
+	if err := prepareWorkout(workout); err != nil {
+		return err
+	}
 	if workout.Status == "" {
 		workout.Status = domain.WorkoutStatusDraft
 	}
@@ -61,8 +68,34 @@ func NewUpdateWorkoutUseCase(workouts repositories.WorkoutRepository) UpdateWork
 	return UpdateWorkoutUseCase{workouts: workouts}
 }
 func (uc UpdateWorkoutUseCase) Execute(ctx context.Context, workout domain.Workout) error {
+	if err := prepareWorkout(&workout); err != nil {
+		return err
+	}
 	workout.UpdatedAt = time.Now()
 	return uc.workouts.UpdateWorkout(ctx, workout)
+}
+
+func prepareWorkout(workout *domain.Workout) error {
+	rawText := strings.TrimSpace(workout.RawText)
+	if rawText == "" {
+		rawText = strings.TrimSpace(workout.Movements)
+	}
+	if rawText == "" || len([]rune(rawText)) > maxWorkoutRawTextLength {
+		return ErrInvalidWorkout
+	}
+	if workout.Status != "" && workout.Status != domain.WorkoutStatusDraft && workout.Status != domain.WorkoutStatusPublished {
+		return ErrInvalidWorkout
+	}
+
+	workout.RawText = normalizeWorkoutText(rawText)
+	workout.Movements = workout.RawText // Compatibilidade com mensagens de treino existentes.
+	workout.Classification = ClassifyWorkoutText(workout.RawText)
+	now := time.Now()
+	workout.ClassifiedAt = &now
+	if strings.TrimSpace(workout.Title) == "" {
+		workout.Title = workout.Classification.SuggestedTitle
+	}
+	return nil
 }
 
 type DeleteWorkoutUseCase struct {

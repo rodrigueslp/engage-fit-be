@@ -10,6 +10,7 @@ import (
 
 	"boxengage/backend/internal/adapters/http/handlers"
 	"boxengage/backend/internal/adapters/http/middleware"
+	athleteapp "boxengage/backend/internal/app/athlete"
 	"boxengage/backend/internal/app/attendance"
 	"boxengage/backend/internal/app/auth"
 	"boxengage/backend/internal/app/automation"
@@ -171,6 +172,7 @@ type RouterDependencies struct {
 	BuildCommit                   string
 	BuildTime                     string
 	BillingService                *billingapp.Service
+	AthleteService                *athleteapp.Service
 }
 
 func NewRouter(deps RouterDependencies) *gin.Engine {
@@ -220,6 +222,19 @@ func NewRouter(deps RouterDependencies) *gin.Engine {
 	authHandler := handlers.NewAuthHandler(deps.LoginUseCase, deps.CurrentUserUseCase, deps.ChangePasswordUseCase, deps.LogoutUseCase, deps.SessionConfig)
 	loginLimiter := middleware.NewWindowRateLimiter(deps.LoginRateLimitRequests, time.Duration(deps.LoginRateLimitWindowSeconds)*time.Second)
 	api.POST("/auth/login", middleware.JSONRateLimit(loginLimiter, "email"), authHandler.Login)
+	if deps.AthleteService != nil {
+		athleteSession := athleteSessionConfig(deps.SessionConfig)
+		athleteHandler := handlers.NewAthleteHandler(deps.AthleteService, athleteSession)
+		athleteLimiter := middleware.NewWindowRateLimiter(10, time.Minute)
+		api.GET("/athlete/invitations/:token", athleteHandler.PreviewInvitation)
+		api.POST("/athlete/invitations/:token/claim", middleware.JSONRateLimit(athleteLimiter, "email"), athleteHandler.ClaimInvitation)
+		api.POST("/athlete/auth/login", middleware.JSONRateLimit(athleteLimiter, "email"), athleteHandler.Login)
+		athleteAuthenticated := api.Group("/athlete")
+		athleteAuthenticated.Use(middleware.AthleteAuth(deps.AthleteService, athleteSession), middleware.CSRF(athleteSession))
+		athleteAuthenticated.GET("/me", athleteHandler.Me)
+		athleteAuthenticated.GET("/workouts", athleteHandler.Workouts)
+		athleteAuthenticated.POST("/auth/logout", athleteHandler.Logout)
+	}
 
 	setupHandler := handlers.NewSetupHandler(deps.CreateBoxUseCase)
 	setupLimiter := middleware.NewWindowRateLimiter(deps.SetupRateLimitRequests, time.Duration(deps.SetupRateLimitWindowSeconds)*time.Second)
@@ -328,6 +343,12 @@ func NewRouter(deps RouterDependencies) *gin.Engine {
 	protected.GET("/students/:id", studentsHandler.Get)
 	protected.PATCH("/students/:id/risk-status", studentsHandler.UpdateRiskStatus)
 	protected.GET("/students/:id/checkins", studentsHandler.Checkins)
+	if deps.AthleteService != nil {
+		athleteHandler := handlers.NewAthleteHandler(deps.AthleteService, athleteSessionConfig(deps.SessionConfig))
+		ownerAthletes := protected.Group("")
+		ownerAthletes.Use(middleware.Owner())
+		ownerAthletes.POST("/students/:id/athlete-invitations", athleteHandler.CreateInvitation)
+	}
 	if deps.AttendanceService != nil {
 		attendanceHandler := handlers.NewAttendanceHandler(deps.AttendanceService)
 		ownerAttendance := protected.Group("")
@@ -457,4 +478,11 @@ func NewRouter(deps RouterDependencies) *gin.Engine {
 	protected.GET("/checkins/summary", reportsHandler.CheckinSummary)
 
 	return router
+}
+
+func athleteSessionConfig(base middleware.SessionConfig) middleware.SessionConfig {
+	base.CookieName = "engagefit_athlete_session"
+	base.CSRFCookieName = "engagefit_athlete_csrf"
+	base.MaxAgeSeconds = 30 * 24 * 60 * 60
+	return base
 }

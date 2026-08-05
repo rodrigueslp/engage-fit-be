@@ -71,8 +71,12 @@ func (h WorkoutsHandler) Create(c *gin.Context) {
 	if status == "" {
 		status = domain.WorkoutStatusDraft
 	}
-	workout := domain.Workout{BoxID: boxID, WorkoutDate: workoutDate, Title: request.Title, Goal: request.Goal, Movements: request.Movements, CoachNotes: request.CoachNotes, Status: status}
+	workout := domain.Workout{BoxID: boxID, WorkoutDate: workoutDate, Title: request.Title, Goal: request.Goal, Movements: request.Movements, CoachNotes: request.CoachNotes, RawText: request.RawText, Status: status}
 	if err := h.createWorkout.Execute(c.Request.Context(), &workout); err != nil {
+		if errors.Is(err, workouts.ErrInvalidWorkout) {
+			respondBadRequest(c)
+			return
+		}
 		respondError(c, err)
 		return
 	}
@@ -119,10 +123,15 @@ func (h WorkoutsHandler) Update(c *gin.Context) {
 	workout.Goal = request.Goal
 	workout.Movements = request.Movements
 	workout.CoachNotes = request.CoachNotes
+	workout.RawText = request.RawText
 	if request.Status != "" {
 		workout.Status = domain.WorkoutStatus(request.Status)
 	}
 	if err := h.updateWorkout.Execute(c.Request.Context(), *workout); err != nil {
+		if errors.Is(err, workouts.ErrInvalidWorkout) {
+			respondBadRequest(c)
+			return
+		}
 		respondError(c, err)
 		return
 	}
@@ -265,7 +274,35 @@ func (h WorkoutsHandler) ListRecipients(c *gin.Context) {
 }
 
 func workoutResponse(workout domain.Workout) dto.WorkoutResponse {
-	return dto.WorkoutResponse{ID: string(workout.ID), WorkoutDate: workout.WorkoutDate.Format("2006-01-02"), Title: workout.Title, Goal: workout.Goal, Movements: workout.Movements, CoachNotes: workout.CoachNotes, Status: string(workout.Status), CreatedAt: workout.CreatedAt.Format("2006-01-02T15:04:05Z07:00"), UpdatedAt: workout.UpdatedAt.Format("2006-01-02T15:04:05Z07:00")}
+	sections := make([]dto.WorkoutSectionResponse, 0, len(workout.Classification.Sections))
+	for _, section := range workout.Classification.Sections {
+		sections = append(sections, dto.WorkoutSectionResponse{Type: string(section.Type), Title: section.Title, Content: section.Content})
+	}
+	response := dto.WorkoutResponse{
+		ID:          string(workout.ID),
+		WorkoutDate: workout.WorkoutDate.Format("2006-01-02"),
+		Title:       workout.Title,
+		Goal:        workout.Goal,
+		Movements:   workout.Movements,
+		CoachNotes:  workout.CoachNotes,
+		RawText:     workout.RawText,
+		Classification: dto.WorkoutClassificationResponse{
+			Version:          workout.Classification.Version,
+			GeneratedBy:      workout.Classification.GeneratedBy,
+			SuggestedTitle:   workout.Classification.SuggestedTitle,
+			Sections:         sections,
+			Formats:          workout.Classification.Formats,
+			DurationSeconds:  workout.Classification.DurationSeconds,
+			MovementMentions: workout.Classification.MovementMentions,
+		},
+		Status:    string(workout.Status),
+		CreatedAt: workout.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		UpdatedAt: workout.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+	}
+	if workout.ClassifiedAt != nil {
+		response.ClassifiedAt = workout.ClassifiedAt.Format("2006-01-02T15:04:05Z07:00")
+	}
+	return response
 }
 
 func workoutDraftResponse(draft domain.WorkoutMessageDraft) dto.WorkoutDraftResponse {

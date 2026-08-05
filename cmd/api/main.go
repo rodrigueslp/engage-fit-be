@@ -22,6 +22,7 @@ import (
 	reportadapters "boxengage/backend/internal/adapters/reports"
 	"boxengage/backend/internal/adapters/security"
 	"boxengage/backend/internal/adapters/whatsapp"
+	athleteapp "boxengage/backend/internal/app/athlete"
 	"boxengage/backend/internal/app/attendance"
 	"boxengage/backend/internal/app/auth"
 	"boxengage/backend/internal/app/automation"
@@ -139,10 +140,12 @@ func main() {
 	emailRepository := pgrepo.NewEmailGormRepository(db)
 	automationRepository := pgrepo.NewAutomationGormRepository(db)
 	workoutRepository := pgrepo.NewWorkoutGormRepository(db)
+	athleteRepository := pgrepo.NewAthleteGormRepository(db)
 	messagingGovernanceRepository := pgrepo.NewMessagingGovernanceGormRepository(db)
 	billingRepository := pgrepo.NewBillingGormRepository(db)
 
 	passwordService := security.NewPasswordService()
+	athleteService := athleteapp.NewService(athleteRepository, studentRepository, passwordService)
 	ensureAdminUseCase := platformadmin.NewEnsureAdminUseCase(userRepository, passwordService)
 	if err := ensureAdminUseCase.Execute(context.Background(), cfg.PlatformAdminName, cfg.PlatformAdminEmail, cfg.PlatformAdminPassword); err != nil {
 		log.Fatalf("failed to ensure platform admin: %v", err)
@@ -432,6 +435,7 @@ func main() {
 			Billing: cfg.FeatureBillingEnabled,
 		},
 		BillingService: billingService,
+		AthleteService: athleteService,
 		BuildVersion:   version,
 		BuildCommit:    commit,
 		BuildTime:      buildTime,

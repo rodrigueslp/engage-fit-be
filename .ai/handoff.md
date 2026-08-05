@@ -4,7 +4,34 @@ Manual canônico de arquitetura e negócio: `docs/system-design.md`.
 
 Guia operacional consolidado: `docs/application-readiness-guide.md`.
 
-Atualizado em: 2026-08-04 (importação atômica e histórico reconciliado em produção)
+Atualizado em: 2026-08-05 (fundação text-first da experiência do aluno)
+
+## Checkpoint de fundação da experiência do aluno em 2026-08-05
+
+- A nova direção de produto mantém o coach fora do fluxo operacional: para
+  publicar o treino, o box informa a data, cola o mesmo texto livre enviado ao
+  grupo e confirma uma única ação. Não há formulário estruturado, whitelist,
+  rascunho de mensagem nem aprovação obrigatória.
+- A migration `050_add_published_workout_classification.sql` preserva o texto
+  canônico em `workouts.raw_text`, grava classificação JSONB versionada e
+  `classified_at`, além de indexar treinos publicados por box/data.
+- O classificador inicial `rules-v1` reconhece seções de aquecimento, técnica,
+  força, WOD, acessórios e volta à calma; formatos AMRAP, EMOM, for time,
+  Tabata, intervalo e esforço máximo; duração explícita e menções candidatas de
+  movimentos. Texto desconhecido permanece intacto como `other` e nunca
+  bloqueia a publicação.
+- O frontend de `Treino do dia` foi simplificado para data + texto + `Publicar
+  treino`. O histórico mostra automaticamente os blocos e formatos detectados.
+  O fluxo antigo de mensagens permanece compatível na API, mas deixou de ser
+  requisito para cadastrar o treino.
+- A direção de contas globais, vínculo com boxes e ligação auditável aos
+  registros Wellhub/TotalPass/mensalistas está registrada em
+  `docs/athlete-experience-design.md`. Nome não será chave global e IA não fará
+  merge silencioso de identidade.
+- Validações concluídas neste checkpoint: suíte Go completa, teste unitário com
+  um treino real de Snatch/AMRAP, 50 migrations em PostgreSQL vazio,
+  idempotência das migrations, TypeScript e build Vite. O aviso conhecido de
+  chunk acima de 500 kB permanece.
 
 ## Checkpoint de importação atômica e diagnóstico seguro em 2026-08-04
 
@@ -2200,6 +2227,47 @@ Infra/dev:
 - `engage-fit-be/migrations/025_create_automation_schedules.sql`
 - `engage-fit-be/migrations/026_create_workouts.sql`
 - `engage-fit-be/test-data/totalpass-checkins-hit-goal.csv`
+
+## App/PWA do aluno — MVP 2026-08-05
+
+Implementado sem exigir participação do coach:
+
+- owner gera em `Alunos > Convidar` um link individual com validade de sete
+  dias; o link já carrega o nome do aluno e do box;
+- aluno cria ou reutiliza sua conta e o backend cria o vínculo explícito com o
+  `student_id` convidado; conta existente exige a senha existente;
+- conta, membership, link, convite e sessão estão na migration `051`;
+- sessões do atleta são opacas, independentes das sessões administrativas,
+  com cookies/CSRF próprios e duração de 30 dias;
+- `GET /api/v1/athlete/workouts` entrega somente treinos publicados dos boxes
+  aos quais o atleta está ativamente vinculado;
+- frontend `#/athlete` tem onboarding, login, treino do dia classificado,
+  histórico, perfil e múltiplos boxes, com layout mobile-first;
+- PWA possui manifest, safe areas, ação de instalação e service worker que não
+  armazena respostas de `/api/`.
+
+Arquivos centrais:
+
+- `migrations/051_create_athlete_accounts.sql`
+- `internal/app/athlete/service.go`
+- `internal/adapters/persistence/postgres/repositories/athlete_repository.go`
+- `internal/adapters/http/handlers/athlete_handler.go`
+- `../engage-fit-fe/src/pages/athlete/AthleteApp.tsx`
+- `../engage-fit-fe/public/manifest.webmanifest`
+- `docs/athlete-experience-design.md`
+
+Validação:
+
+- `go test ./...` e `go vet ./...` passaram;
+- migrations `001..051` passaram em PostgreSQL vazio e segunda execução
+  aplicou zero migrations;
+- build do frontend passou;
+- suíte Playwright passou com 13 testes, 2 testes reais ignorados, incluindo
+  onboarding móvel completo, manifest PWA e convite pelo owner.
+
+Próximo recorte recomendado: resultados do treino e PRs confirmados/estimados,
+seguido do enriquecimento determinístico + explicação por IA inspirado no
+WodScope. Antes de produção, implementar recuperação/verificação de conta.
 
 ## Orientacao para iniciar novo chat
 

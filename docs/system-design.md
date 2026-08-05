@@ -753,6 +753,29 @@ E-mail possui settings SMTP/mock, templates editáveis, campanhas, preview e rec
 
 ### 13.6 Treino do dia e LLM
 
+O cadastro operacional do treino é **text-first**. O box informa somente a
+data e cola em `raw_text` o mesmo conteúdo livre que já enviaria ao grupo de
+alunos. Não há formulário obrigatório por bloco, seleção de movimentos nem
+aprovação do coach. Ao criar ou editar, a aplicação:
+
+1. preserva o texto original normalizado;
+2. identifica automaticamente seções como aquecimento, técnica, força, WOD,
+   acessórios e volta à calma;
+3. identifica formatos como AMRAP, EMOM, for time, intervalado e esforço
+   máximo, duração explícita e menções candidatas de movimentos;
+4. persiste a classificação versionada e o horário em que ela foi produzida;
+5. publica imediatamente quando recebe `status=published`.
+
+A classificação inicial usa regras determinísticas (`rules-v1`) e é tolerante
+a texto não reconhecido: o conteúdo original continua disponível como uma
+seção `other`, sem bloquear a publicação. A classificação é metadado derivado,
+nunca substitui o texto do box. Evoluções com LLM devem manter esse fallback e
+não podem introduzir uma etapa obrigatória de revisão pelo coach.
+
+O modelo legado `movements` continua recebendo o texto original por
+compatibilidade com a geração de mensagens existente. `raw_text` é a fonte
+canônica para a experiência do aluno.
+
 Fluxo:
 
 1. criar treino draft/published;
@@ -767,6 +790,25 @@ O prompt pede linguagem brasileira, até 750 caracteres, foco técnico e seguran
 O log LLM guarda provider, model, resumo do prompt, status e erro — não o prompt completo. A chamada usa a Responses API e timeout configurável.
 
 Quando `student_ids` é fornecido, recipients são congelados no draft. Sem IDs explícitos, o código calcula o total da audiência, mas atualmente não persiste os recipients; enviar esse draft depois resulta em “no workout recipients selected”. Esse é um limite conhecido da API atual.
+
+### 13.7 App/PWA do aluno
+
+O aluno possui autenticação independente do usuário operacional do box. O
+owner cria um convite individual a partir de `student_id`; o backend armazena
+somente o hash do token, com validade de sete dias e uso único. Ao reivindicar
+o convite, o atleta cria `athlete_account`, `athlete_box_membership` e
+`athlete_student_link` em uma transação. Se o e-mail já possui conta, a senha
+existente é obrigatória antes de adicionar outro box.
+
+O vínculo, e não nome/telefone/e-mail importado, autoriza o conteúdo. Assim, a
+unicidade operacional de `students` permanece intacta e nenhuma heurística
+faz merge silencioso de pessoas. As sessões opacas do atleta duram 30 dias,
+usam cookies e CSRF próprios e não se confundem com a sessão do owner/coach.
+
+Rotas públicas: preview/claim do convite e login. Rotas autenticadas: perfil,
+treinos publicados dos boxes com membership ativo e logout. O frontend
+`#/athlete` é mobile-first e instalável como PWA; mantém a API fora do cache do
+service worker para reduzir risco de exposição de dados privados após logout.
 
 ## 14. Automações, concorrência e idempotência
 

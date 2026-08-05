@@ -6,19 +6,39 @@ type WorkoutRequest struct {
 	Goal        string `json:"goal"`
 	Movements   string `json:"movements"`
 	CoachNotes  string `json:"coach_notes"`
+	RawText     string `json:"raw_text"`
 	Status      string `json:"status"`
 }
 
+type WorkoutSectionResponse struct {
+	Type    string `json:"type"`
+	Title   string `json:"title"`
+	Content string `json:"content"`
+}
+
+type WorkoutClassificationResponse struct {
+	Version          string                   `json:"version"`
+	GeneratedBy      string                   `json:"generated_by"`
+	SuggestedTitle   string                   `json:"suggested_title"`
+	Sections         []WorkoutSectionResponse `json:"sections"`
+	Formats          []string                 `json:"formats"`
+	DurationSeconds  int                      `json:"duration_seconds,omitempty"`
+	MovementMentions []string                 `json:"movement_mentions"`
+}
+
 type WorkoutResponse struct {
-	ID          string `json:"id"`
-	WorkoutDate string `json:"workout_date"`
-	Title       string `json:"title"`
-	Goal        string `json:"goal"`
-	Movements   string `json:"movements"`
-	CoachNotes  string `json:"coach_notes"`
-	Status      string `json:"status"`
-	CreatedAt   string `json:"created_at"`
-	UpdatedAt   string `json:"updated_at"`
+	ID             string                        `json:"id"`
+	WorkoutDate    string                        `json:"workout_date"`
+	Title          string                        `json:"title"`
+	Goal           string                        `json:"goal"`
+	Movements      string                        `json:"movements"`
+	CoachNotes     string                        `json:"coach_notes"`
+	RawText        string                        `json:"raw_text"`
+	Classification WorkoutClassificationResponse `json:"classification"`
+	ClassifiedAt   string                        `json:"classified_at,omitempty"`
+	Status         string                        `json:"status"`
+	CreatedAt      string                        `json:"created_at"`
+	UpdatedAt      string                        `json:"updated_at"`
 }
 
 type GenerateWorkoutDraftRequest struct {

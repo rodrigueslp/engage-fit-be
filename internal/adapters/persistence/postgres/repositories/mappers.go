@@ -1,6 +1,7 @@
 package repositories
 
 import (
+	"encoding/json"
 	"time"
 
 	"boxengage/backend/internal/adapters/persistence/postgres/models"
@@ -706,17 +707,22 @@ func workoutToDomain(model models.WorkoutModel) domain.Workout {
 	if status == "" {
 		status = domain.WorkoutStatusDraft
 	}
+	classification := domain.WorkoutClassification{}
+	_ = json.Unmarshal(model.Classification, &classification)
 	return domain.Workout{
-		ID:          domainID(model.ID),
-		BoxID:       domainID(model.BoxID),
-		WorkoutDate: model.WorkoutDate,
-		Title:       model.Title,
-		Goal:        model.Goal,
-		Movements:   model.Movements,
-		CoachNotes:  model.CoachNotes,
-		Status:      status,
-		CreatedAt:   model.CreatedAt,
-		UpdatedAt:   model.UpdatedAt,
+		ID:             domainID(model.ID),
+		BoxID:          domainID(model.BoxID),
+		WorkoutDate:    model.WorkoutDate,
+		Title:          model.Title,
+		Goal:           model.Goal,
+		Movements:      model.Movements,
+		CoachNotes:     model.CoachNotes,
+		RawText:        model.RawText,
+		Classification: classification,
+		ClassifiedAt:   model.ClassifiedAt,
+		Status:         status,
+		CreatedAt:      model.CreatedAt,
+		UpdatedAt:      model.UpdatedAt,
 	}
 }
 
@@ -725,17 +731,21 @@ func workoutToModel(workout domain.Workout) models.WorkoutModel {
 	if status == "" {
 		status = domain.WorkoutStatusDraft
 	}
+	classification, _ := json.Marshal(workout.Classification)
 	return models.WorkoutModel{
-		ID:          stringID(workout.ID),
-		BoxID:       stringID(workout.BoxID),
-		WorkoutDate: workout.WorkoutDate,
-		Title:       workout.Title,
-		Goal:        workout.Goal,
-		Movements:   workout.Movements,
-		CoachNotes:  workout.CoachNotes,
-		Status:      string(status),
-		CreatedAt:   workout.CreatedAt,
-		UpdatedAt:   workout.UpdatedAt,
+		ID:             stringID(workout.ID),
+		BoxID:          stringID(workout.BoxID),
+		WorkoutDate:    workout.WorkoutDate,
+		Title:          workout.Title,
+		Goal:           workout.Goal,
+		Movements:      workout.Movements,
+		CoachNotes:     workout.CoachNotes,
+		RawText:        workout.RawText,
+		Classification: classification,
+		ClassifiedAt:   workout.ClassifiedAt,
+		Status:         string(status),
+		CreatedAt:      workout.CreatedAt,
+		UpdatedAt:      workout.UpdatedAt,
 	}
 }
 
