@@ -23,8 +23,68 @@ Atualizado em: 2026-08-05 (MVP do aluno publicado em produção)
 - Logs HTTP da API e do frontend não apresentaram respostas 5xx após o deploy.
 - `OWNER_SETUP_ENABLED=false`, cookies seguros, pre-deploy ativo, Custom Start
   vazio e Serverless desligado foram confirmados antes da publicação.
-- Próxima homologação manual: owner publica um treino, gera convite em
-  `Alunos`, aluno reivindica em janela anônima e instala a PWA.
+- O owner publicou treino e gerou convites reais durante a primeira homologação.
+
+### Incidente 1: convite aparecia expirado imediatamente
+
+- Sintoma confirmado em produção: `POST
+  /students/:id/athlete-invitations` respondia `201`, mas o `GET` público do
+  mesmo convite respondia `404` poucos segundos depois.
+- Auditoria direta no PostgreSQL confirmou três convites íntegros, não
+  reivindicados, hash com 64 caracteres e `expires_at` sete dias no futuro. O
+  token e o WhatsApp não eram a causa.
+- Causa-raiz: `FindInvitationByTokenHash` tentava escanear o resultado do GORM
+  em uma struct local que embutia `athleteInvitationModel`, um tipo não
+  exportado. A query encontrava a linha, mas o mapeamento falhava e o handler
+  público normalizava qualquer falha como convite inválido/expirado.
+- Hotfix backend `44b06d6` substituiu o embedding por campos exportados
+  explícitos. O mesmo link previamente emitido permaneceu válido; não houve
+  alteração nem remoção de convites em produção.
+- Regressão adicionada em
+  `athlete_repository_integration_test.go`: persiste convite real no
+  PostgreSQL e exige recuperação por hash com IDs, nomes e validade corretos.
+- Reproduzido localmente pelo endpoint real: criação `201`, token opaco com 43
+  caracteres e preview `200` após a correção.
+- Deploys do hotfix concluídos com `SUCCESS`: API
+  `1ce961ec-2791-4ae7-aebd-f746703e4d1f` e billing reconcile
+  `274523f5-3cb7-4f68-a2b2-e9e2697ef435`.
+
+### Incidente 2: Backend CI falhou após o hotfix
+
+- Run `31034863130` falhou somente no passo `go test -race -count=1 ./...`;
+  módulos, formatação, vet, migrations em banco vazio e idempotência passaram.
+- A falha não era no teste novo do convite. Três fixtures antigos de integração
+  criavam `import_histories` sem `status`, embora a migration `049` já imponha
+  `processing|completed|failed`. Com `TEST_DATABASE_URL`, o PostgreSQL rejeitou
+  os inserts com SQLSTATE `23514`.
+- Commit backend `51c1878` marcou esses históricos de teste como
+  `completed` em `contact_activation_repository_integration_test.go` e
+  `operational_flows_integration_test.go`.
+- O comando exato do CI foi reproduzido em container `golang:1.25-bookworm`,
+  com detector de corrida e todas as 51 migrations em PostgreSQL vazio; toda a
+  suíte passou. O banco temporário `engagefit_ci_repro` foi removido.
+- Run oficial final `31035651979` (`Backend CI`) terminou `success`. Deploys
+  finais do commit `51c1878` também terminaram `SUCCESS`: API
+  `064ba349-ee82-4923-a819-f214dfaf8d41` e billing reconcile
+  `08adc205-37ce-46e8-a3ae-0000ec47d7cc`.
+
+### Incidente 3: botão de cadastro parecia desativado
+
+- Nenhuma tentativa de claim chegou à API. A interface desabilitava o botão
+  silenciosamente enquanto a senha tivesse menos de 12 caracteres; o único
+  aviso era um placeholder que desaparecia assim que o aluno digitava.
+- Frontend `38ef4bd` manteve a regra de 12 caracteres, mas deixou o botão
+  acionável, passou a mostrar em tempo real quantos caracteres faltam, exibe
+  erro objetivo ao tocar antes de completar e renomeou a ação para `Criar conta
+  e entrar`. Apenas o estado de envio desabilita o botão para evitar duplicação.
+- Build Vite e os três testes Playwright do aluno passaram, incluindo a
+  regressão de senha curta e botão acionável.
+- Deploy frontend `522105a3-7670-495b-a803-b9c2bc106fbd` concluiu com
+  `SUCCESS`; o bundle público e HTTP 200 foram confirmados.
+
+Próxima homologação manual: reabrir o mesmo convite, concluir o cadastro com
+senha de ao menos 12 caracteres, validar treino/histórico/perfil e instalar a
+PWA. Não é necessário gerar novo convite.
 
 ## Checkpoint de fundação da experiência do aluno em 2026-08-05
 
