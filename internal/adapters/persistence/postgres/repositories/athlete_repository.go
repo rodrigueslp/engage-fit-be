@@ -93,9 +93,16 @@ func (r AthleteGormRepository) SaveInvitation(ctx context.Context, invitation *d
 
 func (r AthleteGormRepository) FindInvitationByTokenHash(ctx context.Context, tokenHash string) (*domain.AthleteInvitation, error) {
 	type invitationRow struct {
-		athleteInvitationModel
-		BoxName     string
-		StudentName string
+		ID              string
+		BoxID           string
+		StudentID       string
+		TokenHash       string
+		CreatedByUserID string
+		ExpiresAt       time.Time
+		ClaimedAt       *time.Time
+		CreatedAt       time.Time
+		BoxName         string
+		StudentName     string
 	}
 	var row invitationRow
 	err := r.db.WithContext(ctx).Table("athlete_invitations ai").
