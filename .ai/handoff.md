@@ -4,7 +4,27 @@ Manual canônico de arquitetura e negócio: `docs/system-design.md`.
 
 Guia operacional consolidado: `docs/application-readiness-guide.md`.
 
-Atualizado em: 2026-08-05 (fundação text-first da experiência do aluno)
+Atualizado em: 2026-08-05 (MVP do aluno publicado em produção)
+
+## Checkpoint de produção do app/PWA do aluno em 2026-08-05
+
+- Funcionalidade publicada nos commits backend `21070ed` e frontend `0ff8d83`.
+- Deploys Railway concluídos com `SUCCESS`:
+  - `engage-fit-api`: `c3d97e80-eb01-47fe-9925-116b49458ba3` para o código e
+    `33863ec4-ab63-42c5-8768-b7c3cdb22957` para ativação da feature;
+  - `engage-fit-web`: `28a2d93a-4471-4da9-8b6d-a88339fe9193`.
+- O pre-deploy executou antes da nova API e registrou exatamente:
+  `applied 050`, `applied 051`, `migration complete: 2 applied`.
+- `FEATURE_WORKOUTS_ENABLED=true` foi ativada em produção; `FEATURE_LLM_ENABLED`
+  permaneceu desligada e nenhuma configuração de envio real foi alterada.
+- Smoke público confirmou HTTP 200 no frontend e capabilities, manifest
+  `EngageFit Aluno`, service worker ativo, login mobile em
+  `#/athlete/login` e erro público controlado para convite inválido.
+- Logs HTTP da API e do frontend não apresentaram respostas 5xx após o deploy.
+- `OWNER_SETUP_ENABLED=false`, cookies seguros, pre-deploy ativo, Custom Start
+  vazio e Serverless desligado foram confirmados antes da publicação.
+- Próxima homologação manual: owner publica um treino, gera convite em
+  `Alunos`, aluno reivindica em janela anônima e instala a PWA.
 
 ## Checkpoint de fundação da experiência do aluno em 2026-08-05
 
