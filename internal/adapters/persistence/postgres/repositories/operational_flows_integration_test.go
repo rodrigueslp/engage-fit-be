@@ -41,7 +41,7 @@ func TestOperationalReportsRewardsAndRecipients(t *testing.T) {
 		&models.BoxModel{ID: boxID, Name: "operational-flow", RiskInactiveDays: 7, RiskMessageCooldownDays: 14, CreatedAt: now, UpdatedAt: now},
 		&models.StudentModel{ID: studentID, BoxID: boxID, Name: "Student Reports", Phone: "+5511999999999", Source: "totalpass", ExternalID: uuid.NewString(), RiskStatus: "active", ContactStatus: "unknown", CreatedAt: now, UpdatedAt: now},
 		&models.StudentModel{ID: staleStudentID, BoxID: boxID, Name: "Outside Campaign", Source: "totalpass", ExternalID: uuid.NewString(), RiskStatus: "active", ContactStatus: "unknown", CreatedAt: now, UpdatedAt: now},
-		&models.ImportHistoryModel{ID: importID, BoxID: boxID, Filename: "report.csv", Source: "totalpass", TotalRecords: 1, ImportedAt: now},
+		&models.ImportHistoryModel{ID: importID, BoxID: boxID, Filename: "report.csv", Source: "totalpass", Status: "completed", TotalRecords: 1, ImportedAt: now},
 		&models.CheckinModel{ID: checkinID, BoxID: boxID, StudentID: studentID, CheckinDate: now, Source: "totalpass", ImportHistoryID: &importID, EntryMethod: "import", CreatedAt: now},
 		&models.CampaignModel{ID: campaignID, BoxID: boxID, Name: "Report Campaign", StartDate: now.AddDate(0, 0, -1), EndDate: now.AddDate(0, 0, 1), Active: true, CreatedAt: now, UpdatedAt: now},
 		&models.CampaignProgressModel{ID: progressID, CampaignID: campaignID, StudentID: studentID, CurrentCheckins: 1, TargetCheckins: 1, ProgressPercentage: 100, Achieved: true, UpdatedAt: now},

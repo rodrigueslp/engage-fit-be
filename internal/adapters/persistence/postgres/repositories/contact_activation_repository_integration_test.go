@@ -29,7 +29,7 @@ func TestContactActivationMatchesAndConfirmsStudent(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = db.Exec("DELETE FROM boxes WHERE id = ?", boxID).Error })
-	if err := db.Create(&models.ImportHistoryModel{ID: importID, BoxID: boxID, Filename: "activation.csv", Source: "totalpass", TotalRecords: 1, ImportedAt: now}).Error; err != nil {
+	if err := db.Create(&models.ImportHistoryModel{ID: importID, BoxID: boxID, Filename: "activation.csv", Source: "totalpass", Status: "completed", TotalRecords: 1, ImportedAt: now}).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Create(&models.StudentModel{ID: studentID, BoxID: boxID, Name: "Adriana  Segatelli", Source: "totalpass", ExternalID: "adriana segatelli", RiskStatus: "active", ContactStatus: "unknown", CreatedAt: now, UpdatedAt: now}).Error; err != nil {
@@ -222,7 +222,7 @@ func TestContactActivationPendingSyncResolvesAfterCheckinImport(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = db.Exec("DELETE FROM boxes WHERE id = ?", boxID).Error })
-	if err := db.Create(&models.ImportHistoryModel{ID: importID, BoxID: boxID, Filename: "activation.csv", Source: "totalpass", TotalRecords: 1, ImportedAt: now}).Error; err != nil {
+	if err := db.Create(&models.ImportHistoryModel{ID: importID, BoxID: boxID, Filename: "activation.csv", Source: "totalpass", Status: "completed", TotalRecords: 1, ImportedAt: now}).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Create(&models.StudentModel{ID: studentID, BoxID: boxID, Name: "Vitor Lima de Oliveira", Source: "totalpass", ExternalID: "vitor lima de oliveira", RiskStatus: "active", ContactStatus: "unknown", CreatedAt: now, UpdatedAt: now}).Error; err != nil {
