@@ -4,12 +4,17 @@ Manual canônico de arquitetura e negócio: `docs/system-design.md`.
 
 Guia operacional consolidado: `docs/application-readiness-guide.md`.
 
-Atualizado em: 2026-08-06 (experiência completa do aluno implementada localmente; ainda não publicada)
+Atualizado em: 2026-08-06 (experiência completa do aluno publicada em produção)
 
-## Checkpoint local da experiência completa do aluno em 2026-08-06
+## Checkpoint de produção da experiência completa do aluno em 2026-08-06
 
-- Implementação concluída nos worktrees, sem commit/deploy: migration `052`,
-  backend e frontend ainda precisam passar pelo fluxo normal de publicação.
+- Código publicado nos commits backend `0ad927f` e frontend `42ef9bf`.
+- Deploys Railway concluíram com `SUCCESS`: API
+  `56711663-b4f8-4e74-95ee-14b385613bc8` e web
+  `acad34da-fcaf-4569-9173-8c7184ab18bc`.
+- O pre-deploy registrou exatamente `applied 052 complete_athlete_experience`
+  e `migration complete: 1 applied`; consulta
+  direta posterior confirmou `52|complete_athlete_experience`.
 - O aluno registra resultado por treino/bloco: RX/scaled/adaptado, tempo,
   rounds/reps, carga, distância, calorias, conclusão, RPE e notas.
 - Histórico agora diferencia treino publicado de treino realizado e abre o
@@ -20,13 +25,27 @@ Atualizado em: 2026-08-06 (experiência completa do aluno implementada localment
   confirmados. Explicação OpenAI é sob demanda, limitada pelos cálculos e tem
   cache/fallback `rules-v1`.
 - Recuperação de senha, revogação de sessões, verificação de e-mail e tokens de
-  uso único foram adicionados. Requer `PUBLIC_WEB_URL` e SMTP habilitado no box.
+  uso único foram adicionados. `PUBLIC_WEB_URL=https://www.engagefit.com.br`
+  foi configurada. Não existe registro em `email_settings` na produção;
+  `FEATURE_EMAIL_ENABLED=false` e `EMAIL_ALLOW_REAL_SEND=false` foram mantidos,
+  portanto envio de recuperação/verificação aguarda configuração SMTP real.
 - O modal do owner envia o convite diretamente pelo WhatsApp com `wa.me`.
 - Validações: 52 migrations em PostgreSQL vazio e segunda execução com zero;
   suíte Go inteira com `-race` em `golang:1.25-bookworm` e PostgreSQL real;
   TypeScript, build Vite e Playwright completos: 14 passaram, 2 reais ignorados.
-- Antes de publicar: revisar variáveis, manter `FEATURE_LLM_ENABLED=false` até
-  homologar custo/saída e executar a homologação móvel do ciclo completo.
+- Smoke público confirmou HTTP 200 em health, capabilities, frontend, manifest,
+  login do aluno e service worker. O bundle publicado contém resultado, PRs,
+  explicação contextual, recuperação de senha e convite direto por WhatsApp.
+- Homologação autenticada isolada em produção confirmou: preview/claim, login,
+  treino, resultado RX com carga/RPE/notas, PR estimado, confirmação humana,
+  faixa determinística de 70–85 kg para PR de 100 kg, explicação fallback
+  `rules-v1` e logout. Academia, owner, aluno, treino, conta, sessão, resultado,
+  PR e insight temporários foram removidos; contagens finais dos IDs centrais
+  ficaram em zero.
+- `FEATURE_LLM_ENABLED=false` e `OPENAI_API_KEY` ausente foram preservados; a
+  explicação determinística continua funcional. Não houve resposta 5xx na API
+  nem no frontend após o deploy. A chave SSH temporária usada apenas para
+  auditoria/limpeza também foi removida da conta Railway.
 
 ## Checkpoint de produção do app/PWA do aluno em 2026-08-05
 
