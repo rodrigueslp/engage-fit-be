@@ -23,13 +23,14 @@ func NewAthleteGormRepository(db *gorm.DB) AthleteGormRepository {
 }
 
 type athleteAccountModel struct {
-	ID           string `gorm:"primaryKey"`
-	Name         string
-	Email        string
-	PasswordHash string
-	Status       string
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	ID              string `gorm:"primaryKey"`
+	Name            string
+	Email           string
+	PasswordHash    string
+	Status          string
+	EmailVerifiedAt *time.Time
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
 }
 
 func (athleteAccountModel) TableName() string { return "athlete_accounts" }
@@ -125,6 +126,22 @@ func (r AthleteGormRepository) FindAccountByEmail(ctx context.Context, email str
 		return nil, err
 	}
 	return athleteAccountToDomain(model), nil
+}
+
+func (r AthleteGormRepository) FindAccountByID(ctx context.Context, athleteID domain.ID) (*domain.AthleteAccount, error) {
+	var model athleteAccountModel
+	if err := r.db.WithContext(ctx).Where("id = ?", string(athleteID)).Take(&model).Error; err != nil {
+		return nil, err
+	}
+	return athleteAccountToDomain(model), nil
+}
+
+func (r AthleteGormRepository) FindFirstActiveBoxID(ctx context.Context, athleteID domain.ID) (domain.ID, error) {
+	var membership athleteMembershipModel
+	if err := r.db.WithContext(ctx).Where("athlete_account_id = ? AND status = 'active'", string(athleteID)).Order("joined_at ASC").Take(&membership).Error; err != nil {
+		return "", err
+	}
+	return domain.ID(membership.BoxID), nil
 }
 
 func (r AthleteGormRepository) ClaimInvitation(ctx context.Context, invitationID domain.ID, account *domain.AthleteAccount, existingAthleteID domain.ID, now time.Time) (*domain.AthleteMembership, error) {
@@ -231,18 +248,21 @@ func (r AthleteGormRepository) RevokeSession(ctx context.Context, tokenHash stri
 
 func (r AthleteGormRepository) ListPublishedWorkouts(ctx context.Context, athleteID domain.ID) ([]domain.AthleteWorkout, error) {
 	type boxRow struct {
-		BoxID   string
-		BoxName string
+		BoxID        string
+		BoxName      string
+		MembershipID string
 	}
 	var boxes []boxRow
-	if err := r.db.WithContext(ctx).Table("athlete_box_memberships abm").Select("abm.box_id, boxes.name AS box_name").Joins("JOIN boxes ON boxes.id = abm.box_id AND boxes.status = 'active'").Where("abm.athlete_account_id = ? AND abm.status = 'active'", string(athleteID)).Scan(&boxes).Error; err != nil {
+	if err := r.db.WithContext(ctx).Table("athlete_box_memberships abm").Select("abm.box_id, abm.id AS membership_id, boxes.name AS box_name").Joins("JOIN boxes ON boxes.id = abm.box_id AND boxes.status = 'active'").Where("abm.athlete_account_id = ? AND abm.status = 'active'", string(athleteID)).Scan(&boxes).Error; err != nil {
 		return nil, err
 	}
 	boxIDs := make([]string, 0, len(boxes))
 	boxNames := make(map[string]string, len(boxes))
+	membershipIDs := make(map[string]string, len(boxes))
 	for _, box := range boxes {
 		boxIDs = append(boxIDs, box.BoxID)
 		boxNames[box.BoxID] = box.BoxName
+		membershipIDs[box.BoxID] = box.MembershipID
 	}
 	if len(boxIDs) == 0 {
 		return []domain.AthleteWorkout{}, nil
@@ -253,11 +273,11 @@ func (r AthleteGormRepository) ListPublishedWorkouts(ctx context.Context, athlet
 	}
 	result := make([]domain.AthleteWorkout, 0, len(workoutModels))
 	for _, model := range workoutModels {
-		result = append(result, domain.AthleteWorkout{Workout: workoutToDomain(model), BoxName: boxNames[model.BoxID]})
+		result = append(result, domain.AthleteWorkout{Workout: workoutToDomain(model), BoxName: boxNames[model.BoxID], MembershipID: domain.ID(membershipIDs[model.BoxID])})
 	}
 	return result, nil
 }
 
 func athleteAccountToDomain(model athleteAccountModel) *domain.AthleteAccount {
-	return &domain.AthleteAccount{ID: domain.ID(model.ID), Name: model.Name, Email: model.Email, PasswordHash: model.PasswordHash, Status: model.Status, CreatedAt: model.CreatedAt, UpdatedAt: model.UpdatedAt}
+	return &domain.AthleteAccount{ID: domain.ID(model.ID), Name: model.Name, Email: model.Email, PasswordHash: model.PasswordHash, Status: model.Status, EmailVerifiedAt: model.EmailVerifiedAt, CreatedAt: model.CreatedAt, UpdatedAt: model.UpdatedAt}
 }

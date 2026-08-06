@@ -805,10 +805,29 @@ unicidade operacional de `students` permanece intacta e nenhuma heurística
 faz merge silencioso de pessoas. As sessões opacas do atleta duram 30 dias,
 usam cookies e CSRF próprios e não se confundem com a sessão do owner/coach.
 
-Rotas públicas: preview/claim do convite e login. Rotas autenticadas: perfil,
-treinos publicados dos boxes com membership ativo e logout. O frontend
-`#/athlete` é mobile-first e instalável como PWA; mantém a API fora do cache do
-service worker para reduzir risco de exposição de dados privados após logout.
+Rotas públicas: preview/claim do convite, login, solicitação/conclusão de
+recuperação de senha e confirmação de e-mail. Rotas autenticadas: perfil,
+treinos publicados, resultados, PRs, explicação contextual e logout.
+
+`athlete_workout_results` guarda um diário flexível por treino em JSONB, com
+escala, scores por bloco/movimento, RPE e notas. O upsert recalcula PRs a partir
+do histórico inteiro afetado, portanto editar o resultado de origem não deixa
+uma melhor marca obsoleta. `athlete_personal_records` distingue `estimated` de
+`confirmed`; somente recordes confirmados entram em faixas pessoais de carga.
+
+Pacing e referências são determinísticos (`rules-v1`). A explicação LLM é
+opcional e recebe esses cálculos como limite factual; falha ou feature
+desligada mantém uma resposta determinística. O cache
+`athlete_workout_insights` usa hash do treino + contexto pessoal para evitar
+chamadas repetidas com a mesma entrada.
+
+Tokens de `verify_email` e `reset_password` são opacos, persistidos apenas como
+SHA-256, de uso único e expiram. A redefinição revoga todas as sessões abertas.
+O envio usa o SMTP do primeiro box ativo e `PUBLIC_WEB_URL` para montar o link.
+
+O frontend `#/athlete` é mobile-first, permite separar múltiplos boxes e é
+instalável como PWA; mantém a API fora do cache do service worker para reduzir
+risco de exposição de dados privados após logout.
 
 ## 14. Automações, concorrência e idempotência
 

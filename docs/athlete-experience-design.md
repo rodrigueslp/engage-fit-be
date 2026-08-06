@@ -1,6 +1,6 @@
 # Experiência do aluno — direção de produto e arquitetura
 
-Estado: MVP navegável implementado em 2026-08-05.
+Estado: ciclo completo implementado localmente em 2026-08-06; ainda não publicado.
 
 ## Princípios
 
@@ -79,12 +79,26 @@ fluxos reversíveis de merge continuam como endurecimento futuro.
 - `manifest.webmanifest` e service worker com cache conservador apenas do shell;
   chamadas de API permanecem network-only para não exibir treino privado
   obsoleto após logout.
+- seleção explícita do box quando a conta possui mais de um vínculo;
+- detalhe de treino e registro flexível por treino/bloco com RX, scaled ou
+  adaptado, tempo, rounds/reps, carga, distância, calorias, conclusão, RPE e
+  notas pessoais;
+- histórico pessoal combina treino publicado e resultado efetivamente salvo;
+- cargas, repetições e tempos elegíveis geram possíveis PRs; o atleta confirma
+  quais são oficiais e uma edição do resultado recalcula a melhor marca;
+- pacing e faixas de carga usam regras determinísticas e somente PRs
+  confirmados. Faixas são referência explicável, nunca prescrição;
+- explicação contextual sob demanda usa OpenAI quando `FEATURE_LLM_ENABLED` e
+  credencial estão ativos. A entrada contém o cálculo determinístico e a saída
+  fica em cache por atleta/treino/hash; qualquer falha usa explicação `rules-v1`;
+- recuperação de senha invalida sessões anteriores, e verificação de e-mail usa
+  tokens opacos, de uso único e validade curta enviados pela configuração SMTP
+  do primeiro box ativo;
+- convite do owner possui ação direta `wa.me`, além de cópia do link.
 
-## Próximos recortes
+## Endurecimentos posteriores
 
-1. Registro de resultado e modelo de PRs confirmados/estimados.
-2. Verificação adicional de identidade (e-mail/passkey) e recuperação de senha.
-3. Compartilhamento do convite diretamente pelo WhatsApp, sem exigir copiar o
-   link manualmente.
-4. Enriquecimento personalizado inspirado no WodScope, usando primeiro
-   cálculos determinísticos e LLM para explicação contextual.
+- passkeys e segundo fator são evolução opcional; e-mail verificado e
+  recuperação já estão cobertos;
+- notificações push e modo offline de dados privados permanecem fora do escopo
+  por exigirem política própria de consentimento, revogação e cache seguro.

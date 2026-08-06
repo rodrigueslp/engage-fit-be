@@ -174,7 +174,11 @@ func main() {
 	messagingAdminUseCases := platformadmin.NewMessagingAdminUseCases(boxRepository, whatsappSettingsResolver, messagingGovernanceRepository)
 	tenantMessagingUsageUseCase := platformadmin.NewGetTenantMessagingUsageUseCase(messagingGovernanceRepository)
 	emailGateway := email.NewSMTPGateway(cfg.AppEnv, cfg.EmailAllowRealSend, cfg.EmailDevRecipientEmail)
+	athleteService.WithMailer(athleteapp.NewAccountMailer(athleteRepository, emailSettingsRepository, emailGateway, cfg.PublicWebURL))
 	llmGenerator := llm.NewOpenAIGenerator(cfg.OpenAIAPIKey, cfg.OpenAIModel, cfg.OpenAITimeoutSeconds)
+	if cfg.FeatureLLMEnabled {
+		athleteService.WithExplainer(llmGenerator)
+	}
 	checkinParser := parsers.NewCheckinParser()
 	billingGateway := billingadapter.NewAsaasClient(cfg.AsaasBaseURL, cfg.AsaasAPIKey, time.Duration(cfg.AsaasTimeoutSeconds)*time.Second)
 	billingService := billingapp.NewService(billingRepository, billingGateway, messagingGovernanceRepository, cfg.FeatureBillingEnabled, cfg.AsaasWebhookToken)

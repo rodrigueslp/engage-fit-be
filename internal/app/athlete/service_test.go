@@ -30,6 +30,12 @@ func (s *athleteRepositoryStub) FindInvitationByTokenHash(context.Context, strin
 func (s *athleteRepositoryStub) FindAccountByEmail(context.Context, string) (*domain.AthleteAccount, error) {
 	return s.account, s.accountErr
 }
+func (s *athleteRepositoryStub) FindAccountByID(context.Context, domain.ID) (*domain.AthleteAccount, error) {
+	return s.account, s.accountErr
+}
+func (s *athleteRepositoryStub) FindFirstActiveBoxID(context.Context, domain.ID) (domain.ID, error) {
+	return "box-1", nil
+}
 func (s *athleteRepositoryStub) ClaimInvitation(_ context.Context, _ domain.ID, account *domain.AthleteAccount, athleteID domain.ID, _ time.Time) (*domain.AthleteMembership, error) {
 	s.claimedAccount, s.claimedID = account, athleteID
 	if account != nil {
@@ -50,6 +56,39 @@ func (s *athleteRepositoryStub) FindContextBySessionHash(context.Context, string
 func (s *athleteRepositoryStub) RevokeSession(context.Context, string, time.Time) error { return nil }
 func (s *athleteRepositoryStub) ListPublishedWorkouts(context.Context, domain.ID) ([]domain.AthleteWorkout, error) {
 	return nil, nil
+}
+func (s *athleteRepositoryStub) FindPublishedWorkout(context.Context, domain.ID, domain.ID) (*domain.AthleteWorkout, error) {
+	return nil, errors.New("not implemented")
+}
+func (s *athleteRepositoryStub) UpsertWorkoutResult(context.Context, *domain.AthleteWorkoutResult) ([]domain.AthletePersonalRecord, error) {
+	return nil, nil
+}
+func (s *athleteRepositoryStub) ListWorkoutResults(context.Context, domain.ID) ([]domain.AthleteWorkoutResult, error) {
+	return nil, nil
+}
+func (s *athleteRepositoryStub) ListPersonalRecords(context.Context, domain.ID) ([]domain.AthletePersonalRecord, error) {
+	return nil, nil
+}
+func (s *athleteRepositoryStub) ConfirmPersonalRecord(context.Context, domain.ID, domain.ID, time.Time) error {
+	return nil
+}
+func (s *athleteRepositoryStub) SaveAccountToken(context.Context, *domain.AthleteAccountToken) error {
+	return nil
+}
+func (s *athleteRepositoryStub) ConsumeAccountToken(context.Context, string, string, time.Time) (*domain.AthleteAccount, error) {
+	return s.account, s.accountErr
+}
+func (s *athleteRepositoryStub) UpdateAthletePassword(context.Context, domain.ID, string, time.Time) error {
+	return nil
+}
+func (s *athleteRepositoryStub) VerifyAthleteEmail(context.Context, domain.ID, time.Time) error {
+	return nil
+}
+func (s *athleteRepositoryStub) FindWorkoutInsight(context.Context, domain.ID, domain.ID, string) (*domain.AthleteWorkoutInsight, error) {
+	return nil, errors.New("not found")
+}
+func (s *athleteRepositoryStub) SaveWorkoutInsight(context.Context, *domain.AthleteWorkoutInsight) error {
+	return nil
 }
 
 type studentRepositoryStub struct{ student domain.Student }

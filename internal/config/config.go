@@ -37,6 +37,7 @@ type Config struct {
 	AuthCookieSameSite                string
 	AuthSessionMaxAgeSeconds          int
 	CORSAllowedOrigins                string
+	PublicWebURL                      string
 	PlatformAdminName                 string
 	PlatformAdminEmail                string
 	PlatformAdminPassword             string
@@ -117,6 +118,7 @@ func Load() Config {
 		AuthCookieSameSite:                getEnv("AUTH_COOKIE_SAME_SITE", "lax"),
 		AuthSessionMaxAgeSeconds:          getEnvInt("AUTH_SESSION_MAX_AGE_SECONDS", 86400),
 		CORSAllowedOrigins:                getEnv("CORS_ALLOWED_ORIGINS", ""),
+		PublicWebURL:                      getEnv("PUBLIC_WEB_URL", "http://localhost:5173"),
 		PlatformAdminName:                 getEnv("PLATFORM_ADMIN_NAME", "Administrador EngageFit"),
 		PlatformAdminEmail:                getEnv("PLATFORM_ADMIN_EMAIL", ""),
 		PlatformAdminPassword:             getEnv("PLATFORM_ADMIN_PASSWORD", ""),

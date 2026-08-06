@@ -4,7 +4,29 @@ Manual canônico de arquitetura e negócio: `docs/system-design.md`.
 
 Guia operacional consolidado: `docs/application-readiness-guide.md`.
 
-Atualizado em: 2026-08-05 (MVP do aluno publicado em produção)
+Atualizado em: 2026-08-06 (experiência completa do aluno implementada localmente; ainda não publicada)
+
+## Checkpoint local da experiência completa do aluno em 2026-08-06
+
+- Implementação concluída nos worktrees, sem commit/deploy: migration `052`,
+  backend e frontend ainda precisam passar pelo fluxo normal de publicação.
+- O aluno registra resultado por treino/bloco: RX/scaled/adaptado, tempo,
+  rounds/reps, carga, distância, calorias, conclusão, RPE e notas.
+- Histórico agora diferencia treino publicado de treino realizado e abre o
+  detalhe completo. Contas com vários boxes possuem seletor de contexto.
+- Resultados geram possíveis PRs de carga, reps e tempo. A confirmação é sempre
+  humana; editar o resultado de origem recalcula o PR pelo histórico.
+- Pacing e faixas de carga são determinísticos, explicáveis e usam apenas PRs
+  confirmados. Explicação OpenAI é sob demanda, limitada pelos cálculos e tem
+  cache/fallback `rules-v1`.
+- Recuperação de senha, revogação de sessões, verificação de e-mail e tokens de
+  uso único foram adicionados. Requer `PUBLIC_WEB_URL` e SMTP habilitado no box.
+- O modal do owner envia o convite diretamente pelo WhatsApp com `wa.me`.
+- Validações: 52 migrations em PostgreSQL vazio e segunda execução com zero;
+  suíte Go inteira com `-race` em `golang:1.25-bookworm` e PostgreSQL real;
+  TypeScript, build Vite e Playwright completos: 14 passaram, 2 reais ignorados.
+- Antes de publicar: revisar variáveis, manter `FEATURE_LLM_ENABLED=false` até
+  homologar custo/saída e executar a homologação móvel do ciclo completo.
 
 ## Checkpoint de produção do app/PWA do aluno em 2026-08-05
 

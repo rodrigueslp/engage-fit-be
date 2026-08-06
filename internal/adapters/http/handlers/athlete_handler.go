@@ -122,9 +122,144 @@ func (h AthleteHandler) Workouts(c *gin.Context) {
 	}
 	response := make([]dto.AthleteWorkoutResponse, 0, len(items))
 	for _, item := range items {
-		response = append(response, dto.AthleteWorkoutResponse{WorkoutResponse: workoutResponse(item.Workout), BoxName: item.BoxName})
+		response = append(response, dto.AthleteWorkoutResponse{WorkoutResponse: workoutResponse(item.Workout), BoxName: item.BoxName, MembershipID: string(item.MembershipID), Result: item.Result, Personalization: item.Personalization})
 	}
 	c.JSON(http.StatusOK, response)
+}
+
+func (h AthleteHandler) SaveResult(c *gin.Context) {
+	athleteID, err := middleware.AthleteID(c)
+	if err != nil {
+		respondUnauthorized(c)
+		return
+	}
+	var request dto.SaveAthleteWorkoutResultRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		respondBadRequest(c)
+		return
+	}
+	performedAt := time.Time{}
+	if request.PerformedAt != "" {
+		performedAt, err = time.Parse(time.RFC3339, request.PerformedAt)
+		if err != nil {
+			respondBadRequest(c)
+			return
+		}
+	}
+	entries := make([]domain.AthleteResultEntry, 0, len(request.Entries))
+	for _, item := range request.Entries {
+		entries = append(entries, domain.AthleteResultEntry{SectionIndex: item.SectionIndex, SectionType: item.SectionType, Movement: item.Movement, ScoreType: item.ScoreType, TimeSeconds: item.TimeSeconds, Rounds: item.Rounds, Repetitions: item.Repetitions, LoadKG: item.LoadKG, DistanceM: item.DistanceMeters, Calories: item.Calories, Completed: item.Completed})
+	}
+	output, err := h.service.SaveResult(c.Request.Context(), athleteID, athlete.ResultInput{WorkoutID: domain.ID(c.Param("id")), Scale: request.Scale, Entries: entries, RPE: request.RPE, Notes: request.Notes, PerformedAt: performedAt})
+	if errors.Is(err, athlete.ErrInvalidInput) {
+		respondPublicError(c, http.StatusBadRequest, "athlete_result_invalid", "revise a escala e os valores informados")
+		return
+	}
+	if err != nil {
+		respondError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"result": output.Result, "possible_records": output.PossibleRecords})
+}
+
+func (h AthleteHandler) Results(c *gin.Context) {
+	athleteID, err := middleware.AthleteID(c)
+	if err != nil {
+		respondUnauthorized(c)
+		return
+	}
+	items, err := h.service.Results(c.Request.Context(), athleteID)
+	if err != nil {
+		respondError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, items)
+}
+func (h AthleteHandler) PersonalRecords(c *gin.Context) {
+	athleteID, err := middleware.AthleteID(c)
+	if err != nil {
+		respondUnauthorized(c)
+		return
+	}
+	items, err := h.service.PersonalRecords(c.Request.Context(), athleteID)
+	if err != nil {
+		respondError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, items)
+}
+func (h AthleteHandler) ExplainWorkout(c *gin.Context) {
+	athleteID, err := middleware.AthleteID(c)
+	if err != nil {
+		respondUnauthorized(c)
+		return
+	}
+	item, err := h.service.ExplainWorkout(c.Request.Context(), athleteID, domain.ID(c.Param("id")))
+	if errors.Is(err, athlete.ErrInvalidInput) {
+		respondPublicError(c, http.StatusNotFound, "athlete_workout_not_found", "treino não encontrado")
+		return
+	}
+	if err != nil {
+		respondError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, item)
+}
+func (h AthleteHandler) ConfirmPersonalRecord(c *gin.Context) {
+	athleteID, err := middleware.AthleteID(c)
+	if err != nil {
+		respondUnauthorized(c)
+		return
+	}
+	if err := h.service.ConfirmPersonalRecord(c.Request.Context(), athleteID, domain.ID(c.Param("id"))); err != nil {
+		respondError(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
+func (h AthleteHandler) RequestPasswordReset(c *gin.Context) {
+	var request dto.AthletePasswordResetRequest
+	if c.ShouldBindJSON(&request) != nil {
+		respondBadRequest(c)
+		return
+	}
+	if err := h.service.RequestPasswordReset(c.Request.Context(), request.Email); err != nil {
+		respondError(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+func (h AthleteHandler) ResetPassword(c *gin.Context) {
+	var request dto.AthletePasswordResetConfirmRequest
+	if c.ShouldBindJSON(&request) != nil {
+		respondBadRequest(c)
+		return
+	}
+	if err := h.service.ResetPassword(c.Request.Context(), c.Param("token"), request.Password); err != nil {
+		respondPublicError(c, http.StatusBadRequest, "athlete_reset_invalid", "link inválido ou expirado, ou senha fora dos requisitos")
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+func (h AthleteHandler) RequestEmailVerification(c *gin.Context) {
+	athleteID, err := middleware.AthleteID(c)
+	if err != nil {
+		respondUnauthorized(c)
+		return
+	}
+	if err := h.service.RequestEmailVerification(c.Request.Context(), athleteID); err != nil {
+		respondError(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+func (h AthleteHandler) VerifyEmail(c *gin.Context) {
+	if err := h.service.VerifyEmail(c.Request.Context(), c.Param("token")); err != nil {
+		respondPublicError(c, http.StatusBadRequest, "athlete_verification_invalid", "link inválido ou expirado")
+		return
+	}
+	c.Status(http.StatusNoContent)
 }
 
 func (h AthleteHandler) Logout(c *gin.Context) {
@@ -141,5 +276,5 @@ func athleteMeResponse(athleteContext domain.AthleteContext) dto.AthleteMeRespon
 	for _, membership := range athleteContext.Memberships {
 		memberships = append(memberships, dto.AthleteMembershipResponse{ID: string(membership.ID), BoxID: string(membership.BoxID), BoxName: membership.BoxName, JoinedAt: membership.JoinedAt.Format(time.RFC3339)})
 	}
-	return dto.AthleteMeResponse{ID: string(athleteContext.Account.ID), Name: athleteContext.Account.Name, Email: athleteContext.Account.Email, Memberships: memberships}
+	return dto.AthleteMeResponse{ID: string(athleteContext.Account.ID), Name: athleteContext.Account.Name, Email: athleteContext.Account.Email, Memberships: memberships, EmailVerified: athleteContext.Account.EmailVerifiedAt != nil}
 }

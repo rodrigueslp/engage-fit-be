@@ -115,6 +115,48 @@ func (g OpenAIGenerator) GenerateWorkoutMessage(ctx context.Context, input servi
 	return &services.WorkoutMessageGenerationOutput{Provider: "openai", Model: g.model, Body: strings.TrimSpace(text)}, nil
 }
 
+func (g OpenAIGenerator) GenerateAthleteExplanation(ctx context.Context, input services.AthleteExplanationInput) (*services.AthleteExplanationOutput, error) {
+	if strings.TrimSpace(g.apiKey) == "" {
+		return nil, errors.New("OPENAI_API_KEY is not configured")
+	}
+	system := strings.Join([]string{
+		"Você explica treinos funcionais em português do Brasil para o próprio atleta.",
+		"Use somente o treino e os cálculos determinísticos fornecidos; nunca invente PR, carga, lesão ou capacidade.",
+		"Explique intenção, estratégia e como interpretar as referências pessoais em linguagem simples.",
+		"Não faça diagnóstico nem prescrição médica. Reforce que dor, adaptação e escolha de carga devem ser discutidas com o coach.",
+		"Responda em até 900 caracteres, sem markdown e sem repetir o treino inteiro.",
+	}, " ")
+	user := fmt.Sprintf("Atleta: %s\nAcademia: %s\nTreino:\n%s\nContexto calculado pelo sistema:\n%s", input.AthleteName, input.BoxName, input.WorkoutText, input.DeterministicContext)
+	payload := map[string]any{"model": g.model, "input": []map[string]string{{"role": "system", "content": system}, {"role": "user", "content": user}}, "max_output_tokens": 400}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://api.openai.com/v1/responses", bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+g.apiKey)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := g.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	responseBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("openai athlete explanation failed: status=%d", resp.StatusCode)
+	}
+	text := strings.TrimSpace(responseText(responseBody))
+	if text == "" {
+		return nil, errors.New("openai response did not include generated text")
+	}
+	return &services.AthleteExplanationOutput{Provider: "openai", Model: g.model, Body: text}, nil
+}
+
 func responseText(body []byte) string {
 	var parsed struct {
 		OutputText string `json:"output_text"`
