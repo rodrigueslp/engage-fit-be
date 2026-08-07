@@ -1217,6 +1217,21 @@ AUTOMATION_STALE_RUN_MINUTES=120
 AUTOMATION_CATCHUP_WINDOW_MINUTES=15
 ```
 
+## Validacao de origem na importacao — 2026-08-07
+
+- Foi adicionada validacao no backend para impedir que um arquivo Wellhub seja
+  importado como TotalPass ou vice-versa.
+- As assinaturas usadas foram conferidas nos arquivos reais:
+  `/home/luiz-paulo/Documentos/wellhub-07-08.xlsx` (Wellhub: `Visitante` e
+  `ID do Wellhub`) e `/home/luiz-paulo/Documentos/07-08-2026_tokens.xlsx`
+  (TotalPass: `Colaborador` e `Validado em`).
+- Em caso de origem trocada, a API retorna HTTP 400 com o código
+  `invalid_import_source` e nenhum registro é processado.
+- O frontend não precisou de alteração: a tela de importações já exibe erros
+  retornados pela API.
+- Testes: `go test ./...` passou no backend.
+- Commit publicado no backend: `77703bf` (`feat: validate import source format`).
+
 - `FEATURE_AUTOMATION_ENABLED` expoe a tela e os endpoints.
 - `AUTOMATION_WORKER_ENABLED` liga execucao agendada; deve continuar falso no primeiro teste.
 - O envio manual continua disponivel pela rotina pausada.
