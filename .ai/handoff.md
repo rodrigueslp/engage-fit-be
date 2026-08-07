@@ -2390,6 +2390,46 @@ Próximo recorte recomendado: resultados do treino e PRs confirmados/estimados,
 seguido do enriquecimento determinístico + explicação por IA inspirado no
 WodScope. Antes de produção, implementar recuperação/verificação de conta.
 
+## Atualizacao operacional — SMTP Resend, monitoramento e marca do aluno (2026-08-07)
+
+### SMTP Resend em producao
+
+- Dominio verificado no Resend: `send.engagefit.com.br`, com MX, SPF e DKIM
+  publicados via GoDaddy; regiao escolhida: Sao Paulo (`sa-east-1`).
+- Configuracao SMTP ativa no `email_settings` do box de producao:
+  `smtp.resend.com`, porta `2587` (STARTTLS), usuario `resend`, remetente
+  `notificacoes@send.engagefit.com.br`.
+- A porta `587` ficava pendurada a partir do Railway; logs de rede mostraram
+  conexoes parciais para o IP do Resend. A porta alternativa `2587` concluiu o
+  envio em aproximadamente 298 ms.
+- Produção está com `FEATURE_EMAIL_ENABLED=true` e
+  `EMAIL_ALLOW_REAL_SEND=true`. Nao registrar API keys ou senhas neste
+  handoff.
+- O e-mail da conta de atleta de Luiz Paulo foi corrigido de
+  `luizpaulo.debvr@gmail.com` para `luizpaulo.devbr@gmail.com`; um novo pedido
+  de recuperacao retornou HTTP 204 apos a troca da porta.
+- O endpoint de recuperacao mantem resposta generica e atualmente nao expõe
+  falhas do gateway no HTTP; para diagnostico, consultar os logs de rede do
+  Railway e a tabela Emails do Resend.
+
+### Monitoramento Grafana/Railway
+
+- O alerta do Synthetic Monitoring em 2026-08-06 foi causado por timeout do
+  probe de Sao Paulo ao IP `69.46.46.73`: `context deadline exceeded` no limite
+  de 5 segundos.
+- Nao foi DNS, erro 5xx ou falha da API: requisicoes que chegaram ao Railway
+  responderam 200; houve dois minutos sem requisicao na borda.
+- Recomendacao pendente: ajustar o check para timeout de 10 s, retry e alerta
+  somente apos tres falhas consecutivas.
+
+### Logo oficial na experiencia do aluno
+
+- A marca que usava icone de raio foi substituida pela imagem oficial
+  `/engagefit-logo-cropped.png` na autenticacao, splash e cabecalho apos login.
+- Frontend publicado no commit `b3a2162` do repositorio `engage-fit-fe`; build e
+  TypeScript passaram. Apos atualizar o navegador com `Ctrl+Shift+R`, a logo
+  oficial deve aparecer em `#/athlete`.
+
 ## Orientacao para iniciar novo chat
 
 Mensagem sugerida:
