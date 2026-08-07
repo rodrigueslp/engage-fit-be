@@ -102,6 +102,9 @@ func parseRows(rows [][]string, source domain.Source) ([]services.ParsedCheckin,
 	if headerIndex < 0 {
 		return []services.ParsedCheckin{}, nil
 	}
+	if err := validateSourceHeaders(rows[headerIndex], source); err != nil {
+		return nil, err
+	}
 
 	result := make([]services.ParsedCheckin, 0, len(rows)-headerIndex-1)
 
@@ -144,6 +147,19 @@ func parseRows(rows [][]string, source domain.Source) ([]services.ParsedCheckin,
 	}
 
 	return result, nil
+}
+
+func validateSourceHeaders(headers []string, source domain.Source) error {
+	wellhubExport := hasHeaders(headers, "visitante", "iddowellhub")
+	totalPassExport := hasHeaders(headers, "colaborador", "validadoem")
+
+	if source == domain.SourceWellhub && totalPassExport && !wellhubExport {
+		return domain.InvalidImportSourceError{Expected: source, Detected: domain.SourceTotalPass}
+	}
+	if source == domain.SourceTotalPass && wellhubExport && !totalPassExport {
+		return domain.InvalidImportSourceError{Expected: source, Detected: domain.SourceWellhub}
+	}
+	return nil
 }
 
 func findHeaderRow(rows [][]string, source domain.Source) (int, map[string]int) {

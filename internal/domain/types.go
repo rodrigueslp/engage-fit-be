@@ -1,6 +1,18 @@
 package domain
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
+
+type InvalidImportSourceError struct {
+	Expected Source
+	Detected Source
+}
+
+func (e InvalidImportSourceError) Error() string {
+	return fmt.Sprintf("arquivo identificado como %s, mas a origem selecionada foi %s", e.Detected, e.Expected)
+}
 
 type ID string
 

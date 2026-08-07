@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"boxengage/backend/internal/adapters/http/apiresponse"
+	"boxengage/backend/internal/domain"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -16,6 +17,11 @@ func notImplemented(c *gin.Context, resource string) {
 
 func respondError(c *gin.Context, err error) {
 	_ = c.Error(err)
+	var invalidImportSource domain.InvalidImportSourceError
+	if errors.As(err, &invalidImportSource) {
+		apiresponse.Error(c, http.StatusBadRequest, "invalid_import_source", "o arquivo nao corresponde a origem selecionada")
+		return
+	}
 	status := http.StatusInternalServerError
 	message := "internal server error"
 

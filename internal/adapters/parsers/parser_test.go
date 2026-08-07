@@ -2,6 +2,7 @@ package parsers
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -93,5 +94,25 @@ func TestCheckinParserParsesWellhubExport(t *testing.T) {
 	}
 	if result[0].CheckinTime == nil || result[0].CheckinTime.Format("15:04") != "16:54" {
 		t.Fatal("expected Wellhub time 16:54")
+	}
+}
+
+func TestCheckinParserRejectsTotalPassExportSelectedAsWellhub(t *testing.T) {
+	input := strings.NewReader("ID,Código,Nome,Plano da academia,Colaborador,Repasse,Validado em\n535602390,T00MYU,crossfit alados,Crossfit,João Paulo da Rocha,14,07/08/2026 12:23:45\n")
+
+	_, err := NewCheckinParser().Parse(context.Background(), input, domain.SourceWellhub, "totalpass.csv")
+	var sourceError domain.InvalidImportSourceError
+	if !errors.As(err, &sourceError) || sourceError.Detected != domain.SourceTotalPass {
+		t.Fatalf("expected TotalPass source mismatch, got %v", err)
+	}
+}
+
+func TestCheckinParserRejectsWellhubExportSelectedAsTotalPass(t *testing.T) {
+	input := strings.NewReader("Data,Hora,ID da unidade,Unidade,Visitante,ID do Wellhub,Produto\n2026-08-06,16:54,84de7bab,CrossFit Alados,Marília Damacena da Silva,3403206168288,Esportes\n")
+
+	_, err := NewCheckinParser().Parse(context.Background(), input, domain.SourceTotalPass, "wellhub.csv")
+	var sourceError domain.InvalidImportSourceError
+	if !errors.As(err, &sourceError) || sourceError.Detected != domain.SourceWellhub {
+		t.Fatalf("expected Wellhub source mismatch, got %v", err)
 	}
 }
