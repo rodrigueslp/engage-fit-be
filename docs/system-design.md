@@ -1,6 +1,6 @@
 # EngageFit — manual de engenharia e design do sistema
 
-Atualizado em: 2026-08-03
+Atualizado em: 2026-08-11
 
 Status: documento canônico da arquitetura atual.
 
@@ -40,9 +40,20 @@ Para Wellhub e TotalPass, o produto ingere arquivos CSV/XLSX. Para mensalistas, 
 
 ## 3. Atores, tenancy e responsabilidades
 
-### 3.1 Academia, ou `Box`
+### 3.1 Organização e academia, ou `Box`
 
-`Box` é o tenant. Quase todo dado de negócio pertence direta ou indiretamente a um `box_id`: alunos, check-ins, campanhas, configurações e comunicações.
+`Organization` representa a operação proprietária acima das unidades. `Box`
+continua representando a academia/unidade física e, nesta fase de migração,
+permanece como o tenant operacional. Quase todo dado de negócio ainda pertence
+direta ou indiretamente a um `box_id`: alunos, check-ins, campanhas,
+configurações e comunicações.
+
+Cada box pertence obrigatoriamente a uma organização. A migration `053` criou
+uma organização determinística para cada box preexistente, usando o mesmo ID e
+nome, sem alterar sessão, autorização ou rotas. Novos boxes criados pelo
+repositório também criam a organização na mesma transação. O suporte efetivo a
+várias unidades por usuário virá depois; pertencer à mesma organização ainda
+não concede acesso a outro `box_id`.
 
 Cada box configura:
 
@@ -296,6 +307,7 @@ Dependências validadas no startup:
 
 ```mermaid
 erDiagram
+    ORGANIZATIONS ||--|{ BOXES : groups
     BOXES ||--o{ USERS : owns
     BOXES ||--o{ STUDENTS : contains
     BOXES ||--o{ IMPORT_HISTORIES : receives
@@ -319,7 +331,7 @@ erDiagram
 
 | Grupo | Tabelas | Papel |
 |---|---|---|
-| Tenancy/acesso | `boxes`, `users` | tenant, owner, coach, platform admin e versão de autenticação |
+| Tenancy/acesso | `organizations`, `boxes`, `users` | organização proprietária, unidade/tenant operacional, owner, coach, platform admin e versão de autenticação |
 | Ingestão | `students`, `import_histories`, `checkins`, `checkin_ingestion_sources`, `checkin_ingestion_batches` | identidade importada, frequência e entradas recorrentes idempotentes |
 | Campanhas | `campaigns`, `campaign_goals`, `campaign_progresses` | período, meta por origem e snapshot de progresso |
 | Brindes | `rewards`, `reward_deliveries` | catálogo e entrega por aluno elegível |
@@ -335,6 +347,8 @@ erDiagram
 ### 9.3 Invariantes relevantes do banco
 
 - UUID é usado como identificador em todas as entidades;
+- todo box referencia exatamente uma organização por `organization_id`;
+- o backfill inicial preserva uma relação determinística `organization.id = box.id`; novos boxes isolados seguem a mesma regra até existir fluxo explícito de criação de segunda unidade;
 - campaign goal é único por `(campaign_id, source)`;
 - campaign progress é único por `(campaign_id, student_id)`;
 - reward delivery é única por `(reward_id, student_id)`;
@@ -1260,6 +1274,7 @@ Hoje há lógica de audiência semelhante em três packages. Mudanças devem ser
 | worker no processo da API | operação simples | acoplamento de recursos e deploy |
 | rate limit em memória | zero infraestrutura extra | não é global entre réplicas |
 | sem RLS | código/repositories mais simples | isolamento depende de disciplina/testes |
+| `Organization` adicionada sem trocar o tenant da sessão | evolução aditiva e sem regressão dos fluxos atuais | multiunidade ainda exige memberships, allowlist e seleção explícita de contexto |
 | preservar check-ins após anonimização | métricas históricas | dado comportamental continua armazenado anonimamente |
 | frontend sem state/router libs | pequena superfície | mais código manual e menos cache |
 
@@ -1278,6 +1293,7 @@ Hoje há lógica de audiência semelhante em três packages. Mudanças devem ser
 
 ### Produto/qualidade
 
+- concluir `SPEC-001-B/C`: modalidades, espaços, memberships e acesso multiunidade; até lá `users.box_id` continua sendo o único contexto autorizado;
 - recuperação de senha por token/e-mail;
 - paginação e filtros server-side;
 - histórico e conversão de brindes/mensagens;

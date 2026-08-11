@@ -4,6 +4,7 @@ import "time"
 
 type Box struct {
 	ID                      ID
+	OrganizationID          ID
 	Name                    string
 	Status                  BoxStatus
 	StatusReason            string

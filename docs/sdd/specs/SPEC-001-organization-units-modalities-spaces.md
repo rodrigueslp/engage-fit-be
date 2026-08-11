@@ -1,7 +1,7 @@
 # SPEC-001 — Organização, unidades, modalidades e espaços
 
-- Status: `ready`
-- Versão: `0.2`
+- Status: `implementing`
+- Versão: `0.3`
 - Depende de: `ARCH-001`
 - Bloqueia: `SPEC-002`, `SPEC-003`, agenda e permissões multiunidade
 
@@ -236,6 +236,8 @@ com o mesmo nome. Ajustes de nomenclatura são feitos depois pelo owner.
 
 ### Slice `001-A` — Fundação compatível
 
+Status: `validated locally` em 2026-08-11.
+
 - criar `organizations`;
 - adicionar `boxes.organization_id`;
 - criar uma organização determinística para cada box existente;
@@ -244,6 +246,11 @@ com o mesmo nome. Ajustes de nomenclatura são feitos depois pelo owner.
 - preservar login, rotas, autorização e interface atuais;
 - não criar endpoints nem frontend novos;
 - validar backfill, integridade e criação transacional de box + owner.
+
+Evidências locais: migrations `001–053` em banco vazio, segunda execução sem
+migrations pendentes, backfill transacional sobre schema `052`, suíte Go com
+PostgreSQL e testes de criação/rollback atômico. A validação de CI permanece
+necessária antes do merge.
 
 ### Slice `001-B` — Modalidades e espaços
 

@@ -2,8 +2,20 @@ package models
 
 import "time"
 
+type OrganizationModel struct {
+	ID              string `gorm:"primaryKey"`
+	Name            string
+	Status          string `gorm:"default:active"`
+	StatusReason    string
+	StatusChangedAt *time.Time
+	StatusChangedBy *string
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+}
+
 type BoxModel struct {
-	ID                      string `gorm:"primaryKey"`
+	ID                      string  `gorm:"primaryKey"`
+	OrganizationID          *string `gorm:"index"`
 	Name                    string
 	Status                  string `gorm:"default:active"`
 	StatusReason            string

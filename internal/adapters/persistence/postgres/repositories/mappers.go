@@ -17,6 +17,10 @@ func boxToDomain(model models.BoxModel) domain.Box {
 	if model.StatusChangedBy != nil {
 		statusChangedBy = domainID(*model.StatusChangedBy)
 	}
+	organizationID := domain.ID("")
+	if model.OrganizationID != nil {
+		organizationID = domainID(*model.OrganizationID)
+	}
 	riskInactiveDays := model.RiskInactiveDays
 	if riskInactiveDays <= 0 {
 		riskInactiveDays = 7
@@ -27,6 +31,7 @@ func boxToDomain(model models.BoxModel) domain.Box {
 	}
 	return domain.Box{
 		ID:                      domainID(model.ID),
+		OrganizationID:          organizationID,
 		Name:                    model.Name,
 		Status:                  status,
 		StatusReason:            model.StatusReason,
@@ -50,6 +55,11 @@ func boxToModel(box domain.Box) models.BoxModel {
 		value := stringID(box.StatusChangedBy)
 		statusChangedBy = &value
 	}
+	var organizationID *string
+	if box.OrganizationID != "" {
+		value := stringID(box.OrganizationID)
+		organizationID = &value
+	}
 	riskInactiveDays := box.RiskInactiveDays
 	if riskInactiveDays <= 0 {
 		riskInactiveDays = 7
@@ -60,6 +70,7 @@ func boxToModel(box domain.Box) models.BoxModel {
 	}
 	return models.BoxModel{
 		ID:                      stringID(box.ID),
+		OrganizationID:          organizationID,
 		Name:                    box.Name,
 		Status:                  string(status),
 		StatusReason:            box.StatusReason,
@@ -73,6 +84,24 @@ func boxToModel(box domain.Box) models.BoxModel {
 		RetentionBaselineAt:     box.RetentionBaselineAt,
 		CreatedAt:               box.CreatedAt,
 		UpdatedAt:               box.UpdatedAt,
+	}
+}
+
+func organizationToModel(organization domain.Organization) models.OrganizationModel {
+	var statusChangedBy *string
+	if organization.StatusChangedBy != "" {
+		value := stringID(organization.StatusChangedBy)
+		statusChangedBy = &value
+	}
+	return models.OrganizationModel{
+		ID:              stringID(organization.ID),
+		Name:            organization.Name,
+		Status:          string(organization.EffectiveStatus()),
+		StatusReason:    organization.StatusReason,
+		StatusChangedAt: organization.StatusChangedAt,
+		StatusChangedBy: statusChangedBy,
+		CreatedAt:       organization.CreatedAt,
+		UpdatedAt:       organization.UpdatedAt,
 	}
 }
 

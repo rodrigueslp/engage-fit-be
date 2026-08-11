@@ -1,5 +1,9 @@
 package models
 
+func (OrganizationModel) TableName() string {
+	return "organizations"
+}
+
 func (BoxModel) TableName() string {
 	return "boxes"
 }

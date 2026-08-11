@@ -1,6 +1,7 @@
 package migrations
 
 import (
+	"strings"
 	"testing"
 	"testing/fstest"
 )
@@ -34,4 +35,20 @@ func TestLoadRejectsInvalidFilename(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected an invalid filename error")
 	}
+}
+
+func TestEmbeddedMigrationsIncludeOrganizationFoundation(t *testing.T) {
+	loaded, err := Load(Files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, migration := range loaded {
+		if migration.Version == 53 {
+			if migration.Name != "create_organizations" || !strings.Contains(migration.SQL, "ADD COLUMN organization_id") {
+				t.Fatalf("unexpected organization migration: %+v", migration)
+			}
+			return
+		}
+	}
+	t.Fatal("organization foundation migration not found")
 }

@@ -40,6 +40,14 @@ const (
 	BoxStatusArchived  BoxStatus = "archived"
 )
 
+type OrganizationStatus string
+
+const (
+	OrganizationStatusActive    OrganizationStatus = "active"
+	OrganizationStatusSuspended OrganizationStatus = "suspended"
+	OrganizationStatusArchived  OrganizationStatus = "archived"
+)
+
 type StudentRiskStatus string
 
 const (
