@@ -2445,6 +2445,23 @@ WodScope. Antes de produção, implementar recuperação/verificação de conta.
   TypeScript passaram. Apos atualizar o navegador com `Ctrl+Shift+R`, a logo
   oficial deve aparecer em `#/athlete`.
 
+## Publicacao da visao de produto para apresentacao (2026-08-11)
+
+- Foram publicadas duas versoes estaticas no frontend de producao, no dominio
+  `https://www.engagefit.com.br`:
+  - `https://www.engagefit.com.br/visao-produto.html`: versao resumida,
+    mantida como pagina de visao geral.
+  - `https://www.engagefit.com.br/plano-engagefit.html`: versao completa,
+    equivalente ao documento executivo original, com benchmark, produto,
+    integracoes Wellhub/TotalPass, roadmap, negocio e sociedade.
+- A versao completa original permanece em
+  `docs/proposta-engagefit-guilherme.html` como fonte documental; o nome do
+  Guilherme nao aparece nas URLs publicas.
+- Frontend publicado pelos commits `61961ab` (URL neutra) e `c46b4fa`
+  (versao completa) no repositorio `rodrigueslp/engage-fit-fe`.
+- O deploy foi feito pelo Railway no servico `engage-fit-web`, ambiente
+  `production`; as duas URLs foram verificadas publicamente apos o deploy.
+
 ## Orientacao para iniciar novo chat
 
 Mensagem sugerida:
