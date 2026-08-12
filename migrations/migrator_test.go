@@ -52,3 +52,19 @@ func TestEmbeddedMigrationsIncludeOrganizationFoundation(t *testing.T) {
 	}
 	t.Fatal("organization foundation migration not found")
 }
+
+func TestEmbeddedMigrationsIncludeCatalogStructure(t *testing.T) {
+	loaded, err := Load(Files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, migration := range loaded {
+		if migration.Version == 54 {
+			if migration.Name != "create_catalog_structure" || !strings.Contains(migration.SQL, "CREATE TABLE modalities") || !strings.Contains(migration.SQL, "CREATE TABLE spaces") {
+				t.Fatalf("unexpected catalog migration: %+v", migration)
+			}
+			return
+		}
+	}
+	t.Fatal("catalog structure migration not found")
+}

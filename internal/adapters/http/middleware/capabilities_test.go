@@ -3,6 +3,7 @@ package middleware
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -31,4 +32,19 @@ func TestFeatureGates(t *testing.T) {
 	assert(http.MethodGet, "/api/v1/message-campaigns", http.StatusNotFound)
 	assert(http.MethodGet, "/api/v1/automation/runs", http.StatusNoContent)
 	assert(http.MethodPost, "/api/v1/workouts/123/message-drafts", http.StatusNotFound)
+}
+
+func TestCatalogCapabilityBlocksAllCatalogRoutes(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.Use(FeatureGates(Capabilities{Catalog: false}))
+	router.Any("/*path", func(c *gin.Context) { c.Status(http.StatusNoContent) })
+
+	for _, path := range []string{"/api/v1/organization", "/api/v1/modalities", "/api/v1/modalities/id", "/api/v1/units/unit-id/spaces", "/api/v1/units/unit-id/modalities/id"} {
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, path, nil))
+		if response.Code != http.StatusNotFound || !strings.Contains(response.Body.String(), "capability_disabled") {
+			t.Fatalf("%s should be blocked by catalog capability: %d %s", path, response.Code, response.Body.String())
+		}
+	}
 }

@@ -61,6 +61,11 @@ Cada box configura:
 - dias sem treino que caracterizam risco de inatividade;
 - cooldown entre mensagens de risco.
 
+O módulo `catalog` usa a organização como escopo das modalidades reutilizáveis
+e a unidade atual como escopo dos espaços. Nesta fase, o owner e o coach podem
+ler o catálogo da unidade autorizada por `users.box_id`; somente o owner pode
+alterá-lo. Ainda não existe seleção ou acesso multiunidade.
+
 ### 3.2 `OWNER`
 
 É o usuário operacional de uma academia. O sistema atual espera conceitualmente um owner por box, embora o banco ainda não imponha uma constraint de unicidade para isso.
@@ -284,6 +289,7 @@ Existem duas decisões diferentes:
 | Automação | `FEATURE_AUTOMATION_ENABLED` + `AUTOMATION_WORKER_ENABLED` | depende também do canal chamado |
 | Treino do dia | `FEATURE_WORKOUTS_ENABLED` | envio depende do WhatsApp |
 | Geração por IA | `FEATURE_LLM_ENABLED` + workouts | `OPENAI_API_KEY` configurada |
+| Catálogo | `FEATURE_CATALOG_ENABLED` | não possui efeito externo |
 
 Defaults:
 
@@ -325,6 +331,10 @@ erDiagram
     BOXES ||--o{ AUTOMATION_SCHEDULES : configures
     AUTOMATION_SCHEDULES ||--o{ AUTOMATION_RUNS : triggers
     STUDENTS ||--o{ RETENTION_INTERVENTIONS : receives
+    ORGANIZATIONS ||--o{ MODALITIES : owns
+    BOXES ||--o{ UNIT_MODALITIES : enables
+    MODALITIES ||--o{ UNIT_MODALITIES : assigned
+    BOXES ||--o{ SPACES : contains
 ```
 
 ### 9.2 Grupos de tabelas
@@ -342,6 +352,7 @@ erDiagram
 | Treino/LLM | `workouts`, `workout_message_drafts`, `workout_message_recipients`, `llm_generation_logs` | treino, geração, aprovação e envio |
 | Governança | `messaging_policies`, `messaging_usage_buckets`, `message_dispatches`, `admin_audit_logs` | limites, reservas, custo estimado e auditoria administrativa |
 | Privacidade | `privacy_suppressions`, `privacy_audit_events` | impedir reimportação e auditar direitos do titular |
+| Catálogo | `modalities`, `unit_modalities`, `spaces`, `catalog_audit_events` | modalidades da organização, ativação por unidade, espaços e auditoria |
 | Schema | `schema_migrations` | versão, checksum e tempo de execução |
 
 ### 9.3 Invariantes relevantes do banco
@@ -358,7 +369,12 @@ erDiagram
 - provider SID é único nos recipients quando preenchido;
 - supressão é única por `(box_id, source, external_id_hash)`;
 - platform admin deve ter `box_id IS NULL`; owner e coach devem ter box;
-- deleções do box propagam para a maior parte dos dados tenant via cascade.
+- deleções do box propagam para a maior parte dos dados tenant via cascade;
+- modalidade é única por `(organization_id, name_key)` e espaço por
+  `(unit_id, name_key)`;
+- FKs compostas impedem associar modalidade e unidade de organizações
+  diferentes;
+- modalidades e espaços usam arquivamento reversível, sem exclusão física.
 
 O schema não usa soft delete. Fechar campanha altera `active`; excluir campanha remove dependências conforme as foreign keys.
 
@@ -1169,6 +1185,7 @@ O contrato definitivo está em `internal/adapters/http/router.go`. Mapa resumido
 | `/api/v1/capabilities` | público | booleans de disponibilidade |
 | `/api/v1/auth`, `/setup/owner` | público/autenticado | sessão e onboarding |
 | `/api/v1/box`, `/students`, `/checkins` | OWNER/COACH, conforme allowlist | tenant, alunos e frequência |
+| `/api/v1/organization`, `/modalities`, `/units/:unit_id/spaces` | OWNER/COACH para leitura; OWNER para mutação | organização atual, modalidades e espaços |
 | `/api/v1/retention*`, `/students/:id/retention-monitoring`, `/team/members` | OWNER/COACH | radar, jornada, exclusões reversíveis, ações e consulta da equipe |
 | `/api/v1/imports`, `/checkin-ingestion*` | OWNER ou credencial de ingestão | upload manual e entrada recorrente |
 | `/api/v1/team/coaches*` | OWNER | criação, desativação e senha de coaches |
@@ -1326,7 +1343,7 @@ Hoje há lógica de audiência semelhante em três packages. Mudanças devem ser
 
 ### Produto/qualidade
 
-- concluir `SPEC-001-B/C`: modalidades, espaços, memberships e acesso multiunidade; até lá `users.box_id` continua sendo o único contexto autorizado;
+- concluir `SPEC-001/C`: memberships e acesso multiunidade; até lá `users.box_id` continua sendo o único contexto autorizado;
 - recuperação de senha por token/e-mail;
 - paginação e filtros server-side;
 - histórico e conversão de brindes/mensagens;
@@ -1461,6 +1478,7 @@ Você domina o núcleo quando consegue explicar:
 | Configuração | `internal/config/config.go`, `.env.example` |
 | Rotas e autorização | `internal/adapters/http/router.go` |
 | Domínio | `internal/domain` |
+| Catálogo de estrutura | `internal/app/catalog`, `catalog_repository.go`, `catalog_handler.go` |
 | Importação | `internal/app/imports/import_checkins_usecase.go` |
 | Campanhas/progresso | `internal/app/campaigns/campaign_usecases.go` |
 | Frequência/check-ins | `internal/adapters/persistence/postgres/repositories/checkin_repository.go`, `engage-fit-fe/src/pages/checkins/CheckinsPage.tsx` |

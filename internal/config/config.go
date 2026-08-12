@@ -82,6 +82,7 @@ type Config struct {
 	FeatureWorkoutsEnabled            bool
 	FeatureLLMEnabled                 bool
 	FeatureBillingEnabled             bool
+	FeatureCatalogEnabled             bool
 	BuildVersion                      string
 	BuildCommit                       string
 	BuildTime                         string
@@ -163,6 +164,7 @@ func Load() Config {
 		FeatureWorkoutsEnabled:            getEnvBool("FEATURE_WORKOUTS_ENABLED", appEnv != "production"),
 		FeatureLLMEnabled:                 getEnvBool("FEATURE_LLM_ENABLED", appEnv != "production"),
 		FeatureBillingEnabled:             getEnvBool("FEATURE_BILLING_ENABLED", false),
+		FeatureCatalogEnabled:             getEnvBool("FEATURE_CATALOG_ENABLED", appEnv != "production"),
 		BuildVersion:                      getEnv("BUILD_VERSION", ""),
 		BuildCommit:                       getEnv("BUILD_COMMIT", ""),
 		BuildTime:                         getEnv("BUILD_TIME", ""),

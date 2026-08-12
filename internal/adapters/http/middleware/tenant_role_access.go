@@ -26,6 +26,9 @@ var coachRoutes = map[string]map[string]bool{
 		"/api/v1/students/:id/retention-interventions": true,
 		"/api/v1/checkins/summary":                     true,
 		"/api/v1/team/members":                         true,
+		"/api/v1/organization":                         true,
+		"/api/v1/modalities":                           true,
+		"/api/v1/units/:unit_id/spaces":                true,
 	},
 	http.MethodPost: {
 		"/api/v1/students/:id/retention-interventions": true,

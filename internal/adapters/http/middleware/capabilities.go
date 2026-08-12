@@ -15,6 +15,7 @@ type Capabilities struct {
 	Workouts   bool `json:"workouts"`
 	LLM        bool `json:"llm"`
 	Billing    bool `json:"billing"`
+	Catalog    bool `json:"catalog"`
 }
 
 func FeatureGates(capabilities Capabilities) gin.HandlerFunc {
@@ -35,6 +36,8 @@ func FeatureGates(capabilities Capabilities) gin.HandlerFunc {
 			disabled = !capabilities.Whatsapp
 		case strings.HasPrefix(path, "/api/v1/billing") || strings.HasPrefix(path, "/api/v1/admin/billing") || strings.HasPrefix(path, "/api/v1/webhooks/asaas"):
 			disabled = !capabilities.Billing
+		case path == "/api/v1/organization" || strings.HasPrefix(path, "/api/v1/modalities") || strings.HasPrefix(path, "/api/v1/units/"):
+			disabled = !capabilities.Catalog
 		}
 		if disabled {
 			apiresponse.AbortError(c, http.StatusNotFound, "capability_disabled", "capability disabled")

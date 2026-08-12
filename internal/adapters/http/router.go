@@ -17,6 +17,7 @@ import (
 	billingapp "boxengage/backend/internal/app/billing"
 	"boxengage/backend/internal/app/boxes"
 	"boxengage/backend/internal/app/campaigns"
+	"boxengage/backend/internal/app/catalog"
 	"boxengage/backend/internal/app/checkiningestion"
 	"boxengage/backend/internal/app/contactactivation"
 	"boxengage/backend/internal/app/dashboard"
@@ -49,6 +50,7 @@ type RouterDependencies struct {
 	CreateBoxUseCase          boxes.CreateBoxUseCase
 	GetBoxUseCase             boxes.GetBoxUseCase
 	UpdateBoxUseCase          boxes.UpdateBoxUseCase
+	CatalogService            *catalog.Service
 
 	ListStudentsUseCase            students.ListStudentsUseCase
 	GetStudentUseCase              students.GetStudentUseCase
@@ -328,6 +330,19 @@ func NewRouter(deps RouterDependencies) *gin.Engine {
 	boxesHandler := handlers.NewBoxesHandler(deps.GetBoxUseCase, deps.UpdateBoxUseCase)
 	protected.GET("/box", boxesHandler.Get)
 	protected.PUT("/box", boxesHandler.Update)
+	if deps.CatalogService != nil {
+		catalogHandler := handlers.NewCatalogHandler(deps.CatalogService)
+		protected.GET("/organization", catalogHandler.Organization)
+		protected.GET("/modalities", catalogHandler.ListModalities)
+		protected.GET("/units/:unit_id/spaces", catalogHandler.ListSpaces)
+		ownerCatalog := protected.Group("")
+		ownerCatalog.Use(middleware.Owner())
+		ownerCatalog.POST("/modalities", catalogHandler.CreateModality)
+		ownerCatalog.PATCH("/modalities/:id", catalogHandler.UpdateModality)
+		ownerCatalog.PUT("/units/:unit_id/modalities/:modality_id", catalogHandler.SetModalityActive)
+		ownerCatalog.POST("/units/:unit_id/spaces", catalogHandler.CreateSpace)
+		ownerCatalog.PATCH("/units/:unit_id/spaces/:id", catalogHandler.UpdateSpace)
+	}
 
 	dashboardHandler := handlers.NewDashboardHandler(deps.DashboardSummaryUseCase, deps.DashboardActiveCampaignsUseCase, deps.DashboardNearGoalUseCase, deps.DashboardAtRiskUseCase, deps.ListPendingRewardDeliveriesUseCase)
 	protected.GET("/dashboard/summary", dashboardHandler.Summary)

@@ -29,6 +29,7 @@ import (
 	billingapp "boxengage/backend/internal/app/billing"
 	"boxengage/backend/internal/app/boxes"
 	"boxengage/backend/internal/app/campaigns"
+	"boxengage/backend/internal/app/catalog"
 	"boxengage/backend/internal/app/checkiningestion"
 	"boxengage/backend/internal/app/contactactivation"
 	"boxengage/backend/internal/app/dashboard"
@@ -121,6 +122,7 @@ func main() {
 	cancelStartup()
 
 	boxRepository := pgrepo.NewBoxGormRepository(db)
+	catalogRepository := pgrepo.NewCatalogGormRepository(db)
 	userRepository := pgrepo.NewUserGormRepository(db)
 	teamRepository := pgrepo.NewTeamGormRepository(db)
 	studentRepository := pgrepo.NewStudentGormRepository(db)
@@ -192,6 +194,7 @@ func main() {
 	boxAdminUseCases := platformadmin.NewBoxAdminUseCases(boxRepository, userRepository, createBoxUseCase, messagingGovernanceRepository)
 	getBoxUseCase := boxes.NewGetBoxUseCase(boxRepository)
 	updateBoxUseCase := boxes.NewUpdateBoxUseCase(boxRepository)
+	catalogService := catalog.NewService(catalogRepository, transactionManager)
 	teamService := team.NewService(userRepository, teamRepository, passwordService)
 
 	listStudentsUseCase := students.NewListStudentsUseCase(studentRepository)
@@ -307,6 +310,7 @@ func main() {
 		CreateBoxUseCase:          createBoxUseCase,
 		GetBoxUseCase:             getBoxUseCase,
 		UpdateBoxUseCase:          updateBoxUseCase,
+		CatalogService:            catalogService,
 
 		ListStudentsUseCase:            listStudentsUseCase,
 		GetStudentUseCase:              getStudentUseCase,
@@ -436,7 +440,7 @@ func main() {
 		Capabilities: middleware.Capabilities{
 			Whatsapp: cfg.FeatureWhatsappEnabled, Email: cfg.FeatureEmailEnabled,
 			Automation: cfg.FeatureAutomationEnabled, Workouts: cfg.FeatureWorkoutsEnabled, LLM: cfg.FeatureLLMEnabled,
-			Billing: cfg.FeatureBillingEnabled,
+			Billing: cfg.FeatureBillingEnabled, Catalog: cfg.FeatureCatalogEnabled,
 		},
 		BillingService: billingService,
 		AthleteService: athleteService,

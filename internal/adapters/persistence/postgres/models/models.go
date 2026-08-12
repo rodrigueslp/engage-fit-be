@@ -31,6 +31,50 @@ type BoxModel struct {
 	UpdatedAt               time.Time
 }
 
+type ModalityModel struct {
+	ID             string `gorm:"primaryKey"`
+	OrganizationID string `gorm:"index"`
+	Name           string
+	NameKey        string
+	Color          string
+	Status         string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+}
+
+type UnitModalityModel struct {
+	OrganizationID string
+	UnitID         string `gorm:"primaryKey"`
+	ModalityID     string `gorm:"primaryKey"`
+	Active         bool
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+}
+
+type SpaceModel struct {
+	ID              string `gorm:"primaryKey"`
+	UnitID          string `gorm:"index"`
+	Name            string
+	NameKey         string
+	DefaultCapacity *int
+	Status          string
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+}
+
+type CatalogAuditEventModel struct {
+	ID             string `gorm:"primaryKey"`
+	OrganizationID string `gorm:"index"`
+	UnitID         *string
+	ActorUserID    string
+	Action         string
+	EntityType     string
+	EntityID       string
+	BeforeData     []byte `gorm:"type:jsonb"`
+	AfterData      []byte `gorm:"type:jsonb"`
+	CreatedAt      time.Time
+}
+
 type BillingPlanModel struct {
 	ID                  string `gorm:"primaryKey"`
 	Code                string
