@@ -247,10 +247,11 @@ Status: `validated locally` em 2026-08-11.
 - não criar endpoints nem frontend novos;
 - validar backfill, integridade e criação transacional de box + owner.
 
-Evidências locais: migrations `001–053` em banco vazio, segunda execução sem
-migrations pendentes, backfill transacional sobre schema `052`, suíte Go com
-PostgreSQL e testes de criação/rollback atômico. A validação de CI permanece
-necessária antes do merge.
+Evidências: migrations `001–053` em banco vazio, segunda execução sem migrations
+pendentes e teste PostgreSQL automatizado do backfill transacional sobre schema
+`052` populado. A suíte também cobre criação/rollback atômico, insert do binário
+legado e isolamento atual por `box_id`. A validação de CI permanece necessária
+antes do merge.
 
 ### Slice `001-B` — Modalidades e espaços
 

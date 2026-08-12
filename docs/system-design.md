@@ -1038,6 +1038,39 @@ Ordem de release:
 
 A API nunca executa migration no startup. `engagefit-rotate-secrets` e retention também são operações separadas.
 
+### 17.1 Rollout da fundação de organizações
+
+A migration `053` altera `boxes` sob lock, cria e preenche uma organização por
+box e conclui a adição de `organization_id` na mesma transação. Antes de
+executá-la, registrar a contagem de boxes e confirmar backup/restore disponível:
+
+```sql
+SELECT COUNT(*) AS boxes_before FROM boxes;
+```
+
+Depois da migration, reconciliar a cardinalidade, a associação determinística
+inicial e a integridade da coluna obrigatória:
+
+```sql
+SELECT COUNT(*) AS organizations_after FROM organizations;
+SELECT COUNT(*) AS boxes_without_organization
+FROM boxes
+WHERE organization_id IS NULL;
+SELECT COUNT(*) AS mismatched_initial_mapping
+FROM boxes
+WHERE organization_id <> id;
+```
+
+No rollout inicial, os dois últimos resultados devem ser zero e as contagens de
+boxes e organizações devem ser iguais. O job deve ser observado quanto a locks
+e duração; se falhar antes do commit, o migrator reverte toda a `053`.
+
+Rollback da aplicação não exige rollback destrutivo do schema: o trigger de
+compatibilidade cria a organização para inserts de boxes feitos pelo binário
+anterior. Depois do commit, a migration permanece aplicada; divergência de
+reconciliação bloqueia a subida da API e exige investigação ou restore, sem
+edição manual parcial das tabelas.
+
 ## 18. Runtime, containers e shutdown
 
 ### 18.1 API
