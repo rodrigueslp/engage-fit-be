@@ -93,7 +93,11 @@ func TestOrganizationFoundationUpgradesPopulatedSchema(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	applied, err := New(testDB).Up(ctx)
+	through53, err := migrationFilesThrough(53)
+	if err != nil {
+		t.Fatal(err)
+	}
+	applied, err := NewWithFS(testDB, through53).Up(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -188,7 +192,7 @@ func TestOrganizationFoundationUpgradesPopulatedSchema(t *testing.T) {
 		t.Fatalf("legacy insert organization = (%q, %q)", legacyOrganizationID, legacyOrganizationName)
 	}
 
-	repeated, err := New(testDB).Up(ctx)
+	repeated, err := NewWithFS(testDB, through53).Up(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
