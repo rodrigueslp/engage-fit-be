@@ -31,17 +31,18 @@ func (r BoxGormRepository) ListAll(ctx context.Context) ([]domain.Box, error) {
 }
 
 func (r BoxGormRepository) Save(ctx context.Context, box *domain.Box) error {
-	if err := ensureID(&box.ID); err != nil {
-		return err
-	}
-
-	model := boxToModel(*box)
-	return r.db.WithContext(ctx).Create(&model).Error
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := prepareNewBox(tx, box); err != nil {
+			return err
+		}
+		model := boxToModel(*box)
+		return tx.Create(&model).Error
+	})
 }
 
 func (r BoxGormRepository) SaveWithOwner(ctx context.Context, box *domain.Box, owner *domain.User) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := ensureID(&box.ID); err != nil {
+		if err := prepareNewBox(tx, box); err != nil {
 			return err
 		}
 		owner.BoxID = box.ID
@@ -56,6 +57,40 @@ func (r BoxGormRepository) SaveWithOwner(ctx context.Context, box *domain.Box, o
 		ownerModel := userToModel(*owner)
 		return tx.Create(&ownerModel).Error
 	})
+}
+
+func prepareNewBox(tx *gorm.DB, box *domain.Box) error {
+	if err := ensureID(&box.ID); err != nil {
+		return err
+	}
+	if box.OrganizationID != "" {
+		return nil
+	}
+
+	box.OrganizationID = box.ID
+	organization := domain.Organization{
+		ID:              box.OrganizationID,
+		Name:            box.Name,
+		Status:          organizationStatusFromBox(box.EffectiveStatus()),
+		StatusReason:    box.StatusReason,
+		StatusChangedAt: box.StatusChangedAt,
+		StatusChangedBy: box.StatusChangedBy,
+		CreatedAt:       box.CreatedAt,
+		UpdatedAt:       box.UpdatedAt,
+	}
+	model := organizationToModel(organization)
+	return tx.Create(&model).Error
+}
+
+func organizationStatusFromBox(status domain.BoxStatus) domain.OrganizationStatus {
+	switch status {
+	case domain.BoxStatusSuspended:
+		return domain.OrganizationStatusSuspended
+	case domain.BoxStatusArchived:
+		return domain.OrganizationStatusArchived
+	default:
+		return domain.OrganizationStatusActive
+	}
 }
 
 func (r BoxGormRepository) Update(ctx context.Context, box domain.Box) error {

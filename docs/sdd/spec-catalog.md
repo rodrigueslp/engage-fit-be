@@ -14,7 +14,7 @@ implementação.
 
 | Spec | Estado | Dependências | Resultado |
 |---|---|---|---|
-| `SPEC-001` Organização, unidades, modalidades e espaços | `ready` | `ARCH-001` | estrutura física e contexto operacional |
+| `SPEC-001` Organização, unidades, modalidades e espaços | `implementing` (`001-A` validada localmente) | `ARCH-001` | estrutura física e contexto operacional |
 | `SPEC-002` Pessoa, identidades e vínculos | `draft` | `ARCH-001`, `SPEC-001` | identidade humana e cadastro mínimo |
 | `SPEC-003` Planos, matrículas e direitos | `draft` | `ARCH-001`, `SPEC-001`, `SPEC-002` | oferta e acesso versionados |
 
