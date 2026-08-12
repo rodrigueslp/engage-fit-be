@@ -255,7 +255,7 @@ antes do merge.
 
 ### Slice `001-B` — Modalidades e espaços
 
-Status: `ready` para execução isolada.
+Status: `validated locally` em 2026-08-12.
 
 - implementar catálogo, APIs e configuração mobile;
 - preservar a experiência de uma unidade sem seletor;

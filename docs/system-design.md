@@ -1087,6 +1087,35 @@ anterior. Depois do commit, a migration permanece aplicada; divergência de
 reconciliação bloqueia a subida da API e exige investigação ou restore, sem
 edição manual parcial das tabelas.
 
+### 17.2 Rollout do catálogo de modalidades e espaços
+
+A migration `054` adiciona somente tabelas, índices e constraints do catálogo;
+ela não cria modalidades ou espaços automaticamente. A criação da constraint
+única `(boxes.id, boxes.organization_id)` pode bloquear brevemente escritas em
+`boxes`, portanto o job continua separado da API e deve ter duração e locks
+observados.
+
+Imediatamente após a migration e antes de habilitar a capability, confirmar que
+as estruturas existem e que nenhum catálogo foi inventado pelo rollout:
+
+```sql
+SELECT COUNT(*) AS modalities_after_migration FROM modalities;
+SELECT COUNT(*) AS unit_modalities_after_migration FROM unit_modalities;
+SELECT COUNT(*) AS spaces_after_migration FROM spaces;
+SELECT COUNT(*) AS catalog_audit_events_after_migration
+FROM catalog_audit_events;
+```
+
+Em uma instalação sem uso prévio do catálogo, todos os resultados devem ser
+zero. Publicar o backend com `FEATURE_CATALOG_ENABLED=false`, publicar o
+frontend em qualquer ordem, executar smoke autenticado e somente então
+habilitar a capability. O frontend trata a capability ausente como desligada.
+
+Rollback operacional consiste em desligar `FEATURE_CATALOG_ENABLED` e, se
+necessário, voltar frontend e API. As estruturas aditivas permanecem no banco;
+nenhuma rota ou dado legado depende delas. Falha da migration antes do commit
+reverte toda a `054`.
+
 ## 18. Runtime, containers e shutdown
 
 ### 18.1 API

@@ -1,10 +1,10 @@
 # SPEC-001/B — Catálogo de modalidades e espaços
 
-- Status: `ready`
-- Versão: `1.0`
-- Data: 2026-08-11
-- Depende de: `ARCH-001`, `SPEC-001/A` no commit `f1e234c`
-- Migration reservada: `054` enquanto esta branch não for rebaseada
+- Status: `validated locally`
+- Versão: `1.1`
+- Data: 2026-08-12
+- Depende de: `ARCH-001`, `SPEC-001/A`
+- Migration reservada: `054`, sujeita à confirmação do integrador no merge
 - Ownership: módulo `catalog`, com leitura mínima de `organizations`
 - Repositórios envolvidos: `engage-fit-be` e `engage-fit-fe`
 
@@ -528,3 +528,18 @@ O agente não deve:
 Se um contrato desta spec precisar mudar, o agente deve atualizar este
 documento e destacar a decisão no handoff da execução antes de codificar o
 contrato divergente.
+
+## 14. Evidências de validação
+
+- migration `054` validada em banco vazio e no upgrade de schema `053`
+  populado, com segunda execução sem migrations pendentes;
+- constraints PostgreSQL e repositories validados entre duas organizações,
+  incluindo rejeição de associação e auditoria com unidade de outro tenant;
+- criação de modalidade, associação com unidade e auditoria cobertas pela mesma
+  transação, inclusive rollback forçado por falha de auditoria;
+- contratos HTTP, feature gate, leitura por coach, mutação exclusiva do owner,
+  CSRF e ocultação de UUIDs externos cobertos pela suíte;
+- tela validada em viewport `390x844`, incluindo criação, conflito, retry,
+  edição, remoção de capacidade, arquivamento e reativação;
+- suíte completa, race detector, build e regressões Playwright permanecem como
+  gates obrigatórios de CI antes do merge.
