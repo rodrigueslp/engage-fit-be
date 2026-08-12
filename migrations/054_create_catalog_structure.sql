@@ -59,7 +59,7 @@ CREATE TABLE spaces (
 CREATE TABLE catalog_audit_events (
     id UUID PRIMARY KEY,
     organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
-    unit_id UUID REFERENCES boxes(id) ON DELETE RESTRICT,
+    unit_id UUID,
     actor_user_id UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
     action VARCHAR(80) NOT NULL,
     entity_type VARCHAR(32) NOT NULL,
@@ -68,6 +68,9 @@ CREATE TABLE catalog_audit_events (
     after_data JSONB NOT NULL DEFAULT '{}'::jsonb,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
+    CONSTRAINT catalog_audit_unit_organization_fk
+        FOREIGN KEY (unit_id, organization_id)
+        REFERENCES boxes(id, organization_id) ON DELETE RESTRICT,
     CONSTRAINT catalog_audit_entity_type_check
         CHECK (entity_type IN ('modality', 'unit_modality', 'space'))
 );

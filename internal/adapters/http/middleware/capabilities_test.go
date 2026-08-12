@@ -47,4 +47,12 @@ func TestCatalogCapabilityBlocksAllCatalogRoutes(t *testing.T) {
 			t.Fatalf("%s should be blocked by catalog capability: %d %s", path, response.Code, response.Body.String())
 		}
 	}
+
+	for _, path := range []string{"/api/v1/units/unit-id/people", "/api/v1/units/unit-id", "/api/v1/units"} {
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, path, nil))
+		if response.Code != http.StatusNoContent {
+			t.Fatalf("%s is not a catalog route and should not be blocked: %d %s", path, response.Code, response.Body.String())
+		}
+	}
 }

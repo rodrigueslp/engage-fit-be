@@ -36,7 +36,7 @@ func FeatureGates(capabilities Capabilities) gin.HandlerFunc {
 			disabled = !capabilities.Whatsapp
 		case strings.HasPrefix(path, "/api/v1/billing") || strings.HasPrefix(path, "/api/v1/admin/billing") || strings.HasPrefix(path, "/api/v1/webhooks/asaas"):
 			disabled = !capabilities.Billing
-		case path == "/api/v1/organization" || strings.HasPrefix(path, "/api/v1/modalities") || strings.HasPrefix(path, "/api/v1/units/"):
+		case isCatalogPath(path):
 			disabled = !capabilities.Catalog
 		}
 		if disabled {
@@ -45,4 +45,18 @@ func FeatureGates(capabilities Capabilities) gin.HandlerFunc {
 		}
 		c.Next()
 	}
+}
+
+func isCatalogPath(path string) bool {
+	if path == "/api/v1/organization" || path == "/api/v1/modalities" || strings.HasPrefix(path, "/api/v1/modalities/") {
+		return true
+	}
+	parts := strings.Split(strings.TrimPrefix(path, "/api/v1/units/"), "/")
+	if len(parts) < 2 || parts[0] == "" {
+		return false
+	}
+	if parts[1] == "spaces" {
+		return len(parts) == 2 || (len(parts) == 3 && parts[2] != "")
+	}
+	return parts[1] == "modalities" && len(parts) == 3 && parts[2] != ""
 }
