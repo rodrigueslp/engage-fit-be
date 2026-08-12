@@ -108,5 +108,6 @@ Uma spec em `draft` não autoriza migrations ou contratos públicos definitivos.
 - [Catálogo e ondas de execução](spec-catalog.md)
 - [ARCH-001 — Fundação modular](ARCH-001-modular-foundation.md)
 - [SPEC-001 — Organização e estrutura](specs/SPEC-001-organization-units-modalities-spaces.md)
+- [SPEC-001/B — Modalidades e espaços](specs/SPEC-001-B-modalities-spaces.md)
 - [SPEC-002 — Pessoa, identidades e vínculos](specs/SPEC-002-person-identities-relationships.md)
 - [SPEC-003 — Planos, matrículas e acesso](specs/SPEC-003-plans-enrollments-entitlements.md)

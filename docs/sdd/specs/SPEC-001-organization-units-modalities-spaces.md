@@ -1,7 +1,7 @@
 # SPEC-001 — Organização, unidades, modalidades e espaços
 
 - Status: `implementing`
-- Versão: `0.3`
+- Versão: `0.4`
 - Depende de: `ARCH-001`
 - Bloqueia: `SPEC-002`, `SPEC-003`, agenda e permissões multiunidade
 
@@ -255,8 +255,12 @@ antes do merge.
 
 ### Slice `001-B` — Modalidades e espaços
 
+Status: `ready` para execução isolada.
+
 - implementar catálogo, APIs e configuração mobile;
-- preservar a experiência de uma unidade sem seletor.
+- preservar a experiência de uma unidade sem seletor;
+- contrato executivo detalhado em
+  [`SPEC-001-B-modalities-spaces.md`](SPEC-001-B-modalities-spaces.md).
 
 ### Slice `001-C` — Acesso e contexto multiunidade
 
