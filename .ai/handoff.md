@@ -40,7 +40,7 @@ operacional do Alados: serviço separado de modalidade, contrato separado de
 PAR-Q, financeiro do aluno separado do billing SaaS, plano base + adicionais,
 quiosque simples e comunicados.
 
-Diretórios de execução previstos:
+Diretórios de execução preparados:
 
 - `/home/luiz-paulo/workspace/engage-fit-worktrees/spec-001-d/`;
 - `/home/luiz-paulo/workspace/engage-fit-worktrees/spec-002-a/`.
@@ -57,9 +57,9 @@ duas slices estarem integrados.
 
 ## Checkpoint local SDD — SPEC-001/A e SPEC-001/B integradas
 
-Este é o estado mais recente do desenvolvimento local. Em caso de conflito com
-commits, comandos ou próximos passos de checkpoints históricos abaixo,
-prevalece esta seção.
+Este checkpoint registra a integração anterior de A/B. Em caso de conflito
+com commits, estados ou próximos passos, prevalece o checkpoint SDD no topo
+deste arquivo.
 
 ### Como a SPEC-001 foi dividida
 
@@ -69,8 +69,8 @@ prevalece esta seção.
   vertical visível e utilizável pelo owner.
 - `SPEC-001/C — Contexto multiunidade`: continua sendo um recorte futuro e não
   foi implementado nem integrado neste checkpoint.
-- `SPEC-001/D — Serviços ofertáveis`: nova slice em `draft`, incorporada após
-  o esboço do Alados; pode ser detalhada antes de C sem alterar A/B.
+- `SPEC-001/D — Serviços ofertáveis`: slice agora em `ready`, incorporada após
+  o esboço do Alados; pode ser implementada antes de C sem alterar A/B.
 - As letras são slices de execução da mesma SPEC, registradas na seção de
   fatiamento de `docs/sdd/specs/SPEC-001-organization-units-modalities-spaces.md`.
   Elas permitem que agentes trabalhem em recortes pequenos e integráveis sem
@@ -78,12 +78,13 @@ prevalece esta seção.
 
 ### Estado integrado no `main` local
 
-- Backend em `main`, commit `5ed6ebe`, dez commits à frente de `origin/main`.
-  Principais marcos da integração:
+- Backend `main` contém a integração A/B e o commit de base SDD `47cd597`;
+  continua apenas local, à frente de `origin/main`. Principais marcos:
   - `89993d9`: merge da fundação `SPEC-001/A`;
   - `79ef83c`: estrutura de catálogo da `SPEC-001/B`;
   - `9f95626`: reforço dos testes de migration do catálogo;
-  - `5ed6ebe`: registro da validação da SPEC.
+  - `5ed6ebe`: registro da validação da SPEC;
+  - `47cd597`: requisitos Alados e specs `001-D`/`002-A` prontas.
 - Frontend em `main`, commit `34330f0`, quatro commits à frente de
   `origin/main`, com a `SPEC-001/B` integrada.
 - Nenhum push, deploy ou migration de produção foi executado. Produção continua
