@@ -26,7 +26,7 @@ Homologação e banco local:
 Git e publicação:
 
 - backend `main` inclui os merges `34a8b17`/`7de1d1b`, o fechamento anterior
-  `e3721b1` e a preparação SDD `14a9278`;
+  `e3721b1`, a preparação SDD `14a9278` e o handoff `a9b00f3`;
 - frontend `main` permanece em `d42ef05`;
 - o push dos dois `main` foi autorizado, mas não executado porque a inspeção
   somente leitura do Railway confirmou que `engage-fit-api`,
@@ -58,7 +58,8 @@ SDD seguinte:
 Workspace preparado:
 
 - raiz: `/home/luiz-paulo/workspace/engage-fit-worktrees/spec-003-a/`;
-- backend: branch `feature/spec-003-plan-catalog`, base `14a9278`;
+- backend: branch `feature/spec-003-plan-catalog`, criada em `14a9278` e
+  atualizada até `a9b00f3`;
 - frontend: branch `feature/spec-003-plan-catalog`, base `d42ef05`;
 - instruções: `AGENTS.md` na raiz do workspace;
 - prompt pronto: `EXECUTION-PROMPT.md` na raiz do workspace;
@@ -72,8 +73,7 @@ iniciar `SPEC-003/B-D` em paralelo.
 
 ## Checkpoint histórico — serviços e fundação de pessoas integrados
 
-As duas
-slices executadas em paralelo foram revisadas, renumeradas, integradas uma por
+As duas slices executadas em paralelo foram revisadas, renumeradas, integradas uma por
 vez e validadas em conjunto.
 
 Estado Git local:
