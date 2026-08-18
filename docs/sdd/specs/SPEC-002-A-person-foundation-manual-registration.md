@@ -566,4 +566,4 @@ com `students`; não executar down migration nem apagar pessoas.
   viewport `360x800` sem scroll horizontal;
 - `go test ./...`, suíte PostgreSQL completa, `go vet ./...`, race detector em
   Linux/CGO, TypeScript, build Vite, Playwright completo e `git diff --check`
-  permanecem como gates antes do merge.
+  foram aprovados antes e depois da integração combinada.

@@ -4,53 +4,76 @@ Manual canônico de arquitetura e negócio: `docs/system-design.md`.
 
 Guia operacional consolidado: `docs/application-readiness-guide.md`.
 
-Atualizado em: 2026-08-18 (SPEC-002/A validada localmente no worktree; sem push/deploy)
+Atualizado em: 2026-08-18 (SPEC-001/D e SPEC-002/A integradas no `main` local;
+sem push/deploy)
 
-## Checkpoint de execução — SPEC-002/A validada localmente
+## Checkpoint atual — serviços e fundação de pessoas integrados
 
-A slice `SPEC-002/A — Fundação de pessoa e cadastro manual compatível` foi
-implementada nos worktrees dedicados da branch
-`feature/spec-002-people-foundation`, sem acessar ou alterar outros workspaces.
+Este checkpoint prevalece sobre os registros históricos abaixo. As duas
+slices executadas em paralelo foram revisadas, renumeradas, integradas uma por
+vez e validadas em conjunto.
 
-Backend:
+Estado Git local:
 
-- migration provisória `055_create_people_foundation.sql`, com `persons`,
-  endereços, vínculos, idempotência, auditoria e `students.person_id` nullable;
-- backfill um-para-um transacional e reconciliado, sem merges por nome,
-  telefone, e-mail, origem ou conta do atleta;
-- módulo `people` com CPF cifrado por AES-GCM, associated data por pessoa e
-  lookup/fingerprint por HMAC-SHA-256 dedicado;
-- cadastro manual transacional cria pessoa, vínculo e `Student box_member`
-  com `contact_status=unknown`, sem evento de consentimento;
-- duplicate check, conflitos seguros, capability `people`, configuração
-  fail-fast, integração ao privacy export/anonymization e contagem agregada de
-  students legados sem pessoa.
+- backend: merges `34a8b17` (`SPEC-001/D`) e `7de1d1b` (`SPEC-002/A`) no
+  `main`;
+- frontend: merges `1839688` (`SPEC-001/D`) e `d42ef05` (`SPEC-002/A`) no
+  `main`;
+- não houve push, deploy, migration de produção nem habilitação de feature
+  flag;
+- preservar os arquivos não rastreados do usuário
+  `.ai/acordo-fundadores-engagefit.md` e
+  `docs/proposta-engagefit-guilherme.html`.
 
-Frontend:
+Migrations finais:
 
-- botão `Novo aluno` somente para owner com capability `people`;
-- bottom sheet mobile com nome, WhatsApp e CPF na primeira visão, e-mail e
-  endereço por abertura progressiva;
-- bloqueio de CPF, revisão explícita de telefone compartilhado, chave
-  idempotente preservada em retries, recarga/destaque da lista e sucesso;
-- nenhuma autorização de contato é inferida ou apresentada como selecionada.
+- `055_create_service_offerings.sql`: catálogo de serviços por organização,
+  ativação por unidade e auditoria transacional;
+- `056_create_people_foundation.sql`: pessoa, endereço, vínculo com unidade,
+  idempotência, auditoria, `students.person_id` nullable e backfill
+  determinístico um-para-um;
+- PostgreSQL vazio aplicou `001..056`; a segunda execução aplicou zero;
+- os testes de upgrade desde `054`, constraints, rollback, reconciliação e
+  isolamento passaram. O banco temporário usado na integração foi removido.
 
-Validação concluída:
+Entregas integradas:
 
-- migrations `001..055` em PostgreSQL vazio e segundo run com zero aplicações;
-- upgrade real da `054`, reconciliação de backfill e suíte PostgreSQL completa;
-- `go test ./...`, `go vet ./...` e race detector em Linux/CGO;
-- TypeScript, build Vite e Playwright completo: 19 testes passaram e 2 testes
-  reais foram ignorados por exigirem `E2E_REAL_API=true`;
-- revisão visual em `360x800`, `git diff --check`, tenancy, PII/logs,
-  consentimento e compatibilidade de `student_id` revisados.
+- owner gerencia serviços em `#/structure` no celular; coach mantém somente
+  leitura e a navegação depende de `catalog` + `service_catalog`;
+- owner cadastra aluno por nome, WhatsApp e CPF, com e-mail/endereço opcionais,
+  revisão de telefone compartilhado e replay idempotente;
+- CPF usa AES-GCM com associated data e HMAC-SHA-256 dedicado; privacy export
+  e anonimização incluem os novos dados;
+- o novo `Student box_member` nasce com `contact_status=unknown`; possuir
+  WhatsApp não concede consentimento.
 
-O banco temporário de validação foi removido. Não houve push, merge, deploy,
-feature flag habilitada nem alteração de produção. O integrador ainda precisa
-confirmar ou renumerar a migration provisória `055` conforme a ordem de merge
-com a `SPEC-001/D`.
+Validação final combinada:
 
-## Checkpoint SDD — próximas duas slices prontas
+- `go test -count=1 ./...` com PostgreSQL real, `go vet ./...` e
+  `go test -race -count=1 ./...` em `golang:1.25-bookworm` passaram;
+- TypeScript e build Vite passaram; permanece o aviso conhecido do bundle JS
+  de aproximadamente 625 kB;
+- Playwright completo: 21 testes passaram e 2 fluxos reais foram ignorados por
+  exigirem `E2E_REAL_API=true`;
+- os dois agentes também validaram visualmente os fluxos em `360x800`, sem
+  overflow horizontal;
+- `npm ci` dos worktrees reportou duas vulnerabilidades `high` já existentes
+  na árvore de dependências; não foram introduzidas nem tratadas nesta
+  integração.
+
+Rollout e próximos passos:
+
+- produção continua no estado anterior, com migrations somente até `052`;
+- `FEATURE_SERVICE_CATALOG_ENABLED` deve permanecer desligada em produção até
+  homologação; `FEATURE_PEOPLE_FOUNDATION_ENABLED` nasce desligada em todos os
+  ambientes e exige chaves válidas antes da ativação;
+- o banco local compartilhado também não foi migrado. Para homologação manual,
+  usar um banco descartável/backup ou aplicar conscientemente `053..056` antes
+  de iniciar API e frontend;
+- homologar `Serviços` e `Novo aluno` no celular e então fechar a execução da
+  `SPEC-003`; `SPEC-001/C` e `SPEC-002/B-C` continuam adiadas/não autorizadas.
+
+## Checkpoint histórico — preparação das duas slices
 
 O documento `Primeiro_Passo.pdf`, entregue pelo sócio, foi consolidado em
 `docs/sdd/REQ-001-primeiro-passo-operacional.md`. A conclusão permanece:
@@ -2728,5 +2751,5 @@ WodScope. Antes de produção, implementar recuperação/verificação de conta.
 Mensagem sugerida:
 
 ```txt
-Leia integralmente `.ai/handoff.md`, começando pelos checkpoints do topo, e use `docs/system-design.md`, `docs/sdd/REQ-001-primeiro-passo-operacional.md`, `docs/sdd/ARCH-001-modular-foundation.md` e as SPECs como fontes canônicas. Estado local: backend `main` em `5ed6ebe`, frontend `main` em `34330f0`; SPEC-001/A e SPEC-001/B estão integradas e validadas localmente, mas não houve push nem deploy. A revisão de 18/08 incorporou o esboço operacional do Alados apenas à documentação: SPEC-001/D, SPEC-002 e SPEC-003 continuam draft e não autorizam implementação. Próximos trabalhos: homologar `#/structure` sem resetar dados; detalhar SPEC-001/D e preparar SPEC-002 para review/ready em paralelo; manter SPEC-001/C adiada no piloto de uma unidade. Produção continua com migrations até `052`; não aplique `053`/`054` nem habilite catálogo em produção sem autorização explícita. Preserve todas as alterações não commitadas e confira agentes/worktrees antes de iniciar trabalho.
+Leia integralmente `.ai/handoff.md`, começando pelo checkpoint atual do topo, e use `docs/system-design.md`, `docs/sdd/REQ-001-primeiro-passo-operacional.md`, `docs/sdd/ARCH-001-modular-foundation.md` e as SPECs como fontes canônicas. Estado local: SPEC-001/A-B-D e SPEC-002/A estão integradas e validadas no `main` local dos dois repositórios; migrations finais 053..056; nenhum push, deploy ou migration de produção foi feito. Produção e o banco local compartilhado continuam no estado anterior, até `052`. Próximos trabalhos: homologar `Serviços` e `Novo aluno` em banco descartável ou conscientemente migrado e fechar a SPEC-003 para execução. Manter SPEC-001/C e SPEC-002/B-C adiadas/não autorizadas. Não habilite `service_catalog` ou `people` em produção sem autorização e plano de rollout. Preserve `.ai/acordo-fundadores-engagefit.md`, `docs/proposta-engagefit-guilherme.html` e qualquer outra alteração não commitada.
 ```

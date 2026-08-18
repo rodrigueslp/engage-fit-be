@@ -17,8 +17,9 @@ migração de leitura e consolidação de identidades na mesma entrega:
 - `SPEC-002/B` — perfil unificado, edição e migração gradual de leituras;
 - `SPEC-002/C` — identidades externas, revisão e consolidação segura.
 
-Somente a slice A está autorizada para implementação. Os contratos amplos
-abaixo orientam as próximas slices, mas permanecem sujeitos a detalhamento.
+A slice A foi a única autorizada até aqui e já está integrada e validada
+localmente. As slices B/C ainda não estão autorizadas; os contratos amplos
+abaixo apenas orientam seu detalhamento futuro.
 
 ## 1. Resultado esperado
 
