@@ -4,7 +4,180 @@ Manual canônico de arquitetura e negócio: `docs/system-design.md`.
 
 Guia operacional consolidado: `docs/application-readiness-guide.md`.
 
-Atualizado em: 2026-08-06 (experiência completa do aluno publicada em produção)
+Atualizado em: 2026-08-18 (SPEC-001/D e SPEC-002/A prontas para agentes; sem implementação)
+
+## Checkpoint SDD — próximas duas slices prontas
+
+O documento `Primeiro_Passo.pdf`, entregue pelo sócio, foi consolidado em
+`docs/sdd/REQ-001-primeiro-passo-operacional.md`. A conclusão permanece:
+preservar todo o trabalho atual. `Organization`, catálogo, check-ins, retenção
+e comunicação formam uma base compatível com a substituição do núcleo do
+Tecnofit/Next Fit e não devem ser removidos ou recomeçados.
+
+Foram fechados dois pacotes executáveis, ainda sem código de produto:
+
+- `docs/sdd/specs/SPEC-001-D-service-offerings.md`, versão `1.0`, estado
+  `ready`: catálogo simples de serviços por organização/unidade. Não contém
+  duração, vagas, preço, profissional ou horário; esses dados pertencem a
+  agenda e planos. Usa capability separada `service_catalog` para rollout
+  compatível;
+- `docs/sdd/specs/SPEC-002-A-person-foundation-manual-registration.md`, versão
+  `1.0`, estado `ready`: cadastro mobile com nome/WhatsApp/CPF, e-mail/endereço
+  opcionais, backfill um-para-um e criação transacional de `Person`, vínculo e
+  `Student box_member`. Preserva todos os consumidores atuais de `student_id`;
+- a spec-guia `SPEC-002` foi elevada a `reviewed` e dividida: A é a única slice
+  autorizada; perfil/edição e identidades externas ficam em B/C;
+- CPF deve usar cifra autenticada mais HMAC dedicado
+  `PERSON_LOOKUP_HMAC_KEY`. A feature `people` nasce desligada em todos os
+  ambientes e não aceita cifra plaintext;
+- `001-D` e `002-A` podem ser implementadas em paralelo. Cada branch usa o
+  próximo número provisório de migration; o integrador renumera a segunda na
+  ordem de merge e repete os testes de upgrade.
+
+O catálogo SDD e o `README` registram as duas slices como `ready`. `ARCH-001`,
+`SPEC-001`, `SPEC-002`, `SPEC-003` e `REQ-001` também foram alinhados ao esboço
+operacional do Alados: serviço separado de modalidade, contrato separado de
+PAR-Q, financeiro do aluno separado do billing SaaS, plano base + adicionais,
+quiosque simples e comunicados.
+
+Diretórios de execução previstos:
+
+- `/home/luiz-paulo/workspace/engage-fit-worktrees/spec-001-d/`;
+- `/home/luiz-paulo/workspace/engage-fit-worktrees/spec-002-a/`.
+
+Cada diretório contém worktrees backend/frontend, `AGENTS.md` e
+`EXECUTION-PROMPT.md`. Não houve implementação, push, deploy, alteração de
+produção nem habilitação de feature flag. A homologação manual de
+`#/structure` da SPEC-001/B continua pendente.
+
+Próxima ação recomendada: abrir dois agentes, um em cada diretório, colar o
+respectivo `EXECUTION-PROMPT.md` e deixar o integrador revisar/mesclar uma slice
+por vez. Não iniciar `SPEC-003` antes de os contratos compartilhados destas
+duas slices estarem integrados.
+
+## Checkpoint local SDD — SPEC-001/A e SPEC-001/B integradas
+
+Este é o estado mais recente do desenvolvimento local. Em caso de conflito com
+commits, comandos ou próximos passos de checkpoints históricos abaixo,
+prevalece esta seção.
+
+### Como a SPEC-001 foi dividida
+
+- `SPEC-001/A — Fundação compatível`: introduz `Organization` acima das
+  unidades existentes sem quebrar a compatibilidade com `boxes`.
+- `SPEC-001/B — Catálogo de modalidades e espaços`: entrega a primeira slice
+  vertical visível e utilizável pelo owner.
+- `SPEC-001/C — Contexto multiunidade`: continua sendo um recorte futuro e não
+  foi implementado nem integrado neste checkpoint.
+- `SPEC-001/D — Serviços ofertáveis`: nova slice em `draft`, incorporada após
+  o esboço do Alados; pode ser detalhada antes de C sem alterar A/B.
+- As letras são slices de execução da mesma SPEC, registradas na seção de
+  fatiamento de `docs/sdd/specs/SPEC-001-organization-units-modalities-spaces.md`.
+  Elas permitem que agentes trabalhem em recortes pequenos e integráveis sem
+  transformar cada recorte em uma iniciativa independente.
+
+### Estado integrado no `main` local
+
+- Backend em `main`, commit `5ed6ebe`, dez commits à frente de `origin/main`.
+  Principais marcos da integração:
+  - `89993d9`: merge da fundação `SPEC-001/A`;
+  - `79ef83c`: estrutura de catálogo da `SPEC-001/B`;
+  - `9f95626`: reforço dos testes de migration do catálogo;
+  - `5ed6ebe`: registro da validação da SPEC.
+- Frontend em `main`, commit `34330f0`, quatro commits à frente de
+  `origin/main`, com a `SPEC-001/B` integrada.
+- Nenhum push, deploy ou migration de produção foi executado. Produção continua
+  no estado anterior, com migrations aplicadas somente até `052`.
+- Os worktrees das slices A e B foram preservados temporariamente. Eles podem
+  ser removidos apenas depois da homologação e quando não houver mais trabalho
+  pendente dos agentes nessas branches.
+- Alterações locais anteriores do usuário foram preservadas: a minuta
+  `.ai/acordo-fundadores-engagefit.md` e a proposta
+  `docs/proposta-engagefit-guilherme.html` continuam fora do commit. Este
+  handoff também passa a ter alteração local intencional.
+
+### O que foi entregue
+
+`SPEC-001/A`:
+
+- migration `053_create_organizations.sql`;
+- tabela `organizations` acima das unidades atuais;
+- vínculo obrigatório `boxes.organization_id`;
+- backfill determinístico e compatível para unidades existentes;
+- trigger de compatibilidade e criação transacional de organization, box e
+  owner;
+- modelo, mapeamento e testes de upgrade com schema já populado e isolamento.
+
+`SPEC-001/B`:
+
+- migration `054_create_catalog_structure.sql`;
+- modalidades, vínculo de modalidades por unidade, espaços e eventos de
+  auditoria do catálogo;
+- constraints de isolamento entre organização e unidade;
+- domínio, serviço, repository, rotas HTTP e erros estáveis no backend;
+- owner pode alterar o catálogo e coach possui somente leitura;
+- capability/feature gate `catalog`;
+- página mobile-first `#/structure`, com cadastro, edição, arquivamento e
+  reativação de modalidades e espaços;
+- navegação do owner condicionada à capability `catalog`.
+
+`FEATURE_CATALOG_ENABLED` fica habilitada por padrão fora de produção e
+desabilitada por padrão em produção. Não habilitar a capability em produção
+antes de aprovar a experiência local e planejar explicitamente o deploy das
+migrations `053` e `054`.
+
+### Validações concluídas depois da integração
+
+- backend: `go test ./...`, `go vet ./...` e `git diff --check`;
+- migrations `001..054` em PostgreSQL temporário vazio, segunda execução com
+  zero aplicações e status completo;
+- suíte Go com PostgreSQL real, incluindo integrações de repository/migrations;
+- suíte Go completa com race detector em `golang:1.25-bookworm` e PostgreSQL;
+- frontend: TypeScript, build Vite e `git diff --check`;
+- Playwright focado em `tests/structure.spec.ts`: 3 testes passaram;
+- Playwright completo: 17 testes passaram e 2 testes reais foram ignorados por
+  exigirem `E2E_REAL_API=true`;
+- o build mantém somente o aviso conhecido de bundle JavaScript acima de 500
+  kB; não foi identificada regressão funcional;
+- banco temporário removido e PostgreSQL local restaurado ao estado anterior.
+
+### Próximo passo: homologação manual local
+
+Ainda falta o usuário validar a experiência no navegador. Não usar
+`make demo-reset-seed`, pois esse comando altera os dados locais.
+
+Em um terminal, iniciar backend e banco:
+
+```bash
+cd /home/luiz-paulo/workspace/engage-fit/engage-fit-be
+docker compose up -d postgres
+make migrate-up
+make backend-run
+```
+
+Em outro terminal, iniciar o frontend:
+
+```bash
+cd /home/luiz-paulo/workspace/engage-fit/engage-fit-fe
+npm run dev
+```
+
+Abrir `http://localhost:5173`, autenticar como owner local e acessar
+`http://localhost:5173/#/structure`. Conferir em desktop e em viewport móvel:
+
+1. criar, editar, arquivar e reativar uma modalidade;
+2. criar, editar, arquivar e reativar um espaço;
+3. conferir clareza dos textos, estados vazios, feedback de erro e quantidade
+   de campos;
+4. confirmar que a experiência prioriza o uso rápido pelo celular do dono do
+   box.
+
+Se o login local falhar, diagnosticar primeiro o banco e as contas existentes;
+não executar reset/seed automaticamente. Depois da homologação, registrar o
+feedback e corrigir o que for necessário. Só então decidir separadamente sobre
+push, CI e deploy. `SPEC-001/C` não deve começar automaticamente: primeiro
+avaliar se ela é o próximo recorte mais valioso em relação à `SPEC-002` e ao
+resultado de outros agentes/worktrees ainda ativos.
 
 ## Checkpoint de produção da experiência completa do aluno em 2026-08-06
 
@@ -2462,10 +2635,53 @@ WodScope. Antes de produção, implementar recuperação/verificação de conta.
 - O deploy foi feito pelo Railway no servico `engage-fit-web`, ambiente
   `production`; as duas URLs foram verificadas publicamente apos o deploy.
 
+## Estrutura societaria e minuta de acordo de fundadores (2026-08-11)
+
+- Depois de revisar a apresentação completa com Guilherme, a prioridade passou
+  a ser a formalização burocrática da empresa antes das próximas evoluções. A
+  constituição da pessoa jurídica também é considerada necessária para avançar
+  nas solicitações formais de integração com Wellhub e TotalPass.
+- A direção de negócio escolhida para discussão é uma sociedade simples e
+  igualitária, com 50% para Luiz e 50% para Guilherme, sem vesting ou aquisição
+  gradual de participação. A divisão reconhece contribuições complementares:
+  Luiz em produto e tecnologia; Guilherme na ideia inicial, validação de
+  mercado, capital, administração, relacionamento e desenvolvimento comercial.
+- Guilherme deverá assumir os custos de abertura, jurídico, contabilidade,
+  infraestrutura, comunicação e aquisição inicial de clientes, dentro de
+  orçamento aprovado pelos dois. Esses pagamentos não alteram automaticamente
+  as porcentagens e seu tratamento contábil deverá ser formalizado.
+- A intenção atual é nomear Guilherme administrador da rotina empresarial e
+  manter Luiz responsável por Produto e Tecnologia. Alteração de quotas,
+  investidores, dívidas relevantes, remuneração, partes relacionadas, venda da
+  empresa e transferência da propriedade intelectual dependerão dos dois.
+- O código específico, a marca e os demais ativos do EngageFit deverão ficar
+  na futura empresa após instrumento próprio de cessão, preservando Luiz como
+  autor. Conhecimentos, ferramentas e componentes genéricos preexistentes ficam
+  ressalvados. A titularidade anterior ainda deve ser validada juridicamente à
+  luz de eventuais pagamentos ou relações de encomenda anteriores.
+- A proteção principal de Luiz não será retirar o código da empresa em caso de
+  saída. A minuta separa função operacional de propriedade das quotas: conflito,
+  destituição ou afastamento não obrigam venda. Também impede diluição
+  unilateral, rejeita mecanismos de compra do tipo `shotgun` e exige que uma
+  eventual saída considere o valor econômico do software, marca, clientes,
+  receitas, contratos e demais intangíveis, não apenas o patrimônio contábil.
+- A minuta `0.1`, sem dados pessoais, está em
+  `.ai/acordo-fundadores-engagefit.md`. Ela contém campos pendentes para capital
+  social, orçamento, limites financeiros, datas, qualificação dos fundadores e
+  inventário final dos ativos.
+- A minuta foi enviada à esposa de Luiz, advogada, para revisão. Depois dos
+  ajustes jurídicos, Luiz alinhará a proposta com Guilherme; somente então os
+  documentos serão levados ao advogado societário e ao contador para contrato
+  social, acordo definitivo e instrumentos de propriedade intelectual.
+- Nenhum contrato foi assinado, nenhuma empresa foi constituída, nenhuma quota
+  foi transferida e nenhuma cessão de propriedade intelectual ocorreu neste
+  checkpoint. A versão final assinada, com CPF, endereços e outros dados
+  pessoais, deverá permanecer fora do Git.
+
 ## Orientacao para iniciar novo chat
 
 Mensagem sugerida:
 
 ```txt
-Leia `.ai/handoff.md` e use `docs/system-design.md` como fonte canonica da arquitetura e das regras de negocio. Backend, frontend e PostgreSQL ja estao implantados no Railway production. Codigo homologado: backend `8b5443b` e frontend `81cee85`, com CI verde; pode haver commit documental posterior somente para este handoff. Dominio publico: `https://engage-fit-web-production.up.railway.app`; API e banco usam rede privada. Owner e PLATFORM_ADMIN foram homologados. Antes de nova evolucao, confirme no Railway: `OWNER_SETUP_ENABLED=false`, setup token removido/selado, Serverless desligado na API, Custom Start vazio e estrategia de pre-deploy restaurada/validada. Nao publique migrations novas enquanto o pre-deploy estiver desativado. Mantenha integracoes e envios reais desligados ate homologacao explicita.
+Leia integralmente `.ai/handoff.md`, começando pelos checkpoints do topo, e use `docs/system-design.md`, `docs/sdd/REQ-001-primeiro-passo-operacional.md`, `docs/sdd/ARCH-001-modular-foundation.md` e as SPECs como fontes canônicas. Estado local: backend `main` em `5ed6ebe`, frontend `main` em `34330f0`; SPEC-001/A e SPEC-001/B estão integradas e validadas localmente, mas não houve push nem deploy. A revisão de 18/08 incorporou o esboço operacional do Alados apenas à documentação: SPEC-001/D, SPEC-002 e SPEC-003 continuam draft e não autorizam implementação. Próximos trabalhos: homologar `#/structure` sem resetar dados; detalhar SPEC-001/D e preparar SPEC-002 para review/ready em paralelo; manter SPEC-001/C adiada no piloto de uma unidade. Produção continua com migrations até `052`; não aplique `053`/`054` nem habilite catálogo em produção sem autorização explícita. Preserve todas as alterações não commitadas e confira agentes/worktrees antes de iniciar trabalho.
 ```

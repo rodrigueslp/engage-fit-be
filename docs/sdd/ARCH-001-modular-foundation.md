@@ -1,8 +1,8 @@
 # ARCH-001 — Fundação modular do EngageFit Gestão
 
 - Status: `reviewed`
-- Versão: `0.2`
-- Data: 2026-08-11
+- Versão: `0.3`
+- Data: 2026-08-18
 - Escopo: backend, frontend, PostgreSQL e integrações
 
 ## 1. Decisão executiva
@@ -29,7 +29,10 @@ Person
 ```
 
 Essa separação permite que uma pessoa seja mensalista, Wellhub e TotalPass sem
-duplicar seu histórico humano nem realizar merge silencioso.
+duplicar seu histórico humano nem realizar merge silencioso. O primeiro escopo
+operacional consolidado em `REQ-001` também exige serviços agendáveis,
+contratos/PAR-Q, cobrança do aluno, vendas avulsas e comunicados no aplicativo;
+essas capacidades entram como módulos próprios sobre a mesma fundação.
 
 ## 2. Contexto atual
 
@@ -64,24 +67,29 @@ evolução será aditiva e com período de convivência.
 - criar banco por organização;
 - criar um backend separado para o aplicativo do aluno;
 - generalizar o produto para qualquer setor fora de negócios fitness;
-- desenhar desde já estoque, POS, avaliações físicas ou comissões avançadas.
+- desenhar desde já estoque avançado, emissão fiscal, compras, avaliações
+  físicas ou comissões; o registro simples de vendas avulsas será uma spec
+  posterior, sem transformar o primeiro recorte em ERP.
 
 ## 5. Módulos e propriedade
 
 | Módulo | Responsabilidade | Dados principais |
 |---|---|---|
 | `organizations` | organização, unidade e contexto selecionado | `organizations`, `boxes` |
-| `catalog` | modalidades e espaços | modalidades, vínculos com unidade, espaços |
+| `catalog` | modalidades, serviços ofertáveis e espaços | modalidades, serviços, vínculos com unidade, espaços |
 | `people` | pessoa, identificadores, contato e participação na unidade | pessoas e relacionamentos |
 | `memberships` | planos, matrículas e direitos de acesso | planos, versões, matrículas |
 | `contracts` | documentos, versões, aceite, trancamento e cancelamento | contratos e eventos |
+| `healthforms` | PAR-Q e formulários sensíveis | modelos, respostas, consentimentos e eventos de acesso |
 | `memberbilling` | cobrança da academia para o aluno | clientes financeiros, cobranças e conciliação |
-| `scheduling` | grade, aula, capacidade e profissionais | séries e sessões de aula |
+| `scheduling` | grade, aula, capacidade e profissionais | profissionais, séries e sessões de aula |
 | `reservations` | reserva, lista de espera, cancelamento e no-show | reservas e eventos |
 | `attendance` | presença e validação de acesso | check-ins e sessões públicas |
 | `integrations` | conectores Wellhub, TotalPass, acesso e pagamentos | configurações, inbox e reconciliação |
 | `retention` | sinais, filas, intervenções e resultados | radar e intervenções |
 | `athlete` | autenticação e experiência do aluno | conta, sessão, perfil e resultados |
+| `commerce` | produtos e vendas avulsas do quiosque | produtos, vendas, itens e pagamentos manuais |
+| `announcements` | matérias, notícias e avisos no app | publicações, audiências e histórico de exibição |
 | `billing` | cobrança do EngageFit para a academia | planos SaaS, assinaturas e invoices |
 
 `billing` e `memberbilling` são contextos diferentes mesmo quando usam o mesmo
@@ -100,9 +108,12 @@ people + catalog ─> memberships ─┬─> contracts
                                  ├─> scheduling/reservations
                                  └─> attendance
 
+people + memberships ─> healthforms
 attendance + reservations + memberbilling ─> retention
 athlete consome contratos públicos dos módulos operacionais
 integrations adapta provedores aos contratos de scheduling e attendance
+commerce usa ports financeiros sem compartilhar entidades de memberbilling
+announcements consome audiências públicas de people/memberships
 ```
 
 Um módulo pode chamar um caso de uso ou port público de outro módulo. Não pode
@@ -198,6 +209,10 @@ reserva a sequência no merge para evitar colisões.
 - se uma pessoa poderá compartilhar CPF/representante em cenários de menores;
 - política de acesso entre organizações distintas usando a mesma conta;
 - provedor financeiro definitivo do aluno e modelo de subcontas;
+- provedor de assinatura eletrônica e exigência efetiva de Gov.br;
+- política de acesso, retenção e revisão jurídica do PAR-Q;
+- modelo comercial final de Recovery e adicionais de plano;
+- limite entre venda avulsa simples e estoque/fiscal do quiosque;
 - estratégia final de sincronização de agenda de Wellhub e TotalPass.
 
 Essas decisões não impedem as specs `001` a `003`, desde que seus contratos

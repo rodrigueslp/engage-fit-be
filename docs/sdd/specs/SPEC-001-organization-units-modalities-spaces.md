@@ -1,9 +1,10 @@
 # SPEC-001 — Organização, unidades, modalidades e espaços
 
 - Status: `implementing`
-- Versão: `0.4`
+- Versão: `0.5`
 - Depende de: `ARCH-001`
-- Bloqueia: `SPEC-002`, `SPEC-003`, agenda e permissões multiunidade
+- Bloqueia: `001/A-B` bloqueiam `SPEC-002`; `001/B-D` bloqueiam `SPEC-003` e
+  agenda; `001/C` bloqueia permissões multiunidade
 
 ## 1. Resultado esperado
 
@@ -24,6 +25,11 @@ de gerar valor.
 
 **Inferência:** no EngageFit, a primeira unidade deve nascer pronta. Modalidades
 e espaços serão cadastrados somente quando necessários para plano ou agenda.
+
+**Entrada Alados — `REQ-001`:** a operação também vende serviços agendáveis,
+como Recovery, fisioterapia, massagem e nutrição. Serviço não será representado
+como modalidade ou espaço; uma slice aditiva criará o catálogo necessário antes
+de planos e agenda dependerem dele.
 
 ## 3. Escopo
 
@@ -57,6 +63,8 @@ e espaços serão cadastrados somente quando necessários para plano ou agenda.
 - **Inferência EngageFit:** modalidade é catálogo da organização; espaço e
   capacidade pertencem à unidade; plano referencia modalidades, não textos
   livres duplicados.
+- **Inferência EngageFit:** serviço é oferta agendável da organização, ativada
+  por unidade; profissional, horário e vaga pertencem à agenda.
 
 Referências:
 
@@ -266,3 +274,24 @@ Status: `validated locally` em 2026-08-12.
 
 - implementar memberships de usuário, allowlist e seleção de unidade;
 - testar duas unidades da mesma organização e duas organizações distintas.
+
+Esta slice pode ser adiada enquanto o piloto operar uma única unidade. O
+backend continua usando `users.box_id` como contexto autorizado até sua
+implementação.
+
+### Slice `001-D` — Catálogo de serviços ofertáveis
+
+Status: [`ready`](SPEC-001-D-service-offerings.md) em 2026-08-18,
+incorporada a partir de `REQ-001`.
+
+- distinguir serviço de modalidade, espaço e sessão de agenda;
+- permitir nome, descrição curta e arquivamento sem exigir preço ou horário;
+- ativar serviços por unidade sem duplicar o catálogo da organização;
+- deixar profissional, duração, preço, capacidade e recorrência para seus
+  módulos proprietários;
+- fornecer referências estáveis para direitos de plano e agenda;
+- executar pelos contratos, tenancy, UX e rollout da spec detalhada.
+
+As letras identificam slices, não uma ordem obrigatória. `001-D` pode ser
+detalhada e executada antes de `001-C`, desde que permaneça limitada à unidade
+autorizada por `users.box_id`.

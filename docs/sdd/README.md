@@ -68,10 +68,17 @@ Uma spec em `draft` não autoriza migrations ou contratos públicos definitivos.
 
 1. `ARCH-001` — fundação modular e evolução segura.
 2. `SPEC-001` — organização, unidades, modalidades e espaços.
-3. `SPEC-002` — pessoa, identidades e vínculos.
-4. `SPEC-003` — planos, matrículas e direitos de acesso.
-5. Contratos, financeiro do aluno e agenda podem avançar em paralelo quando as
-   três primeiras specs estiverem `ready`.
+3. Implementar `SPEC-001/D` (serviços) e `SPEC-002/A` (fundação de pessoas) em
+   paralelo, sem reabrir as slices A/B validadas.
+4. `SPEC-003` — planos, matrículas, adicionais e direitos de acesso.
+5. Contratos, financeiro do aluno e agenda podem avançar em paralelo quando a
+   fundação aplicável (`SPEC-001/B-D`, `SPEC-002` e `SPEC-003`) estiver
+   `ready`.
+
+`SPEC-001/C`, de contexto multiunidade, pode ser executada depois da fundação
+operacional de uma unidade. As letras identificam slices da mesma spec; não
+obrigam que C seja implementada antes de D quando as dependências registradas
+permitirem.
 
 ## Regras para agentes paralelos
 
@@ -106,8 +113,11 @@ Uma spec em `draft` não autoriza migrations ou contratos públicos definitivos.
 
 - [Template de spec](spec-template.md)
 - [Catálogo e ondas de execução](spec-catalog.md)
+- [REQ-001 — Primeiro passo operacional](REQ-001-primeiro-passo-operacional.md)
 - [ARCH-001 — Fundação modular](ARCH-001-modular-foundation.md)
 - [SPEC-001 — Organização e estrutura](specs/SPEC-001-organization-units-modalities-spaces.md)
 - [SPEC-001/B — Modalidades e espaços](specs/SPEC-001-B-modalities-spaces.md)
+- [SPEC-001/D — Serviços ofertáveis](specs/SPEC-001-D-service-offerings.md)
 - [SPEC-002 — Pessoa, identidades e vínculos](specs/SPEC-002-person-identities-relationships.md)
+- [SPEC-002/A — Fundação e cadastro manual](specs/SPEC-002-A-person-foundation-manual-registration.md)
 - [SPEC-003 — Planos, matrículas e acesso](specs/SPEC-003-plans-enrollments-entitlements.md)

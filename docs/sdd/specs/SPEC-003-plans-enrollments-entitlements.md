@@ -1,16 +1,18 @@
 # SPEC-003 — Planos, matrículas e direitos de acesso
 
 - Status: `draft`
-- Versão: `0.1`
-- Depende de: `ARCH-001`, `SPEC-001`, `SPEC-002`
+- Versão: `0.2`
+- Data: 2026-08-18
+- Depende de: `ARCH-001`, `SPEC-001/B-D`, `SPEC-002`
 - Bloqueia: contratos, cobrança do aluno, agenda, reservas e acesso
 
 ## 1. Resultado esperado
 
-O owner cria ofertas comerciais simples e matricula uma pessoa sem precisar
-configurar dezenas de opções. O sistema sabe quais modalidades, unidades,
-reservas e presenças aquela matrícula permite, preservando exatamente os termos
-aceitos mesmo quando o plano comercial mudar no futuro.
+O owner cria ofertas comerciais simples, com adicionais opcionais, e matricula
+uma pessoa sem precisar configurar dezenas de opções. O sistema sabe quais
+modalidades, serviços, unidades, reservas e presenças aquela matrícula permite,
+preservando exatamente os termos aceitos mesmo quando o plano comercial mudar
+no futuro.
 
 ## 2. Problema
 
@@ -37,7 +39,9 @@ vendidos sem uma operação explícita de migração.
 - versões imutáveis após primeiro uso;
 - preço de referência e recorrência;
 - modalidades e unidades elegíveis;
+- serviços elegíveis e modo de atendimento quando aplicável;
 - acesso livre, sessões por período e pacote de aulas;
+- adicionais versionados somados ao plano base;
 - matrícula de uma pessoa em uma unidade;
 - vigência, pausa e encerramento operacional;
 - cálculo central de direito para reservar e fazer check-in;
@@ -67,6 +71,9 @@ vendidos sem uma operação explícita de migração.
   `Limitar frequência`.
 - **Inferência EngageFit:** termos usados por matrículas existentes não sofrem
   alteração retroativa silenciosa.
+- **Entrada Alados — `REQ-001`:** corrida pode ser plano base com adicionais de
+  musculação, Recovery ou outras ofertas; Pilates exige combinações de
+  frequência e atendimento em grupo/individual.
 
 Referências:
 
@@ -104,13 +111,24 @@ usa `billing_plan` para este contexto.
     futuras restrições financeiras entram como razão externa explícita.
 12. Wellhub/TotalPass não são tratados como planos locais fictícios; suas
     elegibilidades entram por identidades e integrações próprias.
+13. Direito referencia modalidade ou serviço por ID estável, nunca texto livre.
+14. Adicional disponível pertence a uma versão de plano e possui preço e
+    direitos imutáveis depois da primeira matrícula.
+15. A matrícula registra explicitamente os adicionais escolhidos; alterar a
+    oferta futura não muda essa composição.
+16. Preço comercial contratado é a soma determinística do plano base com os
+    adicionais selecionados, antes de descontos que pertençam a spec posterior.
+17. Atendimento `group` ou `individual` é uma restrição de direito quando
+    comercialmente relevante; a sessão concreta pertence à agenda.
+18. Renovação recorrente é termo comercial da versão; execução e meio de
+    cobrança pertencem a `memberbilling`.
 
 ## 7. Tipos de direito iniciais
 
 ### `open_access`
 
-Permite acesso à modalidade durante a vigência sem exigir reserva. Pode limitar
-quantidade de acessos por dia.
+Permite acesso à modalidade ou serviço durante a vigência sem exigir reserva.
+Pode limitar quantidade de acessos por dia.
 
 ### `sessions_per_period`
 
@@ -132,11 +150,13 @@ como dezenas de campos obrigatórios no plano básico.
 
 1. Owner toca em `Novo plano`.
 2. Informa nome, preço, recorrência/duração e seleciona modalidades.
-3. O sistema sugere `Acesso livre` ou o padrão mais comum da modalidade.
-4. Owner pode abrir `Limites de acesso` para sessões por semana/pacote.
-5. Uma tela de revisão mostra em linguagem natural:
+3. Seleciona serviços e adicionais somente quando necessários.
+4. O sistema sugere `Acesso livre` ou o padrão mais comum da modalidade.
+5. Owner pode abrir `Limites de acesso` para sessões por semana/pacote e modo
+   individual/grupo.
+6. Uma tela de revisão mostra em linguagem natural:
    `CrossFit, 3 vezes por semana, R$ 189/mês, renovação mensal`.
-6. Owner publica o plano.
+7. Owner publica o plano.
 
 ### Matricular pessoa
 
@@ -190,12 +210,23 @@ Preço é termo comercial de referência. Cobrança real pertence a
 
 ### `membership_plan_entitlements`
 
-- `plan_version_id`, `modality_id`;
+- `plan_version_id` e exatamente um alvo entre `modality_id` ou `service_id`;
 - unidades permitidas ou regra `home_unit_only`;
 - `access_type`;
 - quantidade, período e limite diário quando aplicáveis;
+- `delivery_mode` opcional: `group` ou `individual`;
 - `booking_required`;
 - configuração versionada e validada por constraint.
+
+### `membership_plan_version_addons`
+
+- `id`, `plan_version_id`, nome e descrição curta;
+- `price_delta_cents` não negativo;
+- direitos próprios em tabela associativa equivalente aos direitos do plano;
+- posição de exibição e timestamps.
+
+Como pertence à versão publicada, o adicional não é editado retroativamente.
+Uma nova composição exige nova versão do plano.
 
 ### `enrollments`
 
@@ -207,6 +238,12 @@ Preço é termo comercial de referência. Cobrança real pertence a
 
 Eventos de status ficam em `enrollment_events` para auditoria e reconstrução da
 linha do tempo.
+
+### `enrollment_addons`
+
+- `enrollment_id`, `plan_version_addon_id`;
+- preço incremental e resumo de termos preservados para auditoria;
+- unicidade por matrícula/adicional.
 
 ## 11. Serviço de decisão de acesso
 
@@ -254,6 +291,10 @@ Razões estáveis incluem:
 Publicação e matrícula exigem `Idempotency-Key`. Mudança de versão usa controle
 otimista para impedir sobrescrita por duas abas/agentes.
 
+A criação da matrícula aceita somente IDs de adicionais pertencentes à versão
+selecionada. A resposta retorna preço base, adicionais e total como valores
+separados para revisão e auditoria.
+
 ## 13. Autorização, privacidade e auditoria
 
 - owner gerencia catálogo e matrículas;
@@ -281,6 +322,9 @@ o sistema antigo nunca coletou.
 
 - owner cria e publica plano simples no celular;
 - resumo do plano corresponde deterministicamente aos direitos;
+- preço e direitos da matrícula correspondem ao plano base mais adicionais;
+- pacote de Spinning, Pilates semanal e plano base de corrida com adicional
+  podem ser representados sem criar entidades concorrentes;
 - primeira matrícula usa versão 1 e continua inalterada após publicação da
   versão 2;
 - pessoa com matrícula ativa acessa modalidade/unidade permitida;
@@ -294,6 +338,7 @@ o sistema antigo nunca coletou.
 ## 16. Testes mínimos
 
 - validação de combinações de entitlement;
+- composição e isolamento de adicionais, incluindo alvo modalidade/serviço;
 - imutabilidade e concorrência de versões;
 - idempotência de publicação e matrícula;
 - isolamento entre organizações e unidades;
@@ -308,5 +353,11 @@ o sistema antigo nunca coletou.
 - estado inicial da matrícula antes de contrato/pagamento estarem disponíveis;
 - se preço zero representa cortesia ou exige tipo explícito;
 - política de matrícula simultânea em mais de um plano;
+- se adicionais poderão ser compartilhados entre planos ou sempre pertencerão
+  a uma versão específica;
+- combinações permitidas, desconto e remoção de adicional durante vigência;
+- regra comercial e unidade de cobrança definitiva de Recovery;
+- se Pilates individual será serviço separado ou direito com
+  `delivery_mode=individual`;
 - tratamento definitivo de trancamento e deslocamento de vigência;
 - qual contador é fonte de verdade para sessões reservadas versus presenças.

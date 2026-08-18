@@ -1,16 +1,31 @@
 # SPEC-002 — Pessoa, identidades e vínculos
 
-- Status: `draft`
-- Versão: `0.1`
-- Depende de: `ARCH-001`, `SPEC-001`
+- Status: `reviewed`
+- Versão: `0.3`
+- Data: 2026-08-18
+- Depende de: `ARCH-001`, `SPEC-001/A-B`
 - Bloqueia: planos/matrículas, contratos, cobrança do aluno e histórico unificado
+
+## Estratégia de entrega
+
+Esta é a spec-guia da iniciativa. Ela foi dividida para não misturar cadastro,
+migração de leitura e consolidação de identidades na mesma entrega:
+
+- [`SPEC-002/A`](SPEC-002-A-person-foundation-manual-registration.md) —
+  fundação, backfill um-para-um e cadastro manual compatível; estado `ready`;
+- `SPEC-002/B` — perfil unificado, edição e migração gradual de leituras;
+- `SPEC-002/C` — identidades externas, revisão e consolidação segura.
+
+Somente a slice A está autorizada para implementação. Os contratos amplos
+abaixo orientam as próximas slices, mas permanecem sujeitos a detalhamento.
 
 ## 1. Resultado esperado
 
-O owner cadastra uma pessoa em poucos segundos usando nome, WhatsApp e CPF. O
-EngageFit mantém uma visão humana única mesmo quando essa pessoa frequenta mais
-de uma unidade ou também usa Wellhub/TotalPass, sem realizar associações
-silenciosas e inseguras.
+O owner cadastra uma pessoa em poucos segundos usando nome, WhatsApp e CPF e
+pode complementar e-mail e endereço sem bloquear a entrada inicial. O EngageFit
+mantém uma visão humana única mesmo quando essa pessoa frequenta mais de uma
+unidade ou também usa Wellhub/TotalPass, sem realizar associações silenciosas e
+inseguras.
 
 ## 2. Problema
 
@@ -35,6 +50,7 @@ unidade, conta de acesso e matrícula serão vínculos separados.
 
 - pessoa em escopo de organização;
 - cadastro local compacto com nome, WhatsApp e CPF;
+- e-mail e endereço opcionais por abertura progressiva;
 - participação da pessoa em uma ou mais unidades;
 - associação com registros atuais de `Student`;
 - múltiplas identidades externas;
@@ -49,7 +65,7 @@ unidade, conta de acesso e matrícula serão vínculos separados.
 - CRM completo de leads;
 - responsáveis, dependentes e menores de idade;
 - prontuário ou ficha médica;
-- endereço obrigatório;
+- endereço obrigatório no primeiro cadastro;
 - venda de plano e contrato;
 - merge automático entre pessoas de organizações distintas;
 - biometria e reconhecimento facial.
@@ -102,6 +118,9 @@ Referências:
    `box_member` na mesma transação.
 6. A tela abre o perfil com ações `Vender plano`, `Convidar para o app` e
    `Registrar check-in`; ações indisponíveis explicam o requisito faltante.
+7. `Mais informações` permite completar e-mail e endereço agora ou depois; uma
+   spec consumidora poderá exigir esses dados antes de contrato, cobrança ou
+   emissão específica.
 
 O cadastro manual de mensalista exige os três campos. Fluxos de importação
 Wellhub/TotalPass podem criar pessoa incompleta porque a fonte não os fornece.
@@ -151,6 +170,16 @@ e `Histórico`; somente módulos já disponíveis aparecem.
 CPF deve usar cifra autenticada já adotada pelo projeto. A busca/unique usa
 HMAC com chave exclusiva ou mecanismo equivalente resistente a enumeração; não
 usar SHA-256 simples devido ao espaço reduzido de CPFs possíveis.
+
+### `person_addresses`
+
+- `id`, `person_id`, `type` inicialmente `home`;
+- CEP, logradouro, número, complemento, bairro, cidade, UF e país;
+- timestamps e origem/autor da última alteração;
+- no máximo um endereço residencial ativo por pessoa na primeira versão.
+
+Endereço não participa de deduplicação e não aparece em listas. A interface
+coleta somente os campos necessários e permite cadastro inicial sem endereço.
 
 ### `person_unit_relationships`
 
@@ -210,12 +239,16 @@ Erros estáveis incluem:
 
 - owner cria e altera; permissões futuras podem liberar recepção;
 - coach consulta somente campos operacionais necessários e não vê CPF;
+- enquanto `SPEC-001/C` não existir, toda rota com `unit_id` exige igualdade
+  com `users.box_id`; a allowlist multiunidade substituirá essa regra depois;
 - platform admin não consulta PII por padrão;
 - visualização excepcional de CPF completo exige permissão, motivo e auditoria;
+- endereço segue a mesma minimização: coach não o recebe sem necessidade
+  operacional específica;
 - contato por WhatsApp continua exigindo consentimento explícito;
 - criação, alteração de identificador, vínculo e merge geram auditoria;
 - exportação reúne pessoa, unidades, perfis de origem, conta, check-ins e dados
-  já cobertos pelo fluxo LGPD;
+  já cobertos pelo fluxo LGPD, incluindo endereços;
 - anonimização remove/transforma PII e mantém métricas compatíveis;
 - logs usam `person_id` somente quando necessário para suporte controlado e
   nunca telefone, CPF ou nome como labels de métrica.
@@ -236,6 +269,8 @@ Feature flag sugerida: `FEATURE_PEOPLE_FOUNDATION_ENABLED`.
 ## 12. Critérios de aceite
 
 - owner cadastra mensalista com nome, WhatsApp e CPF em uma tela mobile;
+- owner pode complementar e-mail/endereço sem preencher novamente os dados
+  essenciais;
 - retry do cadastro não cria duplicata;
 - mesmo CPF em outra unidade da organização oferece vínculo, não nova pessoa;
 - mesmo CPF em outra organização não vaza existência nem dados;
@@ -244,11 +279,13 @@ Feature flag sugerida: `FEATURE_PEOPLE_FOUNDATION_ENABLED`.
 - pessoa pode reunir perfis Wellhub e TotalPass somente por confirmação segura;
 - campanhas, retenção, check-ins e app do aluno atuais não regridem;
 - CPF não aparece em logs, URLs, listas ou exportações não autorizadas;
+- endereço não aparece em listas e é removido/anonimizado com a pessoa;
 - exportação e anonimização incluem as novas tabelas.
 
 ## 13. Testes mínimos
 
 - normalização e validação de CPF/telefone;
+- persistência, autorização, exportação e anonimização de endereço;
 - cifra e lookup seguro de CPF;
 - concorrência de dois cadastros com mesmo CPF;
 - isolamento entre organizações e unidades;
@@ -262,5 +299,7 @@ Feature flag sugerida: `FEATURE_PEOPLE_FOUNDATION_ENABLED`.
 
 - política para menor/dependente sem CPF próprio;
 - permissão exata da recepção e visualização parcial de documentos;
+- gatilho que torna e-mail/endereço necessário para contrato, pagamento ou
+  emissão;
 - momento em que o perfil de origem `students` deixa de ser exposto nas APIs;
 - UX final de merge manual e reversão operacional.
