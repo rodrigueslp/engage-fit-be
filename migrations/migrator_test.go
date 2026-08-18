@@ -68,3 +68,19 @@ func TestEmbeddedMigrationsIncludeCatalogStructure(t *testing.T) {
 	}
 	t.Fatal("catalog structure migration not found")
 }
+
+func TestEmbeddedMigrationsIncludeServiceOfferings(t *testing.T) {
+	loaded, err := Load(Files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, migration := range loaded {
+		if migration.Version == 55 {
+			if migration.Name != "create_service_offerings" || !strings.Contains(migration.SQL, "CREATE TABLE service_offerings") || !strings.Contains(migration.SQL, "unit_service_offerings") {
+				t.Fatalf("unexpected service offerings migration: %+v", migration)
+			}
+			return
+		}
+	}
+	t.Fatal("service offerings migration not found")
+}

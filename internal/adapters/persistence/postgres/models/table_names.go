@@ -8,10 +8,12 @@ func (BoxModel) TableName() string {
 	return "boxes"
 }
 
-func (ModalityModel) TableName() string          { return "modalities" }
-func (UnitModalityModel) TableName() string      { return "unit_modalities" }
-func (SpaceModel) TableName() string             { return "spaces" }
-func (CatalogAuditEventModel) TableName() string { return "catalog_audit_events" }
+func (ModalityModel) TableName() string            { return "modalities" }
+func (UnitModalityModel) TableName() string        { return "unit_modalities" }
+func (ServiceOfferingModel) TableName() string     { return "service_offerings" }
+func (UnitServiceOfferingModel) TableName() string { return "unit_service_offerings" }
+func (SpaceModel) TableName() string               { return "spaces" }
+func (CatalogAuditEventModel) TableName() string   { return "catalog_audit_events" }
 
 func (BillingPlanModel) TableName() string         { return "billing_plans" }
 func (BillingCustomerModel) TableName() string     { return "billing_customers" }

@@ -3,6 +3,7 @@ package catalog
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"time"
 
 	"boxengage/backend/internal/domain"
@@ -10,14 +11,17 @@ import (
 )
 
 var (
-	ErrInvalidInput         = errors.New("invalid catalog input")
-	ErrOrganizationNotFound = repositories.ErrCatalogOrganizationNotFound
-	ErrUnitNotFound         = repositories.ErrCatalogUnitNotFound
-	ErrModalityNotFound     = repositories.ErrCatalogModalityNotFound
-	ErrSpaceNotFound        = repositories.ErrCatalogSpaceNotFound
-	ErrModalityNameConflict = repositories.ErrCatalogModalityNameConflict
-	ErrSpaceNameConflict    = repositories.ErrCatalogSpaceNameConflict
-	ErrModalityArchived     = errors.New("catalog modality archived")
+	ErrInvalidInput                = errors.New("invalid catalog input")
+	ErrOrganizationNotFound        = repositories.ErrCatalogOrganizationNotFound
+	ErrUnitNotFound                = repositories.ErrCatalogUnitNotFound
+	ErrModalityNotFound            = repositories.ErrCatalogModalityNotFound
+	ErrSpaceNotFound               = repositories.ErrCatalogSpaceNotFound
+	ErrModalityNameConflict        = repositories.ErrCatalogModalityNameConflict
+	ErrSpaceNameConflict           = repositories.ErrCatalogSpaceNameConflict
+	ErrModalityArchived            = errors.New("catalog modality archived")
+	ErrServiceOfferingNotFound     = repositories.ErrCatalogServiceOfferingNotFound
+	ErrServiceOfferingNameConflict = repositories.ErrCatalogServiceOfferingNameConflict
+	ErrServiceOfferingArchived     = errors.New("catalog service offering archived")
 )
 
 type ModalityChanges struct {
@@ -31,6 +35,13 @@ type SpaceChanges struct {
 	DefaultCapacity      *int
 	ClearDefaultCapacity bool
 	Status               *domain.CatalogStatus
+}
+
+type ServiceOfferingChanges struct {
+	Name        *string
+	Description *string
+	Color       *string
+	Status      *domain.CatalogStatus
 }
 
 type Service struct {
@@ -191,6 +202,164 @@ func (s Service) SetModalityActive(ctx context.Context, sessionUnitID, requested
 	return &updated, nil
 }
 
+func (s Service) ListServiceOfferings(ctx context.Context, sessionUnitID, requestedUnitID domain.ID, includeArchived bool) ([]domain.ServiceOffering, error) {
+	if requestedUnitID != "" && requestedUnitID != sessionUnitID {
+		return nil, ErrUnitNotFound
+	}
+	current, err := s.repository.GetContext(ctx, sessionUnitID)
+	if err != nil {
+		return nil, err
+	}
+	return s.repository.ListServiceOfferings(ctx, current.Organization.ID, sessionUnitID, includeArchived)
+}
+
+func (s Service) CreateServiceOffering(ctx context.Context, unitID, actorUserID domain.ID, name, description, color string) (*domain.ServiceOffering, error) {
+	normalizedName, nameKey, ok := domain.NormalizeCatalogName(name)
+	if !ok {
+		return nil, ErrInvalidInput
+	}
+	normalizedDescription, ok := domain.NormalizeServiceOfferingDescription(description)
+	if !ok {
+		return nil, ErrInvalidInput
+	}
+	normalizedColor, ok := domain.NormalizeCatalogColor(color)
+	if !ok {
+		return nil, ErrInvalidInput
+	}
+	var created domain.ServiceOffering
+	err := s.transactions.WithinTransaction(ctx, func(txctx context.Context) error {
+		current, err := s.repository.GetContext(txctx, unitID)
+		if err != nil {
+			return err
+		}
+		now := s.now().UTC()
+		created = domain.ServiceOffering{OrganizationID: current.Organization.ID, Name: normalizedName, NameKey: nameKey, Description: normalizedDescription, Color: normalizedColor, Status: domain.CatalogStatusActive, ActiveInUnit: true, CreatedAt: now, UpdatedAt: now}
+		if err := s.repository.CreateServiceOffering(txctx, &created); err != nil {
+			return err
+		}
+		association := domain.UnitServiceOffering{OrganizationID: current.Organization.ID, UnitID: unitID, ServiceOfferingID: created.ID, Active: true, CreatedAt: now, UpdatedAt: now}
+		if err := s.repository.CreateUnitServiceOffering(txctx, &association); err != nil {
+			return err
+		}
+		if err := s.audit(txctx, current.Organization.ID, unitID, actorUserID, "service_offering.created", "service_offering", created.ID, nil, serviceOfferingAuditData(created), now); err != nil {
+			return err
+		}
+		return s.audit(txctx, current.Organization.ID, unitID, actorUserID, "unit_service_offering.activated", "unit_service_offering", created.ID, nil, unitServiceOfferingAuditData(true), now)
+	})
+	if err != nil {
+		return nil, err
+	}
+	logServiceOfferingAction("service_offering.created", created.OrganizationID, unitID, actorUserID, created.ID)
+	return &created, nil
+}
+
+func (s Service) UpdateServiceOffering(ctx context.Context, unitID, actorUserID, serviceOfferingID domain.ID, changes ServiceOfferingChanges) (*domain.ServiceOffering, error) {
+	if changes.Name == nil && changes.Description == nil && changes.Color == nil && changes.Status == nil {
+		return nil, ErrInvalidInput
+	}
+	var updated domain.ServiceOffering
+	action := "service_offering.updated"
+	err := s.transactions.WithinTransaction(ctx, func(txctx context.Context) error {
+		current, err := s.repository.GetContext(txctx, unitID)
+		if err != nil {
+			return err
+		}
+		item, err := s.repository.FindServiceOffering(txctx, current.Organization.ID, unitID, serviceOfferingID)
+		if err != nil {
+			return err
+		}
+		before := *item
+		if changes.Name != nil {
+			name, key, valid := domain.NormalizeCatalogName(*changes.Name)
+			if !valid {
+				return ErrInvalidInput
+			}
+			item.Name, item.NameKey = name, key
+		}
+		if changes.Description != nil {
+			description, valid := domain.NormalizeServiceOfferingDescription(*changes.Description)
+			if !valid {
+				return ErrInvalidInput
+			}
+			item.Description = description
+		}
+		if changes.Color != nil {
+			color, valid := domain.NormalizeCatalogColor(*changes.Color)
+			if !valid {
+				return ErrInvalidInput
+			}
+			item.Color = color
+		}
+		if changes.Status != nil {
+			if !domain.ValidCatalogStatus(*changes.Status) {
+				return ErrInvalidInput
+			}
+			item.Status = *changes.Status
+		}
+		item.UpdatedAt = s.now().UTC()
+		if err := s.repository.UpdateServiceOffering(txctx, *item); err != nil {
+			return err
+		}
+		if before.Status != item.Status {
+			if item.Status == domain.CatalogStatusArchived {
+				action = "service_offering.archived"
+			} else {
+				action = "service_offering.reactivated"
+			}
+		}
+		if err := s.audit(txctx, current.Organization.ID, unitID, actorUserID, action, "service_offering", item.ID, serviceOfferingAuditData(before), serviceOfferingAuditData(*item), item.UpdatedAt); err != nil {
+			return err
+		}
+		updated = *item
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	logServiceOfferingAction(action, updated.OrganizationID, unitID, actorUserID, updated.ID)
+	return &updated, nil
+}
+
+func (s Service) SetServiceOfferingActive(ctx context.Context, sessionUnitID, requestedUnitID, actorUserID, serviceOfferingID domain.ID, active bool) (*domain.ServiceOffering, error) {
+	if requestedUnitID != sessionUnitID {
+		return nil, ErrUnitNotFound
+	}
+	var updated domain.ServiceOffering
+	action := "unit_service_offering.deactivated"
+	if active {
+		action = "unit_service_offering.activated"
+	}
+	err := s.transactions.WithinTransaction(ctx, func(txctx context.Context) error {
+		current, err := s.repository.GetContext(txctx, sessionUnitID)
+		if err != nil {
+			return err
+		}
+		item, err := s.repository.FindServiceOffering(txctx, current.Organization.ID, sessionUnitID, serviceOfferingID)
+		if err != nil {
+			return err
+		}
+		if active && item.Status == domain.CatalogStatusArchived {
+			return ErrServiceOfferingArchived
+		}
+		before := item.ActiveInUnit
+		if err := s.repository.SetUnitServiceOfferingActive(txctx, current.Organization.ID, sessionUnitID, serviceOfferingID, active); err != nil {
+			return err
+		}
+		item.ActiveInUnit = active
+		item.UpdatedAt = s.now().UTC()
+		if err := s.audit(txctx, current.Organization.ID, sessionUnitID, actorUserID, action, "unit_service_offering", serviceOfferingID, unitServiceOfferingAuditData(before), unitServiceOfferingAuditData(active), item.UpdatedAt); err != nil {
+			return err
+		}
+		updated = *item
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	logServiceOfferingAction(action, updated.OrganizationID, sessionUnitID, actorUserID, updated.ID)
+	return &updated, nil
+}
+
 func (s Service) ListSpaces(ctx context.Context, sessionUnitID, requestedUnitID domain.ID, includeArchived bool) ([]domain.Space, error) {
 	if requestedUnitID != sessionUnitID {
 		return nil, ErrUnitNotFound
@@ -302,6 +471,16 @@ func modalityAuditData(item domain.Modality) map[string]any {
 	return map[string]any{"name": item.Name, "color": item.Color, "status": item.Status}
 }
 func unitModalityAuditData(active bool) map[string]any { return map[string]any{"active": active} }
+func serviceOfferingAuditData(item domain.ServiceOffering) map[string]any {
+	return map[string]any{"name": item.Name, "description": item.Description, "color": item.Color, "status": item.Status}
+}
+func unitServiceOfferingAuditData(active bool) map[string]any {
+	return map[string]any{"active": active}
+}
 func spaceAuditData(item domain.Space) map[string]any {
 	return map[string]any{"name": item.Name, "default_capacity": item.DefaultCapacity, "status": item.Status}
+}
+
+func logServiceOfferingAction(action string, organizationID, unitID, actorUserID, serviceOfferingID domain.ID) {
+	slog.Info("catalog service offering changed", "action", action, "organization_id", organizationID, "unit_id", unitID, "actor_user_id", actorUserID, "service_offering_id", serviceOfferingID)
 }

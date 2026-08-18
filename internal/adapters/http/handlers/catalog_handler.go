@@ -111,6 +111,82 @@ func (h CatalogHandler) SetModalityActive(c *gin.Context) {
 	c.JSON(http.StatusOK, modalityResponse(*item))
 }
 
+func (h CatalogHandler) ListServiceOfferings(c *gin.Context) {
+	unitID, ok := catalogUnitID(c)
+	if !ok {
+		return
+	}
+	includeArchived, valid := catalogBoolQuery(c, "include_archived")
+	if !valid {
+		respondCatalogError(c, catalog.ErrInvalidInput)
+		return
+	}
+	items, err := h.service.ListServiceOfferings(c.Request.Context(), unitID, domain.ID(c.Query("unit_id")), includeArchived)
+	if err != nil {
+		respondCatalogError(c, err)
+		return
+	}
+	response := make([]dto.ServiceOfferingResponse, 0, len(items))
+	for _, item := range items {
+		response = append(response, serviceOfferingResponse(item))
+	}
+	c.JSON(http.StatusOK, response)
+}
+
+func (h CatalogHandler) CreateServiceOffering(c *gin.Context) {
+	unitID, actorID, ok := catalogMutationContext(c)
+	if !ok {
+		return
+	}
+	var request dto.CreateServiceOfferingRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		respondCatalogError(c, catalog.ErrInvalidInput)
+		return
+	}
+	item, err := h.service.CreateServiceOffering(c.Request.Context(), unitID, actorID, request.Name, request.Description, request.Color)
+	if err != nil {
+		respondCatalogError(c, err)
+		return
+	}
+	c.JSON(http.StatusCreated, serviceOfferingResponse(*item))
+}
+
+func (h CatalogHandler) UpdateServiceOffering(c *gin.Context) {
+	unitID, actorID, ok := catalogMutationContext(c)
+	if !ok {
+		return
+	}
+	var request dto.UpdateServiceOfferingRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		respondCatalogError(c, catalog.ErrInvalidInput)
+		return
+	}
+	item, err := h.service.UpdateServiceOffering(c.Request.Context(), unitID, actorID, domain.ID(c.Param("id")), catalog.ServiceOfferingChanges{Name: request.Name, Description: request.Description, Color: request.Color, Status: request.Status})
+	if err != nil {
+		respondCatalogError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, serviceOfferingResponse(*item))
+}
+
+func (h CatalogHandler) SetServiceOfferingActive(c *gin.Context) {
+	unitID, actorID, ok := catalogMutationContext(c)
+	if !ok {
+		return
+	}
+	var request dto.SetUnitServiceOfferingRequest
+	if err := c.ShouldBindJSON(&request); err != nil || request.Active == nil {
+		respondCatalogError(c, catalog.ErrInvalidInput)
+		return
+	}
+	item, err := h.service.SetServiceOfferingActive(c.Request.Context(), unitID, domain.ID(c.Param("unit_id")), actorID, domain.ID(c.Param("service_offering_id")), *request.Active)
+	if err != nil {
+		respondCatalogError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, serviceOfferingResponse(*item))
+}
+
 func (h CatalogHandler) ListSpaces(c *gin.Context) {
 	unitID, ok := catalogUnitID(c)
 	if !ok {
@@ -228,6 +304,10 @@ func modalityResponse(item domain.Modality) dto.ModalityResponse {
 	return dto.ModalityResponse{ID: string(item.ID), Name: item.Name, Color: item.Color, Status: string(item.Status), ActiveInUnit: item.ActiveInUnit, CreatedAt: item.CreatedAt.Format(time.RFC3339), UpdatedAt: item.UpdatedAt.Format(time.RFC3339)}
 }
 
+func serviceOfferingResponse(item domain.ServiceOffering) dto.ServiceOfferingResponse {
+	return dto.ServiceOfferingResponse{ID: string(item.ID), Name: item.Name, Description: item.Description, Color: item.Color, Status: string(item.Status), ActiveInUnit: item.ActiveInUnit, CreatedAt: item.CreatedAt.Format(time.RFC3339), UpdatedAt: item.UpdatedAt.Format(time.RFC3339)}
+}
+
 func spaceResponse(item domain.Space) dto.SpaceResponse {
 	return dto.SpaceResponse{ID: string(item.ID), UnitID: string(item.UnitID), Name: item.Name, DefaultCapacity: item.DefaultCapacity, Status: string(item.Status), CreatedAt: item.CreatedAt.Format(time.RFC3339), UpdatedAt: item.UpdatedAt.Format(time.RFC3339)}
 }
@@ -244,12 +324,18 @@ func respondCatalogError(c *gin.Context, err error) {
 		respondPublicError(c, http.StatusNotFound, "modality_not_found", "modalidade não encontrada")
 	case errors.Is(err, catalog.ErrSpaceNotFound):
 		respondPublicError(c, http.StatusNotFound, "space_not_found", "espaço não encontrado")
+	case errors.Is(err, catalog.ErrServiceOfferingNotFound):
+		respondPublicError(c, http.StatusNotFound, "service_offering_not_found", "serviço não encontrado")
 	case errors.Is(err, catalog.ErrModalityNameConflict):
 		respondPublicError(c, http.StatusConflict, "modality_name_conflict", "já existe uma modalidade com este nome")
 	case errors.Is(err, catalog.ErrSpaceNameConflict):
 		respondPublicError(c, http.StatusConflict, "space_name_conflict", "já existe um espaço com este nome")
+	case errors.Is(err, catalog.ErrServiceOfferingNameConflict):
+		respondPublicError(c, http.StatusConflict, "service_offering_name_conflict", "já existe um serviço com este nome")
 	case errors.Is(err, catalog.ErrModalityArchived):
 		respondPublicError(c, http.StatusConflict, "modality_archived", "reative a modalidade antes de ativá-la na unidade")
+	case errors.Is(err, catalog.ErrServiceOfferingArchived):
+		respondPublicError(c, http.StatusConflict, "service_offering_archived", "reative o serviço antes de ativá-lo na unidade")
 	default:
 		respondError(c, err)
 	}

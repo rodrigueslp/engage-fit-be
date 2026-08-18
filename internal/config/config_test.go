@@ -1,6 +1,9 @@
 package config
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestProductionConfigValidation(t *testing.T) {
 	valid := Config{
@@ -58,6 +61,26 @@ func TestProductionConfigValidation(t *testing.T) {
 				t.Fatal("expected invalid production config")
 			}
 		})
+	}
+}
+
+func TestServiceCatalogRequiresCatalog(t *testing.T) {
+	cfg := Config{
+		DatabaseURL: "postgres://database", DBMaxOpenConnections: 2, DBMaxIdleConnections: 1,
+		DBConnectionMaxLifetimeSeconds: 1, DBConnectionMaxIdleTimeSeconds: 1,
+		HTTPMaxBodyBytes: 1, ImportMaxUploadBytes: 1, LoginRateLimitRequests: 1,
+		LoginRateLimitWindowSeconds: 1, SetupRateLimitRequests: 1, SetupRateLimitWindowSeconds: 1,
+		HTTPReadHeaderTimeoutSeconds: 1, HTTPReadTimeoutSeconds: 1, HTTPWriteTimeoutSeconds: 1,
+		HTTPIdleTimeoutSeconds: 1, HTTPShutdownTimeoutSeconds: 1, AutomationStaleRunMinutes: 1,
+		AutomationCatchupWindowMinutes: 1, AuthCookieName: "session", AuthCookieSameSite: "lax",
+		AuthSessionMaxAgeSeconds: 1, FeatureServiceCatalogEnabled: true,
+	}
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "FEATURE_SERVICE_CATALOG_ENABLED") {
+		t.Fatalf("service catalog without catalog should fail validation: %v", err)
+	}
+	cfg.FeatureCatalogEnabled = true
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("service catalog with catalog should validate: %v", err)
 	}
 }
 

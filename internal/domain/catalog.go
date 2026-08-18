@@ -7,7 +7,10 @@ import (
 	"unicode/utf8"
 )
 
-const DefaultModalityColor = "#0F766E"
+const (
+	DefaultCatalogColor  = "#0F766E"
+	DefaultModalityColor = DefaultCatalogColor
+)
 
 type CatalogStatus string
 
@@ -40,6 +43,28 @@ type UnitModality struct {
 	Active         bool
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
+}
+
+type ServiceOffering struct {
+	ID             ID
+	OrganizationID ID
+	Name           string
+	NameKey        string
+	Description    string
+	Color          string
+	Status         CatalogStatus
+	ActiveInUnit   bool
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+}
+
+type UnitServiceOffering struct {
+	OrganizationID    ID
+	UnitID            ID
+	ServiceOfferingID ID
+	Active            bool
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
 }
 
 type Space struct {
@@ -77,11 +102,20 @@ func NormalizeCatalogName(value string) (name, key string, valid bool) {
 }
 
 func NormalizeModalityColor(value string) (string, bool) {
+	return NormalizeCatalogColor(value)
+}
+
+func NormalizeCatalogColor(value string) (string, bool) {
 	value = strings.ToUpper(strings.TrimSpace(value))
 	if value == "" {
-		return DefaultModalityColor, true
+		return DefaultCatalogColor, true
 	}
 	return value, modalityColorPattern.MatchString(value)
+}
+
+func NormalizeServiceOfferingDescription(value string) (string, bool) {
+	value = strings.TrimSpace(value)
+	return value, utf8.RuneCountInString(value) <= 280
 }
 
 func ValidCatalogStatus(status CatalogStatus) bool {

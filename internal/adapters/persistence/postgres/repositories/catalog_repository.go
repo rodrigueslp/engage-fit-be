@@ -114,6 +114,84 @@ func (r CatalogGormRepository) SetUnitModalityActive(ctx context.Context, organi
 	return nil
 }
 
+func (r CatalogGormRepository) ListServiceOfferings(ctx context.Context, organizationID, unitID domain.ID, includeArchived bool) ([]domain.ServiceOffering, error) {
+	query := databaseForContext(r.db, ctx).Table("service_offerings so").
+		Select("so.*, uso.active AS active_in_unit").
+		Joins("JOIN unit_service_offerings uso ON uso.service_offering_id = so.id AND uso.organization_id = so.organization_id").
+		Where("so.organization_id = ? AND uso.unit_id = ? AND uso.organization_id = ?", stringID(organizationID), stringID(unitID), stringID(organizationID))
+	if !includeArchived {
+		query = query.Where("so.status = ?", string(domain.CatalogStatusActive))
+	}
+	var rows []serviceOfferingRow
+	if err := query.Order("CASE WHEN so.status = 'active' THEN 0 ELSE 1 END, so.name_key ASC").Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+	result := make([]domain.ServiceOffering, 0, len(rows))
+	for _, row := range rows {
+		result = append(result, serviceOfferingRowToDomain(row))
+	}
+	return result, nil
+}
+
+func (r CatalogGormRepository) FindServiceOffering(ctx context.Context, organizationID, unitID, serviceOfferingID domain.ID) (*domain.ServiceOffering, error) {
+	var row serviceOfferingRow
+	err := databaseForContext(r.db, ctx).Table("service_offerings so").
+		Select("so.*, uso.active AS active_in_unit").
+		Joins("JOIN unit_service_offerings uso ON uso.service_offering_id = so.id AND uso.organization_id = so.organization_id").
+		Where("so.id = ? AND so.organization_id = ? AND uso.unit_id = ? AND uso.organization_id = ?", stringID(serviceOfferingID), stringID(organizationID), stringID(unitID), stringID(organizationID)).
+		Take(&row).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, portrepo.ErrCatalogServiceOfferingNotFound
+		}
+		return nil, err
+	}
+	item := serviceOfferingRowToDomain(row)
+	return &item, nil
+}
+
+func (r CatalogGormRepository) CreateServiceOffering(ctx context.Context, serviceOffering *domain.ServiceOffering) error {
+	if err := ensureID(&serviceOffering.ID); err != nil {
+		return err
+	}
+	model := serviceOfferingToModel(*serviceOffering)
+	if err := databaseForContext(r.db, ctx).Create(&model).Error; err != nil {
+		return catalogWriteError(err)
+	}
+	return nil
+}
+
+func (r CatalogGormRepository) UpdateServiceOffering(ctx context.Context, serviceOffering domain.ServiceOffering) error {
+	result := databaseForContext(r.db, ctx).Model(&models.ServiceOfferingModel{}).
+		Where("id = ? AND organization_id = ?", stringID(serviceOffering.ID), stringID(serviceOffering.OrganizationID)).
+		Updates(map[string]any{"name": serviceOffering.Name, "name_key": serviceOffering.NameKey, "description": serviceOffering.Description, "color": serviceOffering.Color, "status": string(serviceOffering.Status), "updated_at": serviceOffering.UpdatedAt})
+	if result.Error != nil {
+		return catalogWriteError(result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return portrepo.ErrCatalogServiceOfferingNotFound
+	}
+	return nil
+}
+
+func (r CatalogGormRepository) CreateUnitServiceOffering(ctx context.Context, association *domain.UnitServiceOffering) error {
+	model := unitServiceOfferingToModel(*association)
+	return databaseForContext(r.db, ctx).Create(&model).Error
+}
+
+func (r CatalogGormRepository) SetUnitServiceOfferingActive(ctx context.Context, organizationID, unitID, serviceOfferingID domain.ID, active bool) error {
+	result := databaseForContext(r.db, ctx).Model(&models.UnitServiceOfferingModel{}).
+		Where("organization_id = ? AND unit_id = ? AND service_offering_id = ?", stringID(organizationID), stringID(unitID), stringID(serviceOfferingID)).
+		Update("active", active)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return portrepo.ErrCatalogServiceOfferingNotFound
+	}
+	return nil
+}
+
 func (r CatalogGormRepository) ListSpaces(ctx context.Context, unitID domain.ID, includeArchived bool) ([]domain.Space, error) {
 	query := databaseForContext(r.db, ctx).Where("unit_id = ?", stringID(unitID))
 	if !includeArchived {
@@ -192,6 +270,11 @@ type modalityRow struct {
 	ActiveInUnit bool `gorm:"column:active_in_unit"`
 }
 
+type serviceOfferingRow struct {
+	models.ServiceOfferingModel
+	ActiveInUnit bool `gorm:"column:active_in_unit"`
+}
+
 func modalityRowToDomain(row modalityRow) domain.Modality {
 	item := modalityToDomain(row.ModalityModel)
 	item.ActiveInUnit = row.ActiveInUnit
@@ -208,6 +291,24 @@ func modalityToModel(item domain.Modality) models.ModalityModel {
 
 func unitModalityToModel(item domain.UnitModality) models.UnitModalityModel {
 	return models.UnitModalityModel{OrganizationID: stringID(item.OrganizationID), UnitID: stringID(item.UnitID), ModalityID: stringID(item.ModalityID), Active: item.Active, CreatedAt: item.CreatedAt, UpdatedAt: item.UpdatedAt}
+}
+
+func serviceOfferingRowToDomain(row serviceOfferingRow) domain.ServiceOffering {
+	item := serviceOfferingToDomain(row.ServiceOfferingModel)
+	item.ActiveInUnit = row.ActiveInUnit
+	return item
+}
+
+func serviceOfferingToDomain(model models.ServiceOfferingModel) domain.ServiceOffering {
+	return domain.ServiceOffering{ID: domainID(model.ID), OrganizationID: domainID(model.OrganizationID), Name: model.Name, NameKey: model.NameKey, Description: model.Description, Color: model.Color, Status: domain.CatalogStatus(model.Status), CreatedAt: model.CreatedAt, UpdatedAt: model.UpdatedAt}
+}
+
+func serviceOfferingToModel(item domain.ServiceOffering) models.ServiceOfferingModel {
+	return models.ServiceOfferingModel{ID: stringID(item.ID), OrganizationID: stringID(item.OrganizationID), Name: item.Name, NameKey: item.NameKey, Description: item.Description, Color: item.Color, Status: string(item.Status), CreatedAt: item.CreatedAt, UpdatedAt: item.UpdatedAt}
+}
+
+func unitServiceOfferingToModel(item domain.UnitServiceOffering) models.UnitServiceOfferingModel {
+	return models.UnitServiceOfferingModel{OrganizationID: stringID(item.OrganizationID), UnitID: stringID(item.UnitID), ServiceOfferingID: stringID(item.ServiceOfferingID), Active: item.Active, CreatedAt: item.CreatedAt, UpdatedAt: item.UpdatedAt}
 }
 
 func spaceToDomain(model models.SpaceModel) domain.Space {
@@ -236,6 +337,8 @@ func catalogWriteError(err error) error {
 		return portrepo.ErrCatalogModalityNameConflict
 	case "spaces_unit_name_key_key":
 		return portrepo.ErrCatalogSpaceNameConflict
+	case "service_offerings_organization_name_key_key":
+		return portrepo.ErrCatalogServiceOfferingNameConflict
 	default:
 		return err
 	}
