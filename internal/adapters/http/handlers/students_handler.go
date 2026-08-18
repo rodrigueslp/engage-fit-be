@@ -46,6 +46,14 @@ func (h StudentsHandler) ExportData(c *gin.Context) {
 		return
 	}
 	response := dto.StudentPrivacyExportResponse{Student: studentResponse(result.Student), ExportedAt: result.ExportedAt.Format(time.RFC3339), Checkins: []dto.CheckinResponse{}, Progress: []dto.CampaignProgressResponse{}, Communications: []dto.PrivacyCommunicationResponse{}, ContactConsents: []dto.ContactConsentResponse{}, RetentionInterventions: []dto.RetentionInterventionResponse{}}
+	if result.Person != nil {
+		person := dto.PersonPrivacyExportResponse{ID: string(result.Person.ID), Name: result.Person.Name, Phone: result.Person.PhoneE164, Email: result.Person.Email, CPF: result.Person.CPF, ProfileStatus: string(result.Person.ProfileStatus)}
+		if result.Person.Address != nil {
+			address := result.Person.Address
+			person.Address = &dto.PersonAddressResponse{PostalCode: address.PostalCode, Street: address.Street, Number: address.Number, Complement: address.Complement, District: address.District, City: address.City, State: address.State, Country: address.Country}
+		}
+		response.Person = &person
+	}
 	for _, checkin := range result.Checkins {
 		item := dto.CheckinResponse{ID: string(checkin.ID), StudentID: string(checkin.StudentID), CheckinDate: checkin.CheckinDate.Format("2006-01-02"), Source: string(checkin.Source), EntryMethod: string(checkin.EntryMethod)}
 		if checkin.CheckinTime != nil {
@@ -249,6 +257,7 @@ func studentResponse(student domain.Student) dto.StudentResponse {
 	}
 	response := dto.StudentResponse{
 		ID:                      string(student.ID),
+		PersonID:                string(student.PersonID),
 		Name:                    student.Name,
 		Email:                   student.Email,
 		Phone:                   student.Phone,

@@ -24,6 +24,7 @@ import (
 	"boxengage/backend/internal/app/email"
 	"boxengage/backend/internal/app/imports"
 	"boxengage/backend/internal/app/messages"
+	"boxengage/backend/internal/app/people"
 	"boxengage/backend/internal/app/platformadmin"
 	"boxengage/backend/internal/app/reports"
 	"boxengage/backend/internal/app/retention"
@@ -51,6 +52,7 @@ type RouterDependencies struct {
 	GetBoxUseCase             boxes.GetBoxUseCase
 	UpdateBoxUseCase          boxes.UpdateBoxUseCase
 	CatalogService            *catalog.Service
+	PeopleService             *people.Service
 
 	ListStudentsUseCase            students.ListStudentsUseCase
 	GetStudentUseCase              students.GetStudentUseCase
@@ -346,6 +348,13 @@ func NewRouter(deps RouterDependencies) *gin.Engine {
 		ownerCatalog.PUT("/units/:unit_id/service-offerings/:service_offering_id", catalogHandler.SetServiceOfferingActive)
 		ownerCatalog.POST("/units/:unit_id/spaces", catalogHandler.CreateSpace)
 		ownerCatalog.PATCH("/units/:unit_id/spaces/:id", catalogHandler.UpdateSpace)
+	}
+	if deps.PeopleService != nil {
+		peopleHandler := handlers.NewPeopleHandler(deps.PeopleService)
+		ownerPeople := protected.Group("")
+		ownerPeople.Use(middleware.Owner())
+		ownerPeople.POST("/units/:unit_id/people/duplicate-check", peopleHandler.DuplicateCheck)
+		ownerPeople.POST("/units/:unit_id/people", peopleHandler.Create)
 	}
 
 	dashboardHandler := handlers.NewDashboardHandler(deps.DashboardSummaryUseCase, deps.DashboardActiveCampaignsUseCase, deps.DashboardNearGoalUseCase, deps.DashboardAtRiskUseCase, deps.ListPendingRewardDeliveriesUseCase)

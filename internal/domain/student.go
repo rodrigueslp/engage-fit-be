@@ -19,6 +19,7 @@ const (
 
 type Student struct {
 	ID                        ID
+	PersonID                  ID
 	BoxID                     ID
 	Name                      string
 	Email                     string

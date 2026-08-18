@@ -18,11 +18,11 @@ implementação.
 | `SPEC-001` Organização, unidades, modalidades e espaços | `implementing` (`001-A/B` validadas localmente) | `ARCH-001` | estrutura física e contexto operacional |
 | `SPEC-001/D` Serviços ofertáveis | `ready` | `SPEC-001/A-B` | catálogo simples reutilizável por plano e agenda |
 | `SPEC-002` Pessoa, identidades e vínculos | `reviewed` | `ARCH-001`, `SPEC-001/A-B` | iniciativa de identidade humana dividida em slices |
-| `SPEC-002/A` Fundação e cadastro manual | `ready` | `SPEC-001/A-B` | pessoa, backfill seguro e novo aluno compatível |
+| `SPEC-002/A` Fundação e cadastro manual | `validated locally` | `SPEC-001/A-B` | pessoa, backfill seguro e novo aluno compatível |
 | `SPEC-003` Planos, matrículas, adicionais e direitos | `draft` | `ARCH-001`, `SPEC-001/B-D`, `SPEC-002` | oferta, composição e acesso versionados |
 
-`001-D` e `002-A` estão prontas para implementação por agentes diferentes. As
-duas podem usar o mesmo número provisório de migration em seus worktrees; o
+`001-D` continua pronta para implementação e `002-A` foi validada localmente
+em seu worktree. As duas podem usar o mesmo número provisório de migration; o
 integrador reserva os números finais na ordem de merge e repete os testes de
 upgrade. A slice `001-C` de multiunidade pode ser adiada no piloto de uma
 unidade; `001-D` deve estar integrada antes de planos referenciarem serviços.

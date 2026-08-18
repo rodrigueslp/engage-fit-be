@@ -72,6 +72,7 @@ type Config struct {
 	PrometheusBearerToken             string
 	DataEncryptionActiveKeyID         string
 	DataEncryptionKeys                string
+	PersonLookupHMACKey               string
 	AsaasBaseURL                      string
 	AsaasAPIKey                       string
 	AsaasWebhookToken                 string
@@ -84,6 +85,7 @@ type Config struct {
 	FeatureBillingEnabled             bool
 	FeatureCatalogEnabled             bool
 	FeatureServiceCatalogEnabled      bool
+	FeaturePeopleFoundationEnabled    bool
 	BuildVersion                      string
 	BuildCommit                       string
 	BuildTime                         string
@@ -155,6 +157,7 @@ func Load() Config {
 		PrometheusBearerToken:             getEnv("PROMETHEUS_BEARER_TOKEN", ""),
 		DataEncryptionActiveKeyID:         getEnv("DATA_ENCRYPTION_ACTIVE_KEY_ID", ""),
 		DataEncryptionKeys:                getEnv("DATA_ENCRYPTION_KEYS", ""),
+		PersonLookupHMACKey:               getEnv("PERSON_LOOKUP_HMAC_KEY", ""),
 		AsaasBaseURL:                      getEnv("ASAAS_BASE_URL", "https://api-sandbox.asaas.com/v3"),
 		AsaasAPIKey:                       getEnv("ASAAS_API_KEY", ""),
 		AsaasWebhookToken:                 getEnv("ASAAS_WEBHOOK_TOKEN", ""),
@@ -167,6 +170,7 @@ func Load() Config {
 		FeatureBillingEnabled:             getEnvBool("FEATURE_BILLING_ENABLED", false),
 		FeatureCatalogEnabled:             getEnvBool("FEATURE_CATALOG_ENABLED", appEnv != "production"),
 		FeatureServiceCatalogEnabled:      getEnvBool("FEATURE_SERVICE_CATALOG_ENABLED", appEnv != "production"),
+		FeaturePeopleFoundationEnabled:    getEnvBool("FEATURE_PEOPLE_FOUNDATION_ENABLED", false),
 		BuildVersion:                      getEnv("BUILD_VERSION", ""),
 		BuildCommit:                       getEnv("BUILD_COMMIT", ""),
 		BuildTime:                         getEnv("BUILD_TIME", ""),
@@ -240,6 +244,9 @@ func (c Config) Validate() error {
 	}
 	if c.EmailAllowRealSend && !c.FeatureEmailEnabled {
 		return errors.New("EMAIL_ALLOW_REAL_SEND exige FEATURE_EMAIL_ENABLED")
+	}
+	if c.FeaturePeopleFoundationEnabled && (strings.TrimSpace(c.DataEncryptionActiveKeyID) == "" || strings.TrimSpace(c.DataEncryptionKeys) == "" || strings.TrimSpace(c.PersonLookupHMACKey) == "") {
+		return errors.New("FEATURE_PEOPLE_FOUNDATION_ENABLED exige DATA_ENCRYPTION_ACTIVE_KEY_ID, DATA_ENCRYPTION_KEYS e PERSON_LOOKUP_HMAC_KEY")
 	}
 	if c.AppEnv != "production" {
 		return nil

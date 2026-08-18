@@ -49,16 +49,29 @@ type StudentGormRepository struct {
 	db *gorm.DB
 }
 
-type PrivacyGormRepository struct {
+type PeopleGormRepository struct {
 	db *gorm.DB
+}
+
+func NewPeopleGormRepository(db *gorm.DB) PeopleGormRepository {
+	return PeopleGormRepository{db: db}
+}
+
+type PrivacyGormRepository struct {
+	db     *gorm.DB
+	cipher services.SecretCipher
 }
 
 type ContactActivationGormRepository struct {
 	db *gorm.DB
 }
 
-func NewPrivacyGormRepository(db *gorm.DB) PrivacyGormRepository {
-	return PrivacyGormRepository{db: db}
+func NewPrivacyGormRepository(db *gorm.DB, ciphers ...services.SecretCipher) PrivacyGormRepository {
+	var cipher services.SecretCipher
+	if len(ciphers) > 0 {
+		cipher = ciphers[0]
+	}
+	return PrivacyGormRepository{db: db, cipher: cipher}
 }
 
 func NewContactActivationGormRepository(db *gorm.DB) ContactActivationGormRepository {

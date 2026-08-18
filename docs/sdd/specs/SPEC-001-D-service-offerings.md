@@ -6,8 +6,7 @@
 - Depende de: `ARCH-001`, `SPEC-001/A-B`
 - Ownership: módulo `catalog`
 - Repositórios envolvidos: `engage-fit-be` e `engage-fit-fe`
-- Migration: número provisório escolhido no worktree e confirmado/renumerado
-  pelo integrador no merge
+- Migration integrada: `055_create_service_offerings.sql`
 
 ## 1. Resultado esperado
 
@@ -369,7 +368,7 @@ aditivas permanecem e o catálogo anterior continua funcionando.
 
 ## 14. Evidências de validação
 
-- migration provisória `055_create_service_offerings.sql` validada em banco
+- migration `055_create_service_offerings.sql` validada em banco
   PostgreSQL vazio, no upgrade isolado de `054` e em segunda execução sem
   migrations pendentes;
 - constraints compostas, conflito normalizado, transações, rollback por falha

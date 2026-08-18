@@ -5,6 +5,7 @@ import portrepo "boxengage/backend/internal/ports/repositories"
 var (
 	_ portrepo.BoxRepository                 = BoxGormRepository{}
 	_ portrepo.CatalogRepository             = CatalogGormRepository{}
+	_ portrepo.PeopleRepository              = PeopleGormRepository{}
 	_ portrepo.BillingRepository             = BillingGormRepository{}
 	_ portrepo.UserRepository                = UserGormRepository{}
 	_ portrepo.StudentRepository             = StudentGormRepository{}

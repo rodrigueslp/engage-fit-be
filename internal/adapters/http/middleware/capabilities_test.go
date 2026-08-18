@@ -37,7 +37,7 @@ func TestFeatureGates(t *testing.T) {
 func TestCatalogCapabilityBlocksAllCatalogRoutes(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	router.Use(FeatureGates(Capabilities{Catalog: false}))
+	router.Use(FeatureGates(Capabilities{Catalog: false, People: true}))
 	router.Any("/*path", func(c *gin.Context) { c.Status(http.StatusNoContent) })
 
 	for _, path := range []string{"/api/v1/organization", "/api/v1/modalities", "/api/v1/modalities/id", "/api/v1/units/unit-id/spaces", "/api/v1/units/unit-id/modalities/id"} {
@@ -82,5 +82,26 @@ func TestServiceCatalogRequiresBothCapabilities(t *testing.T) {
 	router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/service-offerings", nil))
 	if response.Code != http.StatusNoContent {
 		t.Fatalf("enabled service catalog should pass: %d %s", response.Code, response.Body.String())
+	}
+}
+
+func TestPeopleCapabilityBlocksOnlyPeopleUnitRoutes(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.Use(FeatureGates(Capabilities{People: false, Catalog: true}))
+	router.POST("/api/v1/units/:unit_id/people", func(c *gin.Context) { c.Status(http.StatusCreated) })
+	router.POST("/api/v1/units/:unit_id/people/duplicate-check", func(c *gin.Context) { c.Status(http.StatusOK) })
+	router.GET("/api/v1/units/:unit_id/spaces", func(c *gin.Context) { c.Status(http.StatusOK) })
+	for _, path := range []string{"/api/v1/units/unit-1/people", "/api/v1/units/unit-1/people/duplicate-check"} {
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, httptest.NewRequest(http.MethodPost, path, nil))
+		if response.Code != http.StatusNotFound || !strings.Contains(response.Body.String(), "capability_disabled") {
+			t.Fatalf("%s should be blocked by people capability: %d %s", path, response.Code, response.Body.String())
+		}
+	}
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/units/unit-1/spaces", nil))
+	if response.Code != http.StatusOK {
+		t.Fatalf("spaces route should not be blocked by people capability: %d", response.Code)
 	}
 }

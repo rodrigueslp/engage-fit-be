@@ -4,7 +4,51 @@ Manual canônico de arquitetura e negócio: `docs/system-design.md`.
 
 Guia operacional consolidado: `docs/application-readiness-guide.md`.
 
-Atualizado em: 2026-08-18 (SPEC-001/D e SPEC-002/A prontas para agentes; sem implementação)
+Atualizado em: 2026-08-18 (SPEC-002/A validada localmente no worktree; sem push/deploy)
+
+## Checkpoint de execução — SPEC-002/A validada localmente
+
+A slice `SPEC-002/A — Fundação de pessoa e cadastro manual compatível` foi
+implementada nos worktrees dedicados da branch
+`feature/spec-002-people-foundation`, sem acessar ou alterar outros workspaces.
+
+Backend:
+
+- migration provisória `055_create_people_foundation.sql`, com `persons`,
+  endereços, vínculos, idempotência, auditoria e `students.person_id` nullable;
+- backfill um-para-um transacional e reconciliado, sem merges por nome,
+  telefone, e-mail, origem ou conta do atleta;
+- módulo `people` com CPF cifrado por AES-GCM, associated data por pessoa e
+  lookup/fingerprint por HMAC-SHA-256 dedicado;
+- cadastro manual transacional cria pessoa, vínculo e `Student box_member`
+  com `contact_status=unknown`, sem evento de consentimento;
+- duplicate check, conflitos seguros, capability `people`, configuração
+  fail-fast, integração ao privacy export/anonymization e contagem agregada de
+  students legados sem pessoa.
+
+Frontend:
+
+- botão `Novo aluno` somente para owner com capability `people`;
+- bottom sheet mobile com nome, WhatsApp e CPF na primeira visão, e-mail e
+  endereço por abertura progressiva;
+- bloqueio de CPF, revisão explícita de telefone compartilhado, chave
+  idempotente preservada em retries, recarga/destaque da lista e sucesso;
+- nenhuma autorização de contato é inferida ou apresentada como selecionada.
+
+Validação concluída:
+
+- migrations `001..055` em PostgreSQL vazio e segundo run com zero aplicações;
+- upgrade real da `054`, reconciliação de backfill e suíte PostgreSQL completa;
+- `go test ./...`, `go vet ./...` e race detector em Linux/CGO;
+- TypeScript, build Vite e Playwright completo: 19 testes passaram e 2 testes
+  reais foram ignorados por exigirem `E2E_REAL_API=true`;
+- revisão visual em `360x800`, `git diff --check`, tenancy, PII/logs,
+  consentimento e compatibilidade de `student_id` revisados.
+
+O banco temporário de validação foi removido. Não houve push, merge, deploy,
+feature flag habilitada nem alteração de produção. O integrador ainda precisa
+confirmar ou renumerar a migration provisória `055` conforme a ordem de merge
+com a `SPEC-001/D`.
 
 ## Checkpoint SDD — próximas duas slices prontas
 

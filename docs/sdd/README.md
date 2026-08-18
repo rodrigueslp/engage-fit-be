@@ -68,8 +68,8 @@ Uma spec em `draft` não autoriza migrations ou contratos públicos definitivos.
 
 1. `ARCH-001` — fundação modular e evolução segura.
 2. `SPEC-001` — organização, unidades, modalidades e espaços.
-3. Implementar `SPEC-001/D` (serviços) e `SPEC-002/A` (fundação de pessoas) em
-   paralelo, sem reabrir as slices A/B validadas.
+3. Integrar a `SPEC-002/A` validada localmente e implementar `SPEC-001/D`
+   (serviços), sem reabrir as slices já validadas.
 4. `SPEC-003` — planos, matrículas, adicionais e direitos de acesso.
 5. Contratos, financeiro do aluno e agenda podem avançar em paralelo quando a
    fundação aplicável (`SPEC-001/B-D`, `SPEC-002` e `SPEC-003`) estiver

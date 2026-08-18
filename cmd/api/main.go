@@ -37,6 +37,7 @@ import (
 	"boxengage/backend/internal/app/imports"
 	"boxengage/backend/internal/app/messages"
 	messagingapp "boxengage/backend/internal/app/messaging"
+	"boxengage/backend/internal/app/people"
 	"boxengage/backend/internal/app/platformadmin"
 	reportsapp "boxengage/backend/internal/app/reports"
 	"boxengage/backend/internal/app/retention"
@@ -126,7 +127,8 @@ func main() {
 	userRepository := pgrepo.NewUserGormRepository(db)
 	teamRepository := pgrepo.NewTeamGormRepository(db)
 	studentRepository := pgrepo.NewStudentGormRepository(db)
-	privacyRepository := pgrepo.NewPrivacyGormRepository(db)
+	peopleRepository := pgrepo.NewPeopleGormRepository(db)
+	privacyRepository := pgrepo.NewPrivacyGormRepository(db, secretCipher)
 	contactActivationRepository := pgrepo.NewContactActivationGormRepository(db)
 	checkinRepository := pgrepo.NewCheckinGormRepository(db)
 	attendanceRepository := pgrepo.NewAttendanceGormRepository(db)
@@ -196,6 +198,18 @@ func main() {
 	updateBoxUseCase := boxes.NewUpdateBoxUseCase(boxRepository)
 	catalogService := catalog.NewService(catalogRepository, transactionManager)
 	teamService := team.NewService(userRepository, teamRepository, passwordService)
+	var peopleService *people.Service
+	if cfg.FeaturePeopleFoundationEnabled {
+		peopleService, err = people.NewService(peopleRepository, boxRepository, secretCipher, cfg.PersonLookupHMACKey)
+		if err != nil {
+			log.Fatalf("invalid people foundation configuration: %v", err)
+		}
+	}
+	if missingPeople, countErr := peopleRepository.CountStudentsWithoutPerson(context.Background()); countErr != nil {
+		slog.Warn("people_foundation_debt_count_failed", "error_kind", "database")
+	} else {
+		slog.Info("people_foundation_legacy_students", "students_without_person", missingPeople)
+	}
 
 	listStudentsUseCase := students.NewListStudentsUseCase(studentRepository)
 	getStudentUseCase := students.NewGetStudentUseCase(studentRepository)
@@ -311,6 +325,7 @@ func main() {
 		GetBoxUseCase:             getBoxUseCase,
 		UpdateBoxUseCase:          updateBoxUseCase,
 		CatalogService:            catalogService,
+		PeopleService:             peopleService,
 
 		ListStudentsUseCase:            listStudentsUseCase,
 		GetStudentUseCase:              getStudentUseCase,
@@ -442,6 +457,7 @@ func main() {
 			Automation: cfg.FeatureAutomationEnabled, Workouts: cfg.FeatureWorkoutsEnabled, LLM: cfg.FeatureLLMEnabled,
 			Billing: cfg.FeatureBillingEnabled, Catalog: cfg.FeatureCatalogEnabled,
 			ServiceCatalog: cfg.FeatureServiceCatalogEnabled,
+			People:         cfg.FeaturePeopleFoundationEnabled,
 		},
 		BillingService: billingService,
 		AthleteService: athleteService,
