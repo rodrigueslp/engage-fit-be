@@ -43,3 +43,12 @@ func RecordStaleAutomationRuns(ctx context.Context, count int64) {
 	counter, _ := meter.Int64Counter("engagefit.automation.stale_runs", metric.WithDescription("Automacoes marcadas como stale"))
 	counter.Add(ctx, count)
 }
+
+func RecordMembershipCommand(ctx context.Context, command, result string, elapsed time.Duration) {
+	meter := otel.Meter("engagefit/business")
+	commands, _ := meter.Int64Counter("engagefit.memberships.commands", metric.WithDescription("Comandos do catálogo de planos"))
+	duration, _ := meter.Float64Histogram("engagefit.memberships.command.duration", metric.WithUnit("s"), metric.WithDescription("Latência dos comandos do catálogo de planos"))
+	attrs := metric.WithAttributes(attribute.String("command", command), attribute.String("result", result))
+	commands.Add(ctx, 1, attrs)
+	duration.Record(ctx, elapsed.Seconds(), attrs)
+}

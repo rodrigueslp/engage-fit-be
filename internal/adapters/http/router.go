@@ -23,6 +23,7 @@ import (
 	"boxengage/backend/internal/app/dashboard"
 	"boxengage/backend/internal/app/email"
 	"boxengage/backend/internal/app/imports"
+	"boxengage/backend/internal/app/memberships"
 	"boxengage/backend/internal/app/messages"
 	"boxengage/backend/internal/app/people"
 	"boxengage/backend/internal/app/platformadmin"
@@ -53,6 +54,7 @@ type RouterDependencies struct {
 	UpdateBoxUseCase          boxes.UpdateBoxUseCase
 	CatalogService            *catalog.Service
 	PeopleService             *people.Service
+	MembershipService         *memberships.Service
 
 	ListStudentsUseCase            students.ListStudentsUseCase
 	GetStudentUseCase              students.GetStudentUseCase
@@ -355,6 +357,19 @@ func NewRouter(deps RouterDependencies) *gin.Engine {
 		ownerPeople.Use(middleware.Owner())
 		ownerPeople.POST("/units/:unit_id/people/duplicate-check", peopleHandler.DuplicateCheck)
 		ownerPeople.POST("/units/:unit_id/people", peopleHandler.Create)
+	}
+	if deps.MembershipService != nil {
+		membershipHandler := handlers.NewMembershipHandler(deps.MembershipService)
+		ownerMemberships := protected.Group("")
+		ownerMemberships.Use(middleware.Owner())
+		ownerMemberships.GET("/membership-plans", membershipHandler.List)
+		ownerMemberships.POST("/membership-plans", membershipHandler.Create)
+		ownerMemberships.GET("/membership-plans/:id", membershipHandler.Get)
+		ownerMemberships.PATCH("/membership-plans/:id/draft", membershipHandler.UpdateDraft)
+		ownerMemberships.POST("/membership-plans/:id/publish", membershipHandler.Publish)
+		ownerMemberships.POST("/membership-plans/:id/versions", membershipHandler.NewVersion)
+		ownerMemberships.POST("/membership-plans/:id/archive", membershipHandler.Archive)
+		ownerMemberships.POST("/membership-plans/:id/reactivate", membershipHandler.Reactivate)
 	}
 
 	dashboardHandler := handlers.NewDashboardHandler(deps.DashboardSummaryUseCase, deps.DashboardActiveCampaignsUseCase, deps.DashboardNearGoalUseCase, deps.DashboardAtRiskUseCase, deps.ListPendingRewardDeliveriesUseCase)

@@ -192,6 +192,59 @@ func (r CatalogGormRepository) SetUnitServiceOfferingActive(ctx context.Context,
 	return nil
 }
 
+// ResolvePlanReferences is the catalog module's public read contract for plan
+// composition. It deliberately returns domain values instead of persistence
+// models and scopes both organization and current unit.
+func (r CatalogGormRepository) ResolvePlanReferences(ctx context.Context, organizationID, unitID domain.ID, modalityIDs, serviceOfferingIDs []domain.ID) ([]domain.CatalogPlanReference, error) {
+	db := databaseForContext(r.db, ctx)
+	result := make([]domain.CatalogPlanReference, 0, len(modalityIDs)+len(serviceOfferingIDs))
+	if len(modalityIDs) > 0 {
+		ids := make([]string, 0, len(modalityIDs))
+		for _, id := range modalityIDs {
+			ids = append(ids, stringID(id))
+		}
+		var rows []struct {
+			ID           string
+			Name         string
+			Status       string
+			ActiveInUnit bool `gorm:"column:active_in_unit"`
+		}
+		if err := db.Table("modalities m").
+			Select("m.id, m.name, m.status, um.active AS active_in_unit").
+			Joins("JOIN unit_modalities um ON um.modality_id = m.id AND um.organization_id = m.organization_id").
+			Where("m.organization_id = ? AND um.organization_id = ? AND um.unit_id = ? AND m.id IN ?", stringID(organizationID), stringID(organizationID), stringID(unitID), ids).
+			Scan(&rows).Error; err != nil {
+			return nil, err
+		}
+		for _, row := range rows {
+			result = append(result, domain.CatalogPlanReference{ID: domainID(row.ID), Type: "modality", Name: row.Name, Status: domain.CatalogStatus(row.Status), ActiveInUnit: row.ActiveInUnit})
+		}
+	}
+	if len(serviceOfferingIDs) > 0 {
+		ids := make([]string, 0, len(serviceOfferingIDs))
+		for _, id := range serviceOfferingIDs {
+			ids = append(ids, stringID(id))
+		}
+		var rows []struct {
+			ID           string
+			Name         string
+			Status       string
+			ActiveInUnit bool `gorm:"column:active_in_unit"`
+		}
+		if err := db.Table("service_offerings so").
+			Select("so.id, so.name, so.status, uso.active AS active_in_unit").
+			Joins("JOIN unit_service_offerings uso ON uso.service_offering_id = so.id AND uso.organization_id = so.organization_id").
+			Where("so.organization_id = ? AND uso.organization_id = ? AND uso.unit_id = ? AND so.id IN ?", stringID(organizationID), stringID(organizationID), stringID(unitID), ids).
+			Scan(&rows).Error; err != nil {
+			return nil, err
+		}
+		for _, row := range rows {
+			result = append(result, domain.CatalogPlanReference{ID: domainID(row.ID), Type: "service_offering", Name: row.Name, Status: domain.CatalogStatus(row.Status), ActiveInUnit: row.ActiveInUnit})
+		}
+	}
+	return result, nil
+}
+
 func (r CatalogGormRepository) ListSpaces(ctx context.Context, unitID domain.ID, includeArchived bool) ([]domain.Space, error) {
 	query := databaseForContext(r.db, ctx).Where("unit_id = ?", stringID(unitID))
 	if !includeArchived {

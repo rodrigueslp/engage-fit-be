@@ -1,12 +1,12 @@
 # SPEC-003/A — Catálogo versionado de planos
 
-- Status: `ready`
+- Status: `validated locally`
 - Versão: `1.0`
 - Data: 2026-08-18
 - Depende de: `ARCH-001`, `SPEC-001/B-D`, `SPEC-002/A`, `SPEC-003`
 - Ownership: módulo novo `memberships`
 - Repositórios envolvidos: `engage-fit-be` e `engage-fit-fe`
-- Migration: próximo número provisório após `056`
+- Migration: `057_create_membership_plan_catalog.sql` (número provisório)
 
 ## 1. Resultado esperado
 
@@ -536,3 +536,29 @@ os termos base e os pontos de extensão sem inventar comportamento operacional.
   implementação e validação;
 - nenhum push, merge, deploy, migration de produção ou habilitação de flag pelo
   agente executor.
+
+## 18. Evidências da execução local
+
+Validação concluída em 2026-08-18 nos worktrees dedicados da SPEC-003/A:
+
+- migration completa em PostgreSQL temporário vazio: 57 arquivos aplicados;
+- segundo `engagefit-migrate up` no mesmo banco: `0 applied`;
+- teste de upgrade aplica `001`–`056`, semeia catálogo e people, aplica apenas
+  `057`, confirma as cinco tabelas vazias e remove o banco temporário;
+- tentativas SQL diretas de alterar ou excluir versão publicada/retirada e seus
+  direitos foram rejeitadas pelos triggers; `published -> retired` foi aceita;
+- `TEST_DATABASE_URL=... go test ./...`: passou, incluindo integração real,
+  tenant adversário, rollback de auditoria, idempotência/replay estável,
+  conflito de revisão, publicação e clonagem;
+- `go vet ./...`: passou;
+- `go test -race -count=1 ./...`: passou em `golang:1.25-bookworm`, pois o host
+  local não possui compilador C;
+- TypeScript e build Vite: passaram;
+- Playwright focado: 4 testes passaram; regressão: 25 passaram e 2 fluxos reais
+  opt-in preexistentes foram ignorados por não haver stack E2E real habilitada;
+- revisão visual em Chromium `360x800`: cards e ações legíveis, sem overflow
+  horizontal;
+- capability permanece desligada por padrão e nenhuma ação externa é criada.
+
+Não houve divergência de contrato. A migration `057` continua provisória para
+confirmação ou renumeração pelo integrador.

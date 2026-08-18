@@ -100,3 +100,19 @@ func TestEmbeddedMigrationsIncludePeopleFoundation(t *testing.T) {
 	}
 	t.Fatal("people foundation migration not found")
 }
+
+func TestEmbeddedMigrationsIncludeMembershipPlanCatalog(t *testing.T) {
+	loaded, err := Load(Files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, migration := range loaded {
+		if migration.Version == 57 {
+			if migration.Name != "create_membership_plan_catalog" || !strings.Contains(migration.SQL, "CREATE TABLE membership_plans") || !strings.Contains(migration.SQL, "prevent_membership_plan_version_mutation") {
+				t.Fatalf("unexpected membership migration: %+v", migration)
+			}
+			return
+		}
+	}
+	t.Fatal("membership plan catalog migration not found")
+}

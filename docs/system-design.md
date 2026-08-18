@@ -67,6 +67,12 @@ fase, o owner e o coach podem ler o catálogo da unidade autorizada por
 `users.box_id`; somente o owner pode
 alterá-lo. Ainda não existe seleção ou acesso multiunidade.
 
+O módulo `memberships` mantém o catálogo comercial de planos na organização,
+mas fixa `home_unit_id` na unidade da sessão que criou o plano. Somente essa
+unidade pode consultar ou operar o plano, mesmo quando outra unidade pertence à
+mesma organização. O owner é o único papel autorizado; coach e platform admin
+não recebem essa superfície. A slice não cria matrícula nem decide acesso.
+
 ### 3.2 `OWNER`
 
 É o usuário operacional de uma academia. O sistema atual espera conceitualmente um owner por box, embora o banco ainda não imponha uma constraint de unicidade para isso.
@@ -293,10 +299,12 @@ Existem duas decisões diferentes:
 | Catálogo | `FEATURE_CATALOG_ENABLED` | não possui efeito externo |
 | Serviços ofertáveis | `FEATURE_CATALOG_ENABLED` + `FEATURE_SERVICE_CATALOG_ENABLED` | não possui efeito externo |
 | Fundação de pessoas | `FEATURE_PEOPLE_FOUNDATION_ENABLED` | não possui efeito externo |
+| Catálogo de planos | `FEATURE_MEMBERSHIPS_ENABLED` + catálogo | não possui efeito externo |
 
 Defaults:
 
-- development: capabilities ligadas, exceto `people`, efeitos reais desligados;
+- development: capabilities ligadas, exceto `people` e `memberships`, efeitos
+  reais desligados;
 - production: capabilities desligadas, efeitos reais desligados;
 - mocks continuam permitidos para testes sem rede externa.
 
@@ -345,6 +353,10 @@ erDiagram
     ORGANIZATIONS ||--o{ SERVICE_OFFERINGS : owns
     BOXES ||--o{ UNIT_SERVICE_OFFERINGS : enables
     SERVICE_OFFERINGS ||--o{ UNIT_SERVICE_OFFERINGS : assigned
+    ORGANIZATIONS ||--o{ MEMBERSHIP_PLANS : owns
+    BOXES ||--o{ MEMBERSHIP_PLANS : originates
+    MEMBERSHIP_PLANS ||--|{ MEMBERSHIP_PLAN_VERSIONS : versions
+    MEMBERSHIP_PLAN_VERSIONS ||--|{ MEMBERSHIP_PLAN_ENTITLEMENTS : grants
 ```
 
 ### 9.2 Grupos de tabelas
@@ -364,6 +376,7 @@ erDiagram
 | Privacidade | `privacy_suppressions`, `privacy_audit_events` | impedir reimportação e auditar direitos do titular |
 | Catálogo | `modalities`, `unit_modalities`, `spaces`, `service_offerings`, `unit_service_offerings`, `catalog_audit_events` | modalidades e serviços da organização, ativações por unidade, espaços e auditoria |
 | Pessoas | `persons`, `person_addresses`, `person_unit_relationships`, `person_creation_requests`, `people_audit_events` | identidade humana, endereço, participação na unidade, idempotência e auditoria sem PII |
+| Planos comerciais | `membership_plans`, `membership_plan_versions`, `membership_plan_entitlements`, `membership_plan_command_requests`, `membership_plan_audit_events` | catálogo por organização/unidade de origem, versões imutáveis, direitos, idempotência e auditoria |
 | Schema | `schema_migrations` | versão, checksum e tempo de execução |
 
 ### 9.3 Invariantes relevantes do banco
@@ -391,6 +404,13 @@ erDiagram
 - CPF confirmado é único por organização por meio de HMAC-SHA-256 dedicado;
 - `students.person_id` é opcional para preservar imports e ativações legados,
   mas a migration inicial cria exatamente uma pessoa e um vínculo por student.
+- nome normalizado de plano é único na organização, inclusive quando arquivado;
+- cada plano tem no máximo um rascunho e uma versão publicada atual;
+- versão publicada ou retirada e seus direitos são imutáveis por triggers;
+- todo direito referencia exatamente uma modalidade ou serviço da mesma
+  organização, e publicação exige que o alvo esteja ativo na unidade de origem;
+- criar plano, publicar e criar nova versão mantêm replay idempotente por
+  organização, comando e chave, recusando a reutilização com outro payload.
 
 ### 9.4 Fundação de pessoas e compatibilidade
 
@@ -418,6 +438,27 @@ nunca produz merge. O `Student` nasce com `contact_status=unknown`; informar
 WhatsApp não cria consentimento nem libera campanhas.
 
 O schema não usa soft delete. Fechar campanha altera `active`; excluir campanha remove dependências conforme as foreign keys.
+
+### 9.5 Catálogo versionado de planos
+
+`MembershipPlan` é o agrupador comercial arquivável. Seus termos ficam em
+`MembershipPlanVersion`: o rascunho aceita edição com revisão otimista, enquanto
+publicar torna a versão e seus direitos imutáveis. Alterar um plano publicado
+clona a versão vigente para o próximo rascunho; a publicação seguinte retira a
+anterior sem alterar seu snapshot.
+
+Os direitos apontam por ID para modalidades ou serviços ofertáveis através da
+porta pública estreita do módulo `catalog`. A persistência reforça tenant por
+FKs compostas; o caso de uso valida disponibilidade na unidade antes de criar,
+editar ou publicar. Desativar depois um item não reescreve versões: a leitura
+preserva nome e termos e acrescenta aviso operacional.
+
+Criação, publicação e nova versão usam `Idempotency-Key`, fingerprint canônico,
+advisory lock e resposta persistida na mesma transação da mudança e da
+auditoria. O replay devolve o snapshot original mesmo se o plano já tiver uma
+versão posterior e volta a validar a unidade de origem. Métricas e logs usam
+somente ação, IDs, resultado e versão; a auditoria transacional preserva preço
+e direitos, sem registrar seu corpo nos logs.
 
 ## 10. Fluxo de importação
 
@@ -1208,6 +1249,32 @@ publicar o frontend em qualquer ordem e habilitar somente após smoke de
 cadastro, replay, conflitos e privacy. Rollback operacional é desligar a flag;
 as estruturas e os students compatíveis permanecem.
 
+### 17.5 Rollout do catálogo versionado de planos
+
+A migration provisória `057_create_membership_plan_catalog.sql` é aditiva:
+cria as cinco tabelas de planos, índices, constraints e triggers de
+imutabilidade, sem seed, backfill ou alteração de `billing_plans`, students,
+check-ins e demais fluxos legados. O integrador deve confirmar ou renumerar
+`057` no merge.
+
+Em instalação sem uso, depois da migration e antes de habilitar a capability,
+as contagens abaixo devem permanecer zero:
+
+```sql
+SELECT COUNT(*) FROM membership_plans;
+SELECT COUNT(*) FROM membership_plan_versions;
+SELECT COUNT(*) FROM membership_plan_entitlements;
+SELECT COUNT(*) FROM membership_plan_command_requests;
+SELECT COUNT(*) FROM membership_plan_audit_events;
+```
+
+Publicar backend com `FEATURE_MEMBERSHIPS_ENABLED=false`; a validação de startup
+impede habilitá-la sem `FEATURE_CATALOG_ENABLED=true`. Publicar o frontend, que
+trata capability ausente como `false`, executar smoke owner de criação,
+publicação, nova versão e arquivamento e somente então considerar a habilitação.
+O rollback operacional desliga a flag e, se necessário, reverte os binários; o
+schema aditivo permanece. A API não executa migration no startup.
+
 ## 18. Runtime, containers e shutdown
 
 ### 18.1 API
@@ -1293,6 +1360,7 @@ A lista executável completa está em `.env.example`. Os grupos conceituais são
 | Observabilidade | `OTEL_*`, `PROMETHEUS_*`, build info | sinais ausentes ou endpoint exposto |
 | Criptografia | `DATA_ENCRYPTION_*` | perda irreversível de credenciais |
 | Identidade/CPF | `FEATURE_PEOPLE_FOUNDATION_ENABLED`, `PERSON_LOOKUP_HMAC_KEY` | enumeração de CPF, indisponibilidade de cadastro ou perda de lookup |
+| Planos | `FEATURE_MEMBERSHIPS_ENABLED` (depende de `FEATURE_CATALOG_ENABLED`) | exposição prematura do catálogo comercial |
 | Retenção | `PRIVACY_RETENTION_*` | exclusão prematura ou retenção excessiva |
 
 Production faz fail-fast para banco, JWT, cookie Secure, admin e cifra. Setup/Prometheus habilitados exigem tokens fortes.
@@ -1309,6 +1377,7 @@ O contrato definitivo está em `internal/adapters/http/router.go`. Mapa resumido
 | `/api/v1/box`, `/students`, `/checkins` | OWNER/COACH, conforme allowlist | tenant, alunos e frequência |
 | `/api/v1/organization`, `/modalities`, `/service-offerings`, `/units/:unit_id/{modalities,spaces,service-offerings}` | OWNER/COACH para leitura; OWNER para mutação | organização atual, modalidades, espaços e serviços ofertáveis |
 | `/api/v1/units/:unit_id/people` | OWNER + capability `people` | duplicate check e cadastro manual idempotente |
+| `/api/v1/membership-plans*` | OWNER + capability `memberships` | catálogo comercial, rascunho, publicação, nova versão e arquivamento |
 | `/api/v1/retention*`, `/students/:id/retention-monitoring`, `/team/members` | OWNER/COACH | radar, jornada, exclusões reversíveis, ações e consulta da equipe |
 | `/api/v1/imports`, `/checkin-ingestion*` | OWNER ou credencial de ingestão | upload manual e entrada recorrente |
 | `/api/v1/team/coaches*` | OWNER | criação, desativação e senha de coaches |
@@ -1360,6 +1429,8 @@ Ao adicionar endpoint:
 | token antigo continuar válido | auth_version e testes de logout/senha |
 | CSRF | teste cookie sem/com header |
 | migration alterada | checksum e idempotência |
+| termos publicados alterados | triggers de imutabilidade em versão e direitos |
+| comando de plano duplicado | advisory lock, fingerprint e resposta persistida |
 | duas réplicas executarem schedule | claim concorrente PostgreSQL |
 | ultrapassar limite WhatsApp | reserva concorrente e testes de governance |
 | reimportar aluno anonimizado | teste de privacy suppression |
@@ -1449,6 +1520,7 @@ Hoje há lógica de audiência semelhante em três packages. Mudanças devem ser
 | rate limit em memória | zero infraestrutura extra | não é global entre réplicas |
 | sem RLS | código/repositories mais simples | isolamento depende de disciplina/testes |
 | `Organization` adicionada sem trocar o tenant da sessão | evolução aditiva e sem regressão dos fluxos atuais | multiunidade ainda exige memberships, allowlist e seleção explícita de contexto |
+| plano pertence à organização, mas é operado só pela unidade de origem | prepara identidade organizacional sem ampliar autorização | catálogo compartilhado entre unidades exige contrato futuro explícito |
 | preservar check-ins após anonimização | métricas históricas | dado comportamental continua armazenado anonimamente |
 | frontend sem state/router libs | pequena superfície | mais código manual e menos cache |
 
@@ -1467,7 +1539,9 @@ Hoje há lógica de audiência semelhante em três packages. Mudanças devem ser
 
 ### Produto/qualidade
 
-- concluir `SPEC-001/C`: memberships e acesso multiunidade; até lá `users.box_id` continua sendo o único contexto autorizado;
+- implementar matrículas e acesso multiunidade nas slices futuras; até lá
+  `users.box_id` continua sendo o único contexto autorizado e planos não são
+  vendidos a pessoas;
 - recuperação de senha por token/e-mail;
 - paginação e filtros server-side;
 - histórico e conversão de brindes/mensagens;
@@ -1603,6 +1677,7 @@ Você domina o núcleo quando consegue explicar:
 | Rotas e autorização | `internal/adapters/http/router.go` |
 | Domínio | `internal/domain` |
 | Catálogo de estrutura e serviços | `internal/app/catalog`, `catalog_repository.go`, `catalog_handler.go` |
+| Catálogo versionado de planos | `internal/app/memberships`, `membership_repository.go`, `membership_handler.go`, `engage-fit-fe/src/pages/plans/PlansPage.tsx` |
 | Pessoas/cadastro manual | `internal/app/people`, `people_repository.go`, `people_handler.go` |
 | Importação | `internal/app/imports/import_checkins_usecase.go` |
 | Campanhas/progresso | `internal/app/campaigns/campaign_usecases.go` |

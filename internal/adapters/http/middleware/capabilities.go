@@ -18,6 +18,7 @@ type Capabilities struct {
 	Catalog        bool `json:"catalog"`
 	ServiceCatalog bool `json:"service_catalog"`
 	People         bool `json:"people"`
+	Memberships    bool `json:"memberships"`
 }
 
 func FeatureGates(capabilities Capabilities) gin.HandlerFunc {
@@ -44,6 +45,8 @@ func FeatureGates(capabilities Capabilities) gin.HandlerFunc {
 			disabled = !capabilities.Catalog
 		case isPeoplePath(path):
 			disabled = !capabilities.People
+		case strings.HasPrefix(path, "/api/v1/membership-plans"):
+			disabled = !capabilities.Memberships
 		}
 		if disabled {
 			apiresponse.AbortError(c, http.StatusNotFound, "capability_disabled", "capability disabled")

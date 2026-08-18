@@ -35,6 +35,7 @@ import (
 	"boxengage/backend/internal/app/dashboard"
 	emailapp "boxengage/backend/internal/app/email"
 	"boxengage/backend/internal/app/imports"
+	"boxengage/backend/internal/app/memberships"
 	"boxengage/backend/internal/app/messages"
 	messagingapp "boxengage/backend/internal/app/messaging"
 	"boxengage/backend/internal/app/people"
@@ -124,6 +125,7 @@ func main() {
 
 	boxRepository := pgrepo.NewBoxGormRepository(db)
 	catalogRepository := pgrepo.NewCatalogGormRepository(db)
+	membershipRepository := pgrepo.NewMembershipGormRepository(db)
 	userRepository := pgrepo.NewUserGormRepository(db)
 	teamRepository := pgrepo.NewTeamGormRepository(db)
 	studentRepository := pgrepo.NewStudentGormRepository(db)
@@ -197,6 +199,7 @@ func main() {
 	getBoxUseCase := boxes.NewGetBoxUseCase(boxRepository)
 	updateBoxUseCase := boxes.NewUpdateBoxUseCase(boxRepository)
 	catalogService := catalog.NewService(catalogRepository, transactionManager)
+	membershipService := memberships.NewService(membershipRepository, catalogRepository, boxRepository, transactionManager)
 	teamService := team.NewService(userRepository, teamRepository, passwordService)
 	var peopleService *people.Service
 	if cfg.FeaturePeopleFoundationEnabled {
@@ -326,6 +329,7 @@ func main() {
 		UpdateBoxUseCase:          updateBoxUseCase,
 		CatalogService:            catalogService,
 		PeopleService:             peopleService,
+		MembershipService:         membershipService,
 
 		ListStudentsUseCase:            listStudentsUseCase,
 		GetStudentUseCase:              getStudentUseCase,
@@ -458,6 +462,7 @@ func main() {
 			Billing: cfg.FeatureBillingEnabled, Catalog: cfg.FeatureCatalogEnabled,
 			ServiceCatalog: cfg.FeatureServiceCatalogEnabled,
 			People:         cfg.FeaturePeopleFoundationEnabled,
+			Memberships:    cfg.FeatureMembershipsEnabled,
 		},
 		BillingService: billingService,
 		AthleteService: athleteService,

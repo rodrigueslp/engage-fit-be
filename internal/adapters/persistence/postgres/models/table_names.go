@@ -15,6 +15,14 @@ func (UnitServiceOfferingModel) TableName() string { return "unit_service_offeri
 func (SpaceModel) TableName() string               { return "spaces" }
 func (CatalogAuditEventModel) TableName() string   { return "catalog_audit_events" }
 
+func (MembershipPlanModel) TableName() string            { return "membership_plans" }
+func (MembershipPlanVersionModel) TableName() string     { return "membership_plan_versions" }
+func (MembershipPlanEntitlementModel) TableName() string { return "membership_plan_entitlements" }
+func (MembershipPlanCommandRequestModel) TableName() string {
+	return "membership_plan_command_requests"
+}
+func (MembershipPlanAuditEventModel) TableName() string { return "membership_plan_audit_events" }
+
 func (BillingPlanModel) TableName() string         { return "billing_plans" }
 func (BillingCustomerModel) TableName() string     { return "billing_customers" }
 func (BillingSubscriptionModel) TableName() string { return "billing_subscriptions" }
