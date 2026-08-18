@@ -64,6 +64,7 @@ func (catalogTransactionStub) WithinTransaction(ctx context.Context, operation f
 type catalogRepositoryStub struct {
 	current    domain.CatalogContext
 	modalities []domain.Modality
+	services   []domain.ServiceOffering
 }
 
 func (s *catalogRepositoryStub) GetContext(_ context.Context, unitID domain.ID) (*domain.CatalogContext, error) {
@@ -102,6 +103,49 @@ func (s *catalogRepositoryStub) CreateUnitModality(context.Context, *domain.Unit
 func (s *catalogRepositoryStub) SetUnitModalityActive(context.Context, domain.ID, domain.ID, domain.ID, bool) error {
 	return nil
 }
+func (s *catalogRepositoryStub) ListServiceOfferings(context.Context, domain.ID, domain.ID, bool) ([]domain.ServiceOffering, error) {
+	return append([]domain.ServiceOffering(nil), s.services...), nil
+}
+func (s *catalogRepositoryStub) FindServiceOffering(_ context.Context, organizationID, _ domain.ID, serviceOfferingID domain.ID) (*domain.ServiceOffering, error) {
+	for _, item := range s.services {
+		if item.ID == serviceOfferingID && item.OrganizationID == organizationID {
+			copy := item
+			return &copy, nil
+		}
+	}
+	return nil, portrepo.ErrCatalogServiceOfferingNotFound
+}
+func (s *catalogRepositoryStub) CreateServiceOffering(_ context.Context, item *domain.ServiceOffering) error {
+	for _, existing := range s.services {
+		if existing.NameKey == item.NameKey {
+			return portrepo.ErrCatalogServiceOfferingNameConflict
+		}
+	}
+	item.ID = "service-created"
+	s.services = append(s.services, *item)
+	return nil
+}
+func (s *catalogRepositoryStub) UpdateServiceOffering(_ context.Context, updated domain.ServiceOffering) error {
+	for index, item := range s.services {
+		if item.ID == updated.ID && item.OrganizationID == updated.OrganizationID {
+			s.services[index] = updated
+			return nil
+		}
+	}
+	return portrepo.ErrCatalogServiceOfferingNotFound
+}
+func (*catalogRepositoryStub) CreateUnitServiceOffering(context.Context, *domain.UnitServiceOffering) error {
+	return nil
+}
+func (s *catalogRepositoryStub) SetUnitServiceOfferingActive(_ context.Context, organizationID, _ domain.ID, serviceOfferingID domain.ID, active bool) error {
+	for index, item := range s.services {
+		if item.ID == serviceOfferingID && item.OrganizationID == organizationID {
+			s.services[index].ActiveInUnit = active
+			return nil
+		}
+	}
+	return portrepo.ErrCatalogServiceOfferingNotFound
+}
 func (s *catalogRepositoryStub) ListSpaces(context.Context, domain.ID, bool) ([]domain.Space, error) {
 	return []domain.Space{}, nil
 }
@@ -122,7 +166,7 @@ func TestCatalogHTTPContractsRolesAndCSRF(t *testing.T) {
 			repository := &catalogRepositoryStub{current: domain.CatalogContext{Organization: domain.Organization{ID: "organization-1", Name: "Organization", Status: domain.OrganizationStatusActive}, Unit: domain.Box{ID: unitID, OrganizationID: "organization-1", Name: "Unit", Status: domain.BoxStatusActive}}}
 			service := catalog.NewService(repository, catalogTransactionStub{})
 			user := domain.User{ID: userID, BoxID: unitID, Role: role, AuthVersion: 1, Active: true, CreatedAt: now, UpdatedAt: now}
-			router := NewRouter(RouterDependencies{TokenService: catalogTokenStub{claims: services.AuthClaims{UserID: userID, BoxID: unitID, Role: role, AuthVersion: 1}}, UserRepository: catalogUserStub{user: user}, BoxRepository: catalogBoxStub{box: repository.current.Unit}, CatalogService: service, Capabilities: middleware.Capabilities{Catalog: true}, SessionConfig: middleware.SessionConfig{CookieName: "session", CSRFCookieName: "csrf"}})
+			router := NewRouter(RouterDependencies{TokenService: catalogTokenStub{claims: services.AuthClaims{UserID: userID, BoxID: unitID, Role: role, AuthVersion: 1}}, UserRepository: catalogUserStub{user: user}, BoxRepository: catalogBoxStub{box: repository.current.Unit}, CatalogService: service, Capabilities: middleware.Capabilities{Catalog: true, ServiceCatalog: true}, SessionConfig: middleware.SessionConfig{CookieName: "session", CSRFCookieName: "csrf"}})
 
 			organization := catalogRequest(router, http.MethodGet, "/api/v1/organization", "", true, false)
 			if organization.Code != http.StatusOK || !strings.Contains(organization.Body.String(), "current_unit") {
@@ -132,13 +176,49 @@ func TestCatalogHTTPContractsRolesAndCSRF(t *testing.T) {
 			if list.Code != http.StatusOK {
 				t.Fatalf("catalog list for %s: %d %s", role, list.Code, list.Body.String())
 			}
+			serviceList := catalogRequest(router, http.MethodGet, "/api/v1/service-offerings", "", true, false)
+			if serviceList.Code != http.StatusOK {
+				t.Fatalf("service catalog list for %s: %d %s", role, serviceList.Code, serviceList.Body.String())
+			}
 
 			create := catalogRequest(router, http.MethodPost, "/api/v1/modalities", `{"name":"  Cross   Training "}`, true, false)
 			if role == domain.UserRoleCoach {
 				if create.Code != http.StatusForbidden || !strings.Contains(create.Body.String(), "owner_required") {
 					t.Fatalf("coach mutation: %d %s", create.Code, create.Body.String())
 				}
+				createService := catalogRequest(router, http.MethodPost, "/api/v1/service-offerings", `{"name":"Recovery"}`, true, false)
+				if createService.Code != http.StatusForbidden || !strings.Contains(createService.Body.String(), "owner_required") {
+					t.Fatalf("coach service mutation: %d %s", createService.Code, createService.Body.String())
+				}
 				return
+			}
+			createService := catalogRequest(router, http.MethodPost, "/api/v1/service-offerings", `{"name":"  Recovery ","description":" Sessão de recuperação ","color":"#a1b2c3"}`, true, false)
+			if createService.Code != http.StatusCreated || !strings.Contains(createService.Body.String(), `"name":"Recovery"`) || !strings.Contains(createService.Body.String(), `"description":"Sessão de recuperação"`) || !strings.Contains(createService.Body.String(), `"color":"#A1B2C3"`) {
+				t.Fatalf("owner service create contract: %d %s", createService.Code, createService.Body.String())
+			}
+			duplicateService := catalogRequest(router, http.MethodPost, "/api/v1/service-offerings", `{"name":"recovery"}`, true, false)
+			if duplicateService.Code != http.StatusConflict || !strings.Contains(duplicateService.Body.String(), "service_offering_name_conflict") {
+				t.Fatalf("service duplicate contract: %d %s", duplicateService.Code, duplicateService.Body.String())
+			}
+			crossUnitService := catalogRequest(router, http.MethodGet, "/api/v1/service-offerings?unit_id=other-unit", "", true, false)
+			if crossUnitService.Code != http.StatusNotFound || !strings.Contains(crossUnitService.Body.String(), "unit_not_found") {
+				t.Fatalf("cross-unit service contract: %d %s", crossUnitService.Code, crossUnitService.Body.String())
+			}
+			archiveService := catalogRequest(router, http.MethodPatch, "/api/v1/service-offerings/service-created", `{"status":"archived"}`, true, false)
+			if archiveService.Code != http.StatusOK || !strings.Contains(archiveService.Body.String(), `"status":"archived"`) {
+				t.Fatalf("service archive contract: %d %s", archiveService.Code, archiveService.Body.String())
+			}
+			activateArchivedService := catalogRequest(router, http.MethodPut, "/api/v1/units/11111111-1111-4111-8111-111111111111/service-offerings/service-created", `{"active":true}`, true, false)
+			if activateArchivedService.Code != http.StatusConflict || !strings.Contains(activateArchivedService.Body.String(), "service_offering_archived") {
+				t.Fatalf("archived service activation contract: %d %s", activateArchivedService.Code, activateArchivedService.Body.String())
+			}
+			serviceWithoutCSRF := catalogRequest(router, http.MethodPost, "/api/v1/service-offerings", `{"name":"Nutrição"}`, false, false)
+			if serviceWithoutCSRF.Code != http.StatusForbidden || !strings.Contains(serviceWithoutCSRF.Body.String(), "csrf_invalid") {
+				t.Fatalf("service missing csrf: %d %s", serviceWithoutCSRF.Code, serviceWithoutCSRF.Body.String())
+			}
+			serviceWithCSRF := catalogRequest(router, http.MethodPost, "/api/v1/service-offerings", `{"name":"Nutrição"}`, false, true)
+			if serviceWithCSRF.Code != http.StatusCreated {
+				t.Fatalf("service valid csrf: %d %s", serviceWithCSRF.Code, serviceWithCSRF.Body.String())
 			}
 			if create.Code != http.StatusCreated || !strings.Contains(create.Body.String(), `"name":"Cross Training"`) || !strings.Contains(create.Body.String(), `"color":"#0F766E"`) {
 				t.Fatalf("owner create contract: %d %s", create.Code, create.Body.String())
@@ -161,6 +241,23 @@ func TestCatalogHTTPContractsRolesAndCSRF(t *testing.T) {
 				t.Fatalf("valid csrf: %d %s", withCSRF.Code, withCSRF.Body.String())
 			}
 		})
+	}
+}
+
+func TestPlatformAdminCannotAccessServiceCatalog(t *testing.T) {
+	userID := domain.ID("22222222-2222-4222-8222-222222222222")
+	user := domain.User{ID: userID, Role: domain.UserRolePlatformAdmin, AuthVersion: 1, Active: true}
+	repository := &catalogRepositoryStub{}
+	router := NewRouter(RouterDependencies{
+		TokenService:   catalogTokenStub{claims: services.AuthClaims{UserID: userID, Role: domain.UserRolePlatformAdmin, AuthVersion: 1}},
+		UserRepository: catalogUserStub{user: user}, BoxRepository: catalogBoxStub{},
+		CatalogService: catalog.NewService(repository, catalogTransactionStub{}),
+		Capabilities:   middleware.Capabilities{Catalog: true, ServiceCatalog: true},
+		SessionConfig:  middleware.SessionConfig{CookieName: "session", CSRFCookieName: "csrf"},
+	})
+	response := catalogRequest(router, http.MethodGet, "/api/v1/service-offerings", "", true, false)
+	if response.Code != http.StatusUnauthorized || !strings.Contains(response.Body.String(), "tenant_missing") {
+		t.Fatalf("platform admin service catalog access: %d %s", response.Code, response.Body.String())
 	}
 }
 

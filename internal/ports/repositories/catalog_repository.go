@@ -8,12 +8,14 @@ import (
 )
 
 var (
-	ErrCatalogOrganizationNotFound = errors.New("catalog organization not found")
-	ErrCatalogUnitNotFound         = errors.New("catalog unit not found")
-	ErrCatalogModalityNotFound     = errors.New("catalog modality not found")
-	ErrCatalogSpaceNotFound        = errors.New("catalog space not found")
-	ErrCatalogModalityNameConflict = errors.New("catalog modality name conflict")
-	ErrCatalogSpaceNameConflict    = errors.New("catalog space name conflict")
+	ErrCatalogOrganizationNotFound        = errors.New("catalog organization not found")
+	ErrCatalogUnitNotFound                = errors.New("catalog unit not found")
+	ErrCatalogModalityNotFound            = errors.New("catalog modality not found")
+	ErrCatalogSpaceNotFound               = errors.New("catalog space not found")
+	ErrCatalogServiceOfferingNotFound     = errors.New("catalog service offering not found")
+	ErrCatalogModalityNameConflict        = errors.New("catalog modality name conflict")
+	ErrCatalogSpaceNameConflict           = errors.New("catalog space name conflict")
+	ErrCatalogServiceOfferingNameConflict = errors.New("catalog service offering name conflict")
 )
 
 type CatalogRepository interface {
@@ -24,6 +26,12 @@ type CatalogRepository interface {
 	UpdateModality(ctx context.Context, modality domain.Modality) error
 	CreateUnitModality(ctx context.Context, association *domain.UnitModality) error
 	SetUnitModalityActive(ctx context.Context, organizationID, unitID, modalityID domain.ID, active bool) error
+	ListServiceOfferings(ctx context.Context, organizationID, unitID domain.ID, includeArchived bool) ([]domain.ServiceOffering, error)
+	FindServiceOffering(ctx context.Context, organizationID, unitID, serviceOfferingID domain.ID) (*domain.ServiceOffering, error)
+	CreateServiceOffering(ctx context.Context, serviceOffering *domain.ServiceOffering) error
+	UpdateServiceOffering(ctx context.Context, serviceOffering domain.ServiceOffering) error
+	CreateUnitServiceOffering(ctx context.Context, association *domain.UnitServiceOffering) error
+	SetUnitServiceOfferingActive(ctx context.Context, organizationID, unitID, serviceOfferingID domain.ID, active bool) error
 	ListSpaces(ctx context.Context, unitID domain.ID, includeArchived bool) ([]domain.Space, error)
 	FindSpace(ctx context.Context, unitID, spaceID domain.ID) (*domain.Space, error)
 	CreateSpace(ctx context.Context, space *domain.Space) error

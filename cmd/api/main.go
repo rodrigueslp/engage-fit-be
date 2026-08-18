@@ -441,6 +441,7 @@ func main() {
 			Whatsapp: cfg.FeatureWhatsappEnabled, Email: cfg.FeatureEmailEnabled,
 			Automation: cfg.FeatureAutomationEnabled, Workouts: cfg.FeatureWorkoutsEnabled, LLM: cfg.FeatureLLMEnabled,
 			Billing: cfg.FeatureBillingEnabled, Catalog: cfg.FeatureCatalogEnabled,
+			ServiceCatalog: cfg.FeatureServiceCatalogEnabled,
 		},
 		BillingService: billingService,
 		AthleteService: athleteService,

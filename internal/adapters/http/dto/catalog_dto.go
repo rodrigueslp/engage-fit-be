@@ -44,6 +44,34 @@ type SetUnitModalityRequest struct {
 	Active *bool `json:"active"`
 }
 
+type ServiceOfferingResponse struct {
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	Description  string `json:"description"`
+	Color        string `json:"color"`
+	Status       string `json:"status"`
+	ActiveInUnit bool   `json:"active_in_unit"`
+	CreatedAt    string `json:"created_at"`
+	UpdatedAt    string `json:"updated_at"`
+}
+
+type CreateServiceOfferingRequest struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Color       string `json:"color"`
+}
+
+type UpdateServiceOfferingRequest struct {
+	Name        *string               `json:"name"`
+	Description *string               `json:"description"`
+	Color       *string               `json:"color"`
+	Status      *domain.CatalogStatus `json:"status"`
+}
+
+type SetUnitServiceOfferingRequest struct {
+	Active *bool `json:"active"`
+}
+
 type SpaceResponse struct {
 	ID              string `json:"id"`
 	UnitID          string `json:"unit_id"`

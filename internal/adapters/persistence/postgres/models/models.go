@@ -51,6 +51,27 @@ type UnitModalityModel struct {
 	UpdatedAt      time.Time
 }
 
+type ServiceOfferingModel struct {
+	ID             string `gorm:"primaryKey"`
+	OrganizationID string `gorm:"index"`
+	Name           string
+	NameKey        string
+	Description    string
+	Color          string
+	Status         string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+}
+
+type UnitServiceOfferingModel struct {
+	OrganizationID    string
+	UnitID            string `gorm:"primaryKey"`
+	ServiceOfferingID string `gorm:"primaryKey"`
+	Active            bool
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+}
+
 type SpaceModel struct {
 	ID              string `gorm:"primaryKey"`
 	UnitID          string `gorm:"index"`

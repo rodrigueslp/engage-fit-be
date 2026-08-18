@@ -56,3 +56,31 @@ func TestCatalogCapabilityBlocksAllCatalogRoutes(t *testing.T) {
 		}
 	}
 }
+
+func TestServiceCatalogRequiresBothCapabilities(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	for _, capabilities := range []Capabilities{
+		{Catalog: false, ServiceCatalog: true},
+		{Catalog: true, ServiceCatalog: false},
+	} {
+		router := gin.New()
+		router.Use(FeatureGates(capabilities))
+		router.Any("/*path", func(c *gin.Context) { c.Status(http.StatusNoContent) })
+		for _, path := range []string{"/api/v1/service-offerings", "/api/v1/service-offerings/id", "/api/v1/units/unit-id/service-offerings/id"} {
+			response := httptest.NewRecorder()
+			router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, path, nil))
+			if response.Code != http.StatusNotFound || !strings.Contains(response.Body.String(), "capability_disabled") {
+				t.Fatalf("%s should require both service catalog capabilities: %d %s", path, response.Code, response.Body.String())
+			}
+		}
+	}
+
+	router := gin.New()
+	router.Use(FeatureGates(Capabilities{Catalog: true, ServiceCatalog: true}))
+	router.Any("/*path", func(c *gin.Context) { c.Status(http.StatusNoContent) })
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/service-offerings", nil))
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("enabled service catalog should pass: %d %s", response.Code, response.Body.String())
+	}
+}

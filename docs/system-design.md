@@ -1,6 +1,6 @@
 # EngageFit — manual de engenharia e design do sistema
 
-Atualizado em: 2026-08-11
+Atualizado em: 2026-08-18
 
 Status: documento canônico da arquitetura atual.
 
@@ -61,9 +61,10 @@ Cada box configura:
 - dias sem treino que caracterizam risco de inatividade;
 - cooldown entre mensagens de risco.
 
-O módulo `catalog` usa a organização como escopo das modalidades reutilizáveis
-e a unidade atual como escopo dos espaços. Nesta fase, o owner e o coach podem
-ler o catálogo da unidade autorizada por `users.box_id`; somente o owner pode
+O módulo `catalog` usa a organização como escopo das modalidades e serviços
+ofertáveis reutilizáveis, e a unidade atual como escopo dos espaços. Nesta
+fase, o owner e o coach podem ler o catálogo da unidade autorizada por
+`users.box_id`; somente o owner pode
 alterá-lo. Ainda não existe seleção ou acesso multiunidade.
 
 ### 3.2 `OWNER`
@@ -290,6 +291,7 @@ Existem duas decisões diferentes:
 | Treino do dia | `FEATURE_WORKOUTS_ENABLED` | envio depende do WhatsApp |
 | Geração por IA | `FEATURE_LLM_ENABLED` + workouts | `OPENAI_API_KEY` configurada |
 | Catálogo | `FEATURE_CATALOG_ENABLED` | não possui efeito externo |
+| Serviços ofertáveis | `FEATURE_CATALOG_ENABLED` + `FEATURE_SERVICE_CATALOG_ENABLED` | não possui efeito externo |
 
 Defaults:
 
@@ -335,6 +337,9 @@ erDiagram
     BOXES ||--o{ UNIT_MODALITIES : enables
     MODALITIES ||--o{ UNIT_MODALITIES : assigned
     BOXES ||--o{ SPACES : contains
+    ORGANIZATIONS ||--o{ SERVICE_OFFERINGS : owns
+    BOXES ||--o{ UNIT_SERVICE_OFFERINGS : enables
+    SERVICE_OFFERINGS ||--o{ UNIT_SERVICE_OFFERINGS : assigned
 ```
 
 ### 9.2 Grupos de tabelas
@@ -352,7 +357,7 @@ erDiagram
 | Treino/LLM | `workouts`, `workout_message_drafts`, `workout_message_recipients`, `llm_generation_logs` | treino, geração, aprovação e envio |
 | Governança | `messaging_policies`, `messaging_usage_buckets`, `message_dispatches`, `admin_audit_logs` | limites, reservas, custo estimado e auditoria administrativa |
 | Privacidade | `privacy_suppressions`, `privacy_audit_events` | impedir reimportação e auditar direitos do titular |
-| Catálogo | `modalities`, `unit_modalities`, `spaces`, `catalog_audit_events` | modalidades da organização, ativação por unidade, espaços e auditoria |
+| Catálogo | `modalities`, `unit_modalities`, `spaces`, `service_offerings`, `unit_service_offerings`, `catalog_audit_events` | modalidades e serviços da organização, ativações por unidade, espaços e auditoria |
 | Schema | `schema_migrations` | versão, checksum e tempo de execução |
 
 ### 9.3 Invariantes relevantes do banco
@@ -375,6 +380,8 @@ erDiagram
 - FKs compostas impedem associar modalidade e unidade de organizações
   diferentes;
 - modalidades e espaços usam arquivamento reversível, sem exclusão física.
+- serviço ofertável é único por `(organization_id, name_key)`, usa ativação
+  por unidade com FKs compostas e também possui arquivamento reversível.
 
 O schema não usa soft delete. Fechar campanha altera `active`; excluir campanha remove dependências conforme as foreign keys.
 
@@ -1116,6 +1123,25 @@ necessário, voltar frontend e API. As estruturas aditivas permanecem no banco;
 nenhuma rota ou dado legado depende delas. Falha da migration antes do commit
 reverte toda a `054`.
 
+### 17.3 Rollout do catálogo de serviços ofertáveis
+
+A migration provisória `055` adiciona `service_offerings` e
+`unit_service_offerings` e amplia a constraint conhecida de tipos da auditoria.
+Não existe backfill ou seed. Depois da migration, antes de habilitar a
+capability, as contagens abaixo devem ser zero em uma instalação sem uso:
+
+```sql
+SELECT COUNT(*) AS service_offerings_after_migration FROM service_offerings;
+SELECT COUNT(*) AS unit_service_offerings_after_migration
+FROM unit_service_offerings;
+```
+
+Publicar o backend com `FEATURE_SERVICE_CATALOG_ENABLED=false`, manter
+`FEATURE_CATALOG_ENABLED=true` somente onde o catálogo anterior já estiver
+homologado, publicar o frontend em qualquer ordem e executar o smoke do ciclo
+de vida antes da habilitação. Rollback operacional desliga apenas
+`FEATURE_SERVICE_CATALOG_ENABLED`; as tabelas aditivas permanecem.
+
 ## 18. Runtime, containers e shutdown
 
 ### 18.1 API
@@ -1214,7 +1240,7 @@ O contrato definitivo está em `internal/adapters/http/router.go`. Mapa resumido
 | `/api/v1/capabilities` | público | booleans de disponibilidade |
 | `/api/v1/auth`, `/setup/owner` | público/autenticado | sessão e onboarding |
 | `/api/v1/box`, `/students`, `/checkins` | OWNER/COACH, conforme allowlist | tenant, alunos e frequência |
-| `/api/v1/organization`, `/modalities`, `/units/:unit_id/spaces` | OWNER/COACH para leitura; OWNER para mutação | organização atual, modalidades e espaços |
+| `/api/v1/organization`, `/modalities`, `/service-offerings`, `/units/:unit_id/{modalities,spaces,service-offerings}` | OWNER/COACH para leitura; OWNER para mutação | organização atual, modalidades, espaços e serviços ofertáveis |
 | `/api/v1/retention*`, `/students/:id/retention-monitoring`, `/team/members` | OWNER/COACH | radar, jornada, exclusões reversíveis, ações e consulta da equipe |
 | `/api/v1/imports`, `/checkin-ingestion*` | OWNER ou credencial de ingestão | upload manual e entrada recorrente |
 | `/api/v1/team/coaches*` | OWNER | criação, desativação e senha de coaches |
@@ -1507,7 +1533,7 @@ Você domina o núcleo quando consegue explicar:
 | Configuração | `internal/config/config.go`, `.env.example` |
 | Rotas e autorização | `internal/adapters/http/router.go` |
 | Domínio | `internal/domain` |
-| Catálogo de estrutura | `internal/app/catalog`, `catalog_repository.go`, `catalog_handler.go` |
+| Catálogo de estrutura e serviços | `internal/app/catalog`, `catalog_repository.go`, `catalog_handler.go` |
 | Importação | `internal/app/imports/import_checkins_usecase.go` |
 | Campanhas/progresso | `internal/app/campaigns/campaign_usecases.go` |
 | Frequência/check-ins | `internal/adapters/persistence/postgres/repositories/checkin_repository.go`, `engage-fit-fe/src/pages/checkins/CheckinsPage.tsx` |

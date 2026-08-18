@@ -9,13 +9,14 @@ import (
 )
 
 type Capabilities struct {
-	Whatsapp   bool `json:"whatsapp"`
-	Email      bool `json:"email"`
-	Automation bool `json:"automation"`
-	Workouts   bool `json:"workouts"`
-	LLM        bool `json:"llm"`
-	Billing    bool `json:"billing"`
-	Catalog    bool `json:"catalog"`
+	Whatsapp       bool `json:"whatsapp"`
+	Email          bool `json:"email"`
+	Automation     bool `json:"automation"`
+	Workouts       bool `json:"workouts"`
+	LLM            bool `json:"llm"`
+	Billing        bool `json:"billing"`
+	Catalog        bool `json:"catalog"`
+	ServiceCatalog bool `json:"service_catalog"`
 }
 
 func FeatureGates(capabilities Capabilities) gin.HandlerFunc {
@@ -36,6 +37,8 @@ func FeatureGates(capabilities Capabilities) gin.HandlerFunc {
 			disabled = !capabilities.Whatsapp
 		case strings.HasPrefix(path, "/api/v1/billing") || strings.HasPrefix(path, "/api/v1/admin/billing") || strings.HasPrefix(path, "/api/v1/webhooks/asaas"):
 			disabled = !capabilities.Billing
+		case isServiceCatalogPath(path):
+			disabled = !capabilities.Catalog || !capabilities.ServiceCatalog
 		case isCatalogPath(path):
 			disabled = !capabilities.Catalog
 		}
@@ -45,6 +48,14 @@ func FeatureGates(capabilities Capabilities) gin.HandlerFunc {
 		}
 		c.Next()
 	}
+}
+
+func isServiceCatalogPath(path string) bool {
+	if path == "/api/v1/service-offerings" || strings.HasPrefix(path, "/api/v1/service-offerings/") {
+		return true
+	}
+	parts := strings.Split(strings.TrimPrefix(path, "/api/v1/units/"), "/")
+	return len(parts) == 3 && parts[0] != "" && parts[1] == "service-offerings" && parts[2] != ""
 }
 
 func isCatalogPath(path string) bool {

@@ -1,6 +1,6 @@
 # SPEC-001/D — Catálogo de serviços ofertáveis
 
-- Status: `ready`
+- Status: `validated locally`
 - Versão: `1.0`
 - Data: 2026-08-18
 - Depende de: `ARCH-001`, `SPEC-001/A-B`
@@ -366,3 +366,19 @@ aditivas permanecem e o catálogo anterior continua funcionando.
 - profissional e disponibilidade: `SPEC-006`;
 - reserva, fila e check-in: `SPEC-007/008`;
 - ativação real em outra unidade: `SPEC-001/C`.
+
+## 14. Evidências de validação
+
+- migration provisória `055_create_service_offerings.sql` validada em banco
+  PostgreSQL vazio, no upgrade isolado de `054` e em segunda execução sem
+  migrations pendentes;
+- constraints compostas, conflito normalizado, transações, rollback por falha
+  de auditoria e isolamento entre duas organizações validados com PostgreSQL;
+- contratos HTTP validados para owner, leitura por coach, bloqueio de platform
+  admin, CSRF, capabilities combinadas e códigos estáveis;
+- ciclo criar, editar, arquivar, reativar, ativar e desativar coberto no backend
+  e no Playwright, com auditoria de todos os comandos;
+- frontend validado em `360x800`, sem overflow horizontal, incluindo abertura
+  progressiva, conflito recuperável e compatibilidade com capability ausente;
+- suíte Go completa, `go vet`, race detector em container Linux, TypeScript,
+  build Vite e suíte Playwright completa aprovados localmente.
