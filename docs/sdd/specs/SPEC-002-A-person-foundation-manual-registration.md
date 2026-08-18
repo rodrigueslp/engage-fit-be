@@ -1,6 +1,6 @@
 # SPEC-002/A — Fundação de pessoa e cadastro manual compatível
 
-- Status: `validated locally`
+- Status: `validated`
 - Versão: `1.1`
 - Data: 2026-08-18
 - Depende de: `ARCH-001`, `SPEC-001/A-B`
@@ -547,6 +547,10 @@ com `students`; não executar down migration nem apagar pessoas.
   de implementação.
 
 ## 15. Evidências de validação
+
+- homologação manual do owner concluída no banco local migrado até `056`,
+  incluindo cadastro de pessoas com CPFs distintos e WhatsApp compartilhado
+  mediante revisão explícita;
 
 - migration `056_create_people_foundation.sql` validada em banco
   PostgreSQL vazio, upgrade real a partir da `054` populada e segundo run com

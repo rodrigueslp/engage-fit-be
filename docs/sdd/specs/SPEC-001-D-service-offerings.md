@@ -1,6 +1,6 @@
 # SPEC-001/D — Catálogo de serviços ofertáveis
 
-- Status: `validated locally`
+- Status: `validated`
 - Versão: `1.0`
 - Data: 2026-08-18
 - Depende de: `ARCH-001`, `SPEC-001/A-B`
@@ -367,6 +367,9 @@ aditivas permanecem e o catálogo anterior continua funcionando.
 - ativação real em outra unidade: `SPEC-001/C`.
 
 ## 14. Evidências de validação
+
+- homologação manual do owner concluída no banco local migrado até `056`,
+  cobrindo o fluxo mobile de serviços sem divergência reportada;
 
 - migration `055_create_service_offerings.sql` validada em banco
   PostgreSQL vazio, no upgrade isolado de `054` e em segunda execução sem

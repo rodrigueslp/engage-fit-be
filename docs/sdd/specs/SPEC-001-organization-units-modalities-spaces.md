@@ -281,7 +281,7 @@ implementação.
 
 ### Slice `001-D` — Catálogo de serviços ofertáveis
 
-Status: [`validated locally`](SPEC-001-D-service-offerings.md) em 2026-08-18,
+Status: [`validated`](SPEC-001-D-service-offerings.md) em 2026-08-18,
 integrada no `main` local a partir de `REQ-001`.
 
 - distinguir serviço de modalidade, espaço e sessão de agenda;

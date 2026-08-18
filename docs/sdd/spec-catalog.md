@@ -15,17 +15,18 @@ implementação.
 
 | Spec | Estado | Dependências | Resultado |
 |---|---|---|---|
-| `SPEC-001` Organização, unidades, modalidades e espaços | `implementing` (`001-A/B/D` validadas localmente) | `ARCH-001` | estrutura física e contexto operacional |
-| `SPEC-001/D` Serviços ofertáveis | `validated locally` | `SPEC-001/A-B` | catálogo simples reutilizável por plano e agenda |
+| `SPEC-001` Organização, unidades, modalidades e espaços | `implementing` (`001-A/B/D` validadas) | `ARCH-001` | estrutura física e contexto operacional |
+| `SPEC-001/D` Serviços ofertáveis | `validated` | `SPEC-001/A-B` | catálogo simples reutilizável por plano e agenda |
 | `SPEC-002` Pessoa, identidades e vínculos | `reviewed` | `ARCH-001`, `SPEC-001/A-B` | iniciativa de identidade humana dividida em slices |
-| `SPEC-002/A` Fundação e cadastro manual | `validated locally` | `SPEC-001/A-B` | pessoa, backfill seguro e novo aluno compatível |
-| `SPEC-003` Planos, matrículas, adicionais e direitos | `draft` | `ARCH-001`, `SPEC-001/B-D`, `SPEC-002` | oferta, composição e acesso versionados |
+| `SPEC-002/A` Fundação e cadastro manual | `validated` | `SPEC-001/A-B` | pessoa, backfill seguro e novo aluno compatível |
+| `SPEC-003` Planos, matrículas, adicionais e direitos | `reviewed` | `ARCH-001`, `SPEC-001/B-D`, `SPEC-002` | iniciativa dividida em catálogo, composição, matrícula e acesso |
+| `SPEC-003/A` Catálogo versionado de planos | `ready` | `SPEC-001/B-D`, `SPEC-002/A` | criação mobile, direitos base e publicação imutável |
 
-`001-D` e `002-A` estão integradas no `main` local e validadas em conjunto. As
+`001-D` e `002-A` estão integradas e homologadas manualmente no banco local. As
 migrations finais são, respectivamente, `055_create_service_offerings.sql` e
-`056_create_people_foundation.sql`. A slice `001-C` de multiunidade continua
-adiada no piloto de uma unidade. Não houve push, deploy, migration de produção
-ou habilitação das novas capabilities.
+`056_create_people_foundation.sql`. A `SPEC-003` foi dividida em quatro slices;
+somente `003-A` está pronta e autorizada. `001-C`, `002/B-C` e `003/B-D`
+continuam adiadas ou em detalhamento.
 
 ## Onda 2 — trilhas paralelas
 

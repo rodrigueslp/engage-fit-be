@@ -1,10 +1,28 @@
 # SPEC-003 — Planos, matrículas e direitos de acesso
 
-- Status: `draft`
-- Versão: `0.2`
+- Status: `reviewed`
+- Versão: `0.3`
 - Data: 2026-08-18
 - Depende de: `ARCH-001`, `SPEC-001/B-D`, `SPEC-002`
 - Bloqueia: contratos, cobrança do aluno, agenda, reservas e acesso
+
+## Estratégia de entrega
+
+Esta é a spec-guia da iniciativa. O escopo foi dividido para que catálogo,
+composição comercial, matrícula e decisão operacional não sejam implementados
+na mesma branch:
+
+- [`SPEC-003/A`](SPEC-003-A-versioned-membership-plan-catalog.md) — catálogo,
+  direitos base e publicação versionada; estado `ready`;
+- `SPEC-003/B` — adicionais versionados e composição comercial; estado
+  `draft`;
+- `SPEC-003/C` — matrícula da pessoa e ciclo de vida; estado `draft`;
+- `SPEC-003/D` — decisão de acesso, contadores e transição do legado; estado
+  `draft`.
+
+Somente a slice A está autorizada para implementação. Ela não cria matrícula,
+contrato, cobrança, consumo, agenda nem adicional. As decisões abertas das
+slices B–D não podem ampliar silenciosamente a primeira entrega.
 
 ## 1. Resultado esperado
 

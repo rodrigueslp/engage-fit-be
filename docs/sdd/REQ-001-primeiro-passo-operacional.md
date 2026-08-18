@@ -119,10 +119,10 @@ ou avisar sobre a publicação, mas não são sua fonte de verdade.
 
 | Requisito | Destino | Estado em 2026-08-18 |
 |---|---|---|
-| Cadastro | `SPEC-002/A` | fundação e cadastro manual implementados e validados localmente |
+| Cadastro | `SPEC-002/A` | fundação e cadastro manual implementados e validados |
 | Modalidades e espaços | `SPEC-001/A-B` | implementadas e validadas localmente |
-| Serviços ofertáveis | `SPEC-001/D` | implementada e validada localmente; antecede planos completos |
-| Planos, pacotes e adicionais | `SPEC-003` | draft revisada por esta entrada |
+| Serviços ofertáveis | `SPEC-001/D` | implementada e validada; antecede planos completos |
+| Planos, pacotes e adicionais | `SPEC-003/A-D` | iniciativa fatiada; catálogo versionado pronto para execução em `003/A` |
 | Contrato, PAR-Q e assinatura | `SPEC-004` | planejada |
 | Financeiro do aluno | `SPEC-005` | planejada |
 | Agenda, profissionais e vagas | `SPEC-006` | planejada |
