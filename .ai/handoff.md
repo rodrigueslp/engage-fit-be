@@ -4,12 +4,75 @@ Manual canônico de arquitetura e negócio: `docs/system-design.md`.
 
 Guia operacional consolidado: `docs/application-readiness-guide.md`.
 
-Atualizado em: 2026-08-18 (SPEC-001/D e SPEC-002/A integradas no `main` local;
-sem push/deploy)
+Atualizado em: 2026-08-18 (homologação manual concluída e SPEC-003/A pronta
+para execução; sem push/deploy)
 
-## Checkpoint atual — serviços e fundação de pessoas integrados
+## Checkpoint atual — homologação fechada e SPEC-003/A preparada
 
-Este checkpoint prevalece sobre os registros históricos abaixo. As duas
+Este checkpoint prevalece sobre todos os registros históricos abaixo.
+
+Homologação e banco local:
+
+- o owner homologou manualmente `Serviços` e `Novo aluno` no banco local
+  compartilhado, sem divergência funcional reportada;
+- o cenário de CPFs diferentes com o mesmo WhatsApp foi aceito após revisão
+  explícita, conforme o contrato de produto;
+- o banco local `boxengage` está agora em `056`; `055` e `056` foram aplicadas
+  conscientemente pelo usuário;
+- `SPEC-001/D` e `SPEC-002/A` passaram de `validated locally` para
+  `validated`;
+- produção continua em `052`, com as capabilities novas desligadas.
+
+Git e publicação:
+
+- backend `main` inclui os merges `34a8b17`/`7de1d1b`, o fechamento anterior
+  `e3721b1` e a preparação SDD `14a9278`;
+- frontend `main` permanece em `d42ef05`;
+- o push dos dois `main` foi autorizado, mas não executado porque a inspeção
+  somente leitura do Railway confirmou que `engage-fit-api`,
+  `engage-fit-billing-reconcile` e `engage-fit-web` usam os repositórios no
+  branch `main` como source automático;
+- no backend, o pre-deploy de produção executa
+  `/usr/local/bin/engagefit-migrate up`; portanto um push também faria deploy
+  e poderia aplicar `053..056` em produção. Não fazer push enquanto o deploy
+  de produção não for explicitamente autorizado/preparado ou o auto-deploy
+  não for desabilitado de forma controlada;
+- não houve deploy, migration de produção, alteração de flags ou push;
+- preservar os arquivos não rastreados do usuário
+  `.ai/acordo-fundadores-engagefit.md` e
+  `docs/proposta-engagefit-guilherme.html`.
+
+SDD seguinte:
+
+- a spec-guia `SPEC-003` está `reviewed` e dividida em A catálogo, B
+  adicionais, C matrículas e D decisão de acesso;
+- somente `SPEC-003/A — Catálogo versionado de planos` está `ready` e
+  autorizada;
+- a slice A entrega plano em rascunho, publicação imutável, nova versão,
+  direitos base de modalidades/serviços, capability `memberships` e UI mobile;
+- adicionais, matrícula, contrato, cobrança, agenda, reserva, consumo,
+  multiunidade e integrações corporativas estão explicitamente fora desta
+  execução;
+- migration esperada `057`, ainda provisória até a integração.
+
+Workspace preparado:
+
+- raiz: `/home/luiz-paulo/workspace/engage-fit-worktrees/spec-003-a/`;
+- backend: branch `feature/spec-003-plan-catalog`, base `14a9278`;
+- frontend: branch `feature/spec-003-plan-catalog`, base `d42ef05`;
+- instruções: `AGENTS.md` na raiz do workspace;
+- prompt pronto: `EXECUTION-PROMPT.md` na raiz do workspace;
+- o agente não pode tocar no banco compartilhado `boxengage`; migrations e
+  integrações usam bancos temporários removidos ao final.
+
+Próxima ação: abrir um novo agente na raiz do workspace `spec-003-a`, colar o
+conteúdo integral de `EXECUTION-PROMPT.md` e deixá-lo entregar commits separados
+de backend/frontend. Depois trazer o relatório para revisão e integração; não
+iniciar `SPEC-003/B-D` em paralelo.
+
+## Checkpoint histórico — serviços e fundação de pessoas integrados
+
+As duas
 slices executadas em paralelo foram revisadas, renumeradas, integradas uma por
 vez e validadas em conjunto.
 
@@ -2751,5 +2814,5 @@ WodScope. Antes de produção, implementar recuperação/verificação de conta.
 Mensagem sugerida:
 
 ```txt
-Leia integralmente `.ai/handoff.md`, começando pelo checkpoint atual do topo, e use `docs/system-design.md`, `docs/sdd/REQ-001-primeiro-passo-operacional.md`, `docs/sdd/ARCH-001-modular-foundation.md` e as SPECs como fontes canônicas. Estado local: SPEC-001/A-B-D e SPEC-002/A estão integradas e validadas no `main` local dos dois repositórios; migrations finais 053..056; nenhum push, deploy ou migration de produção foi feito. Produção e o banco local compartilhado continuam no estado anterior, até `052`. Próximos trabalhos: homologar `Serviços` e `Novo aluno` em banco descartável ou conscientemente migrado e fechar a SPEC-003 para execução. Manter SPEC-001/C e SPEC-002/B-C adiadas/não autorizadas. Não habilite `service_catalog` ou `people` em produção sem autorização e plano de rollout. Preserve `.ai/acordo-fundadores-engagefit.md`, `docs/proposta-engagefit-guilherme.html` e qualquer outra alteração não commitada.
+Leia integralmente `.ai/handoff.md`, começando pelo checkpoint atual do topo, e use `docs/system-design.md`, `docs/sdd/REQ-001-primeiro-passo-operacional.md`, `docs/sdd/ARCH-001-modular-foundation.md` e as SPECs como fontes canônicas. Estado local: SPEC-001/D e SPEC-002/A estão integradas, automatizadas e homologadas; o banco local compartilhado está em `056`, mas produção continua em `052`. SPEC-003/A está `ready` e possui workspace em `/home/luiz-paulo/workspace/engage-fit-worktrees/spec-003-a/`, com prompt próprio; SPEC-003/B-D não estão autorizadas. Não faça push dos `main`: Railway usa esses branches como source automático e o backend executa migrations no pre-deploy, portanto push implica deploy de produção. Preserve `.ai/acordo-fundadores-engagefit.md`, `docs/proposta-engagefit-guilherme.html` e qualquer outra alteração não commitada.
 ```
