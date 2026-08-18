@@ -1,6 +1,6 @@
 # EngageFit — manual de engenharia e design do sistema
 
-Atualizado em: 2026-08-11
+Atualizado em: 2026-08-18
 
 Status: documento canônico da arquitetura atual.
 
@@ -290,10 +290,11 @@ Existem duas decisões diferentes:
 | Treino do dia | `FEATURE_WORKOUTS_ENABLED` | envio depende do WhatsApp |
 | Geração por IA | `FEATURE_LLM_ENABLED` + workouts | `OPENAI_API_KEY` configurada |
 | Catálogo | `FEATURE_CATALOG_ENABLED` | não possui efeito externo |
+| Fundação de pessoas | `FEATURE_PEOPLE_FOUNDATION_ENABLED` | não possui efeito externo |
 
 Defaults:
 
-- development: capabilities ligadas, efeitos reais desligados;
+- development: capabilities ligadas, exceto `people`, efeitos reais desligados;
 - production: capabilities desligadas, efeitos reais desligados;
 - mocks continuam permitidos para testes sem rede externa.
 
@@ -316,6 +317,10 @@ erDiagram
     ORGANIZATIONS ||--|{ BOXES : groups
     BOXES ||--o{ USERS : owns
     BOXES ||--o{ STUDENTS : contains
+    ORGANIZATIONS ||--o{ PERSONS : identifies
+    PERSONS ||--o{ PERSON_UNIT_RELATIONSHIPS : participates
+    BOXES ||--o{ PERSON_UNIT_RELATIONSHIPS : receives
+    PERSONS ||--o{ STUDENTS : projects
     BOXES ||--o{ IMPORT_HISTORIES : receives
     IMPORT_HISTORIES ||--o{ CHECKINS : creates
     STUDENTS ||--o{ CHECKINS : performs
@@ -353,6 +358,7 @@ erDiagram
 | Governança | `messaging_policies`, `messaging_usage_buckets`, `message_dispatches`, `admin_audit_logs` | limites, reservas, custo estimado e auditoria administrativa |
 | Privacidade | `privacy_suppressions`, `privacy_audit_events` | impedir reimportação e auditar direitos do titular |
 | Catálogo | `modalities`, `unit_modalities`, `spaces`, `catalog_audit_events` | modalidades da organização, ativação por unidade, espaços e auditoria |
+| Pessoas | `persons`, `person_addresses`, `person_unit_relationships`, `person_creation_requests`, `people_audit_events` | identidade humana, endereço, participação na unidade, idempotência e auditoria sem PII |
 | Schema | `schema_migrations` | versão, checksum e tempo de execução |
 
 ### 9.3 Invariantes relevantes do banco
@@ -375,6 +381,34 @@ erDiagram
 - FKs compostas impedem associar modalidade e unidade de organizações
   diferentes;
 - modalidades e espaços usam arquivamento reversível, sem exclusão física.
+- CPF confirmado é único por organização por meio de HMAC-SHA-256 dedicado;
+- `students.person_id` é opcional para preservar imports e ativações legados,
+  mas a migration inicial cria exatamente uma pessoa e um vínculo por student.
+
+### 9.4 Fundação de pessoas e compatibilidade
+
+`Person` representa a identidade humana no escopo da organização. `Student`
+continua sendo a projeção operacional por unidade/origem e permanece como
+identificador de check-ins, campanhas, retenção, privacidade e convite do app.
+O cadastro manual faz dual-write transacional somente na criação: pessoa,
+endereço opcional, vínculo ativo, `Student source=box_member`, eventos de
+auditoria e claim de idempotência são confirmados ou revertidos juntos.
+
+A migration provisória `055_create_people_foundation.sql` faz backfill
+determinístico um-para-um usando `person.id = student.id` e
+`relationship.id = student.id`. Ela não consolida homônimos, telefones iguais,
+e-mails, origens ou contas de atleta, não altera IDs/external IDs/consentimentos
+e reconcilia as contagens antes de concluir. Criações legadas posteriores
+podem manter `person_id` nulo; o startup registra apenas a contagem agregada
+desse débito, sem PII e sem bloquear os fluxos existentes.
+
+No cadastro manual, nome, telefone brasileiro e CPF são obrigatórios. O CPF é
+cifrado com AES-256-GCM e associated data
+`person-cpf:<organization_id>:<person_id>`; o lookup e o fingerprint
+idempotente usam HMAC-SHA-256 com `PERSON_LOOKUP_HMAC_KEY`, separado das chaves
+de sessão e de cifra. Telefone repetido exige revisão explícita e motivo, mas
+nunca produz merge. O `Student` nasce com `contact_status=unknown`; informar
+WhatsApp não cria consentimento nem libera campanhas.
 
 O schema não usa soft delete. Fechar campanha altera `active`; excluir campanha remove dependências conforme as foreign keys.
 
@@ -965,6 +999,11 @@ O JSON contém:
 
 A exportação também gera `privacy_audit_events`.
 
+Quando o student possui `person_id`, a exportação autorizada inclui pessoa,
+endereço e CPF descriptografado. Respostas operacionais comuns retornam no
+máximo `cpf_masked`; listas, conflitos, logs, métricas e auditoria de people
+nunca recebem CPF integral, ciphertext, telefone bruto ou endereço.
+
 ### 15.3 Anonimização
 
 É transacional e exige confirmação + motivo de 5–500 caracteres.
@@ -980,6 +1019,11 @@ Ela:
 - limpa telefone e nome reivindicado nas ativações e eventos de consentimento;
 - preserva check-ins, progressos e métricas sem identidade direta;
 - grava auditoria.
+
+Quando existe uma pessoa vinculada sem outro `Student` não anonimizado, a mesma
+transação também limpa nome, telefone, e-mail, CPF cifrado/hash/últimos dígitos
+e remove o endereço. Se existir outro perfil ativo inesperado, a PII da pessoa
+é preservada e um evento sem PII registra essa decisão.
 
 O hash não é reversível, mas identificadores de baixa entropia ainda podem ser testados por força bruta por quem possuir acesso ao banco. O controle de acesso ao PostgreSQL continua essencial.
 
@@ -1116,6 +1160,28 @@ necessário, voltar frontend e API. As estruturas aditivas permanecem no banco;
 nenhuma rota ou dado legado depende delas. Falha da migration antes do commit
 reverte toda a `054`.
 
+### 17.3 Rollout da fundação de pessoas
+
+A migration provisória `055` cria as tabelas de people, adiciona
+`students.person_id` nullable e executa o backfill um-para-um na mesma
+transação. Antes do rollout, registrar a quantidade de students. Depois,
+reconciliar:
+
+```sql
+SELECT COUNT(*) AS students_total FROM students;
+SELECT COUNT(*) AS students_without_person FROM students WHERE person_id IS NULL;
+SELECT COUNT(*) AS backfilled_people FROM persons p JOIN students s ON s.id = p.id;
+SELECT COUNT(*) AS backfilled_relationships
+FROM person_unit_relationships r JOIN students s ON s.id = r.id;
+```
+
+Imediatamente após o backfill inicial, `students_without_person` deve ser zero
+e as outras três contagens devem coincidir. Publicar a API com
+`FEATURE_PEOPLE_FOUNDATION_ENABLED=false`; configurar e guardar as chaves,
+publicar o frontend em qualquer ordem e habilitar somente após smoke de
+cadastro, replay, conflitos e privacy. Rollback operacional é desligar a flag;
+as estruturas e os students compatíveis permanecem.
+
 ## 18. Runtime, containers e shutdown
 
 ### 18.1 API
@@ -1200,6 +1266,7 @@ A lista executável completa está em `.env.example`. Os grupos conceituais são
 | OpenAI | `OPENAI_API_KEY`, model, timeout | custo e envio de conteúdo ao provedor |
 | Observabilidade | `OTEL_*`, `PROMETHEUS_*`, build info | sinais ausentes ou endpoint exposto |
 | Criptografia | `DATA_ENCRYPTION_*` | perda irreversível de credenciais |
+| Identidade/CPF | `FEATURE_PEOPLE_FOUNDATION_ENABLED`, `PERSON_LOOKUP_HMAC_KEY` | enumeração de CPF, indisponibilidade de cadastro ou perda de lookup |
 | Retenção | `PRIVACY_RETENTION_*` | exclusão prematura ou retenção excessiva |
 
 Production faz fail-fast para banco, JWT, cookie Secure, admin e cifra. Setup/Prometheus habilitados exigem tokens fortes.
@@ -1215,6 +1282,7 @@ O contrato definitivo está em `internal/adapters/http/router.go`. Mapa resumido
 | `/api/v1/auth`, `/setup/owner` | público/autenticado | sessão e onboarding |
 | `/api/v1/box`, `/students`, `/checkins` | OWNER/COACH, conforme allowlist | tenant, alunos e frequência |
 | `/api/v1/organization`, `/modalities`, `/units/:unit_id/spaces` | OWNER/COACH para leitura; OWNER para mutação | organização atual, modalidades e espaços |
+| `/api/v1/units/:unit_id/people` | OWNER + capability `people` | duplicate check e cadastro manual idempotente |
 | `/api/v1/retention*`, `/students/:id/retention-monitoring`, `/team/members` | OWNER/COACH | radar, jornada, exclusões reversíveis, ações e consulta da equipe |
 | `/api/v1/imports`, `/checkin-ingestion*` | OWNER ou credencial de ingestão | upload manual e entrada recorrente |
 | `/api/v1/team/coaches*` | OWNER | criação, desativação e senha de coaches |
@@ -1269,6 +1337,7 @@ Ao adicionar endpoint:
 | duas réplicas executarem schedule | claim concorrente PostgreSQL |
 | ultrapassar limite WhatsApp | reserva concorrente e testes de governance |
 | reimportar aluno anonimizado | teste de privacy suppression |
+| duplicar/vazar CPF | HMAC dedicado, cifra autenticada, unique por organização e testes concorrentes/tenant |
 | quebrar fluxo crítico | smoke + Playwright real |
 | chamar provider sem intenção | gateway tests + flags explícitas |
 
@@ -1508,6 +1577,7 @@ Você domina o núcleo quando consegue explicar:
 | Rotas e autorização | `internal/adapters/http/router.go` |
 | Domínio | `internal/domain` |
 | Catálogo de estrutura | `internal/app/catalog`, `catalog_repository.go`, `catalog_handler.go` |
+| Pessoas/cadastro manual | `internal/app/people`, `people_repository.go`, `people_handler.go` |
 | Importação | `internal/app/imports/import_checkins_usecase.go` |
 | Campanhas/progresso | `internal/app/campaigns/campaign_usecases.go` |
 | Frequência/check-ins | `internal/adapters/persistence/postgres/repositories/checkin_repository.go`, `engage-fit-fe/src/pages/checkins/CheckinsPage.tsx` |

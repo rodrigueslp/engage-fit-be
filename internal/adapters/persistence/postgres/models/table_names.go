@@ -27,6 +27,12 @@ func (StudentModel) TableName() string {
 	return "students"
 }
 
+func (PersonModel) TableName() string                 { return "persons" }
+func (PersonAddressModel) TableName() string          { return "person_addresses" }
+func (PersonUnitRelationshipModel) TableName() string { return "person_unit_relationships" }
+func (PersonCreationRequestModel) TableName() string  { return "person_creation_requests" }
+func (PeopleAuditEventModel) TableName() string       { return "people_audit_events" }
+
 func (ImportHistoryModel) TableName() string {
 	return "import_histories"
 }

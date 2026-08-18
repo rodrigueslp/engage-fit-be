@@ -12,7 +12,8 @@ Esta é a spec-guia da iniciativa. Ela foi dividida para não misturar cadastro,
 migração de leitura e consolidação de identidades na mesma entrega:
 
 - [`SPEC-002/A`](SPEC-002-A-person-foundation-manual-registration.md) —
-  fundação, backfill um-para-um e cadastro manual compatível; estado `ready`;
+  fundação, backfill um-para-um e cadastro manual compatível; estado
+  `validated locally`;
 - `SPEC-002/B` — perfil unificado, edição e migração gradual de leituras;
 - `SPEC-002/C` — identidades externas, revisão e consolidação segura.
 

@@ -68,3 +68,19 @@ func TestEmbeddedMigrationsIncludeCatalogStructure(t *testing.T) {
 	}
 	t.Fatal("catalog structure migration not found")
 }
+
+func TestEmbeddedMigrationsIncludePeopleFoundation(t *testing.T) {
+	loaded, err := Load(Files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, migration := range loaded {
+		if migration.Version == 55 {
+			if migration.Name != "create_people_foundation" || !strings.Contains(migration.SQL, "CREATE TABLE persons") || !strings.Contains(migration.SQL, "UPDATE students SET person_id = id") {
+				t.Fatalf("unexpected people migration: %+v", migration)
+			}
+			return
+		}
+	}
+	t.Fatal("people foundation migration not found")
+}

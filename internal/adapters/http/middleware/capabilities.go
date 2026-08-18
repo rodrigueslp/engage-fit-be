@@ -16,6 +16,7 @@ type Capabilities struct {
 	LLM        bool `json:"llm"`
 	Billing    bool `json:"billing"`
 	Catalog    bool `json:"catalog"`
+	People     bool `json:"people"`
 }
 
 func FeatureGates(capabilities Capabilities) gin.HandlerFunc {
@@ -38,6 +39,8 @@ func FeatureGates(capabilities Capabilities) gin.HandlerFunc {
 			disabled = !capabilities.Billing
 		case isCatalogPath(path):
 			disabled = !capabilities.Catalog
+		case isPeoplePath(path):
+			disabled = !capabilities.People
 		}
 		if disabled {
 			apiresponse.AbortError(c, http.StatusNotFound, "capability_disabled", "capability disabled")
@@ -45,6 +48,11 @@ func FeatureGates(capabilities Capabilities) gin.HandlerFunc {
 		}
 		c.Next()
 	}
+}
+
+func isPeoplePath(path string) bool {
+	parts := strings.Split(strings.TrimPrefix(path, "/api/v1/units/"), "/")
+	return len(parts) >= 2 && parts[0] != "" && parts[1] == "people"
 }
 
 func isCatalogPath(path string) bool {

@@ -1,7 +1,7 @@
 # SPEC-002/A — Fundação de pessoa e cadastro manual compatível
 
-- Status: `ready`
-- Versão: `1.0`
+- Status: `validated locally`
+- Versão: `1.1`
 - Data: 2026-08-18
 - Depende de: `ARCH-001`, `SPEC-001/A-B`
 - Ownership: módulo novo `people`, com compatibilidade explícita com
@@ -546,3 +546,25 @@ com `students`; não executar down migration nem apagar pessoas.
 - vínculo multiunidade depende de `SPEC-001/C`;
 - vínculo de `AthleteAccount` e política de merge exigem contrato próprio antes
   de implementação.
+
+## 15. Evidências de validação
+
+- migration provisória `055_create_people_foundation.sql` validada em banco
+  PostgreSQL vazio, upgrade real a partir da `054` populada e segundo run com
+  zero migrations aplicadas;
+- backfill reconciliado um-para-um com homônimos, telefones iguais, origens
+  diferentes e student anonimizado, sem alterar origem, external ID ou
+  consentimento;
+- normalização, CPF válido/inválido, HMAC dedicado, cifra autenticada com
+  associated data, idempotência, rollback, concorrência de CPF, isolamento e
+  auditoria cobertos por testes;
+- privacy export inclui CPF autorizado/endereço e anonimização remove PII e
+  endereço na mesma transação quando a pessoa não é compartilhada;
+- contratos HTTP cobrem capability, roles, unit adversária, erros estáveis e
+  ausência de CPF bruto nas respostas;
+- frontend validado com capability ausente, cadastro mínimo, abertura
+  progressiva, telefone compartilhado, retry com a mesma chave, sucesso e
+  viewport `360x800` sem scroll horizontal;
+- `go test ./...`, suíte PostgreSQL completa, `go vet ./...`, race detector em
+  Linux/CGO, TypeScript, build Vite, Playwright completo e `git diff --check`
+  permanecem como gates antes do merge.

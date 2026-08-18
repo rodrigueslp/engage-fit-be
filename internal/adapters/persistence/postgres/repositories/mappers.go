@@ -165,6 +165,7 @@ func studentToDomain(model models.StudentModel) domain.Student {
 	}
 	return domain.Student{
 		ID:                        domainID(model.ID),
+		PersonID:                  domainID(valueOrEmpty(model.PersonID)),
 		BoxID:                     domainID(model.BoxID),
 		Name:                      model.Name,
 		Email:                     model.Email,
@@ -205,6 +206,7 @@ func studentToModel(student domain.Student) models.StudentModel {
 	}
 	return models.StudentModel{
 		ID:                        stringID(student.ID),
+		PersonID:                  stringPointer(stringID(student.PersonID)),
 		BoxID:                     stringID(student.BoxID),
 		Name:                      student.Name,
 		Email:                     student.Email,

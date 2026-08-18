@@ -2,6 +2,7 @@ package dto
 
 type StudentResponse struct {
 	ID                      string `json:"id"`
+	PersonID                string `json:"person_id,omitempty"`
 	Name                    string `json:"name"`
 	Email                   string `json:"email"`
 	Phone                   string `json:"phone"`
@@ -39,12 +40,34 @@ type PrivacyCommunicationResponse struct {
 
 type StudentPrivacyExportResponse struct {
 	Student                StudentResponse                 `json:"student"`
+	Person                 *PersonPrivacyExportResponse    `json:"person,omitempty"`
 	Checkins               []CheckinResponse               `json:"checkins"`
 	Progress               []CampaignProgressResponse      `json:"campaign_progress"`
 	Communications         []PrivacyCommunicationResponse  `json:"communications"`
 	ContactConsents        []ContactConsentResponse        `json:"contact_consents"`
 	RetentionInterventions []RetentionInterventionResponse `json:"retention_interventions"`
 	ExportedAt             string                          `json:"exported_at"`
+}
+
+type PersonPrivacyExportResponse struct {
+	ID            string                 `json:"id"`
+	Name          string                 `json:"name"`
+	Phone         string                 `json:"phone"`
+	Email         string                 `json:"email"`
+	CPF           string                 `json:"cpf"`
+	ProfileStatus string                 `json:"profile_status"`
+	Address       *PersonAddressResponse `json:"address,omitempty"`
+}
+
+type PersonAddressResponse struct {
+	PostalCode string `json:"postal_code,omitempty"`
+	Street     string `json:"street,omitempty"`
+	Number     string `json:"number,omitempty"`
+	Complement string `json:"complement,omitempty"`
+	District   string `json:"district,omitempty"`
+	City       string `json:"city,omitempty"`
+	State      string `json:"state,omitempty"`
+	Country    string `json:"country"`
 }
 
 type ContactConsentResponse struct {

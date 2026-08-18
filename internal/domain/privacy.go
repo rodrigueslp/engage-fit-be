@@ -23,6 +23,7 @@ type ContactConsentEvent struct {
 
 type StudentPrivacyExport struct {
 	Student                Student
+	Person                 *PersonPrivacyExport
 	Checkins               []Checkin
 	Progress               []CampaignProgress
 	Communications         []PrivacyCommunication

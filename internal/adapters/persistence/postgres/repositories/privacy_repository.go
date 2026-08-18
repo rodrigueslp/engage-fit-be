@@ -4,6 +4,8 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
+	"errors"
 	"time"
 
 	"boxengage/backend/internal/adapters/persistence/postgres/models"
@@ -34,6 +36,10 @@ type contactConsentRow struct {
 func (r PrivacyGormRepository) ExportStudent(ctx context.Context, boxID, studentID domain.ID) (*domain.StudentPrivacyExport, error) {
 	studentRepository := NewStudentGormRepository(r.db)
 	student, err := studentRepository.FindByID(ctx, boxID, studentID)
+	if err != nil {
+		return nil, err
+	}
+	person, err := r.exportPerson(ctx, boxID, *student)
 	if err != nil {
 		return nil, err
 	}
@@ -89,7 +95,42 @@ func (r PrivacyGormRepository) ExportStudent(ctx context.Context, boxID, student
 			ConsentVersion: row.ConsentVersion, ConsentText: row.ConsentText, CreatedAt: row.CreatedAt,
 		})
 	}
-	return &domain.StudentPrivacyExport{Student: *student, Checkins: checkins, Progress: progress, Communications: communications, ContactConsents: consents, RetentionInterventions: interventions, ExportedAt: time.Now().UTC()}, nil
+	return &domain.StudentPrivacyExport{Student: *student, Person: person, Checkins: checkins, Progress: progress, Communications: communications, ContactConsents: consents, RetentionInterventions: interventions, ExportedAt: time.Now().UTC()}, nil
+}
+
+func (r PrivacyGormRepository) exportPerson(ctx context.Context, boxID domain.ID, student domain.Student) (*domain.PersonPrivacyExport, error) {
+	if student.PersonID == "" {
+		return nil, nil
+	}
+	db := databaseForContext(r.db, ctx)
+	var person models.PersonModel
+	err := db.Table("persons p").Select("p.*").
+		Joins("JOIN boxes b ON b.organization_id = p.organization_id").
+		Where("b.id = ? AND p.id = ?", stringID(boxID), stringID(student.PersonID)).Take(&person).Error
+	if err != nil {
+		return nil, err
+	}
+	plainCPF := ""
+	if person.CPFEncrypted != nil {
+		if r.cipher == nil {
+			return nil, errors.New("person CPF cipher unavailable")
+		}
+		plainCPF, err = r.cipher.Decrypt(*person.CPFEncrypted, domain.PersonCPFAssociatedData(domainID(person.OrganizationID), domainID(person.ID)))
+		if err != nil {
+			return nil, err
+		}
+	}
+	var addressModel models.PersonAddressModel
+	var address *domain.PersonAddress
+	err = db.Where("person_id = ? AND organization_id = ? AND address_type = 'home'", person.ID, person.OrganizationID).Take(&addressModel).Error
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, err
+	}
+	if err == nil {
+		item := addressToDomain(addressModel)
+		address = &item
+	}
+	return &domain.PersonPrivacyExport{ID: domainID(person.ID), Name: person.Name, PhoneE164: optionalString(person.PhoneE164), Email: optionalString(person.Email), CPF: plainCPF, ProfileStatus: domain.PersonProfileStatus(person.ProfileStatus), Address: address}, nil
 }
 
 func (r PrivacyGormRepository) AnonymizeStudent(ctx context.Context, boxID, studentID, actorUserID domain.ID, reason string) error {
@@ -129,8 +170,58 @@ func (r PrivacyGormRepository) AnonymizeStudent(ctx context.Context, boxID, stud
 		if err := tx.Table("contact_consent_events").Where("box_id = ? AND student_id = ?", stringID(boxID), stringID(studentID)).Update("phone", "").Error; err != nil {
 			return err
 		}
+		if student.PersonID != nil && *student.PersonID != "" {
+			if err := anonymizeLinkedPerson(tx, boxID, studentID, actorUserID, domainID(*student.PersonID), now); err != nil {
+				return err
+			}
+		}
 		return PrivacyGormRepository{db: tx}.recordAudit(ctx, boxID, studentID, actorUserID, "anonymized", reason)
 	})
+}
+
+func anonymizeLinkedPerson(tx *gorm.DB, boxID, studentID, actorUserID, personID domain.ID, now time.Time) error {
+	var organizationID string
+	if err := tx.Table("boxes").Select("organization_id").Where("id = ?", stringID(boxID)).Scan(&organizationID).Error; err != nil || organizationID == "" {
+		if err != nil {
+			return err
+		}
+		return gorm.ErrRecordNotFound
+	}
+	var otherActive int64
+	if err := tx.Model(&models.StudentModel{}).Where("person_id = ? AND id <> ? AND anonymized_at IS NULL", stringID(personID), stringID(studentID)).Count(&otherActive).Error; err != nil {
+		return err
+	}
+	action := "person.privacy_preserved_shared_profile"
+	metadata := map[string]any{"student_id": studentID, "pii_removed": false, "shared_profile": true}
+	if otherActive == 0 {
+		result := tx.Model(&models.PersonModel{}).Where("id = ? AND organization_id = ?", stringID(personID), organizationID).Updates(map[string]any{"name": "Pessoa anonimizada", "phone_e164": nil, "email": nil, "cpf_encrypted": nil, "cpf_lookup_hash": nil, "cpf_last2": nil, "profile_status": string(domain.PersonProfileAnonymized), "updated_at": now})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return gorm.ErrRecordNotFound
+		}
+		if err := tx.Where("person_id = ? AND organization_id = ?", stringID(personID), organizationID).Delete(&models.PersonAddressModel{}).Error; err != nil {
+			return err
+		}
+		action = "person.anonymized"
+		metadata = map[string]any{"student_id": studentID, "pii_removed": true, "address_removed": true}
+	}
+	eventID, err := newID()
+	if err != nil {
+		return err
+	}
+	encoded, err := json.Marshal(metadata)
+	if err != nil {
+		return err
+	}
+	studentIDValue := stringID(studentID)
+	event := models.PeopleAuditEventModel{ID: stringID(eventID), OrganizationID: organizationID, UnitID: stringID(boxID), ActorUserID: stringID(actorUserID), Action: action, PersonID: stringID(personID), StudentID: &studentIDValue, Metadata: encoded, CreatedAt: now}
+	return tx.Create(&event).Error
+}
+
+func addressToDomain(address models.PersonAddressModel) domain.PersonAddress {
+	return domain.PersonAddress{ID: domainID(address.ID), PersonID: domainID(address.PersonID), OrganizationID: domainID(address.OrganizationID), AddressType: address.AddressType, PostalCode: optionalString(address.PostalCode), Street: optionalString(address.Street), Number: optionalString(address.Number), Complement: optionalString(address.Complement), District: optionalString(address.District), City: optionalString(address.City), State: optionalString(address.State), Country: address.Country, CreatedByUserID: domainID(address.CreatedByUserID), UpdatedByUserID: domainID(address.UpdatedByUserID), CreatedAt: address.CreatedAt, UpdatedAt: address.UpdatedAt}
 }
 
 func (r PrivacyGormRepository) IsIdentitySuppressed(ctx context.Context, boxID domain.ID, source domain.Source, externalID string) (bool, error) {

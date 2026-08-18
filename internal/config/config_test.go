@@ -105,3 +105,28 @@ func TestBillingReconciliationValidationRequiresOnlyDatabaseAndAsaas(t *testing.
 		})
 	}
 }
+
+func TestPeopleFoundationRequiresDedicatedEncryptionAndLookupKeys(t *testing.T) {
+	base := Config{
+		AppEnv: "development", DatabaseURL: "postgres://database", HTTPMaxBodyBytes: 1, ImportMaxUploadBytes: 1,
+		LoginRateLimitRequests: 1, LoginRateLimitWindowSeconds: 1, SetupRateLimitRequests: 1, SetupRateLimitWindowSeconds: 1,
+		HTTPReadHeaderTimeoutSeconds: 1, HTTPReadTimeoutSeconds: 1, HTTPWriteTimeoutSeconds: 1, HTTPIdleTimeoutSeconds: 1, HTTPShutdownTimeoutSeconds: 1,
+		DBMaxOpenConnections: 2, DBMaxIdleConnections: 1, DBConnectionMaxLifetimeSeconds: 1, DBConnectionMaxIdleTimeSeconds: 1,
+		AutomationStaleRunMinutes: 1, AutomationCatchupWindowMinutes: 1, AuthCookieName: "session", AuthCookieSameSite: "lax", AuthSessionMaxAgeSeconds: 1,
+		FeaturePeopleFoundationEnabled: true, DataEncryptionActiveKeyID: "active", DataEncryptionKeys: "active:key", PersonLookupHMACKey: "lookup",
+	}
+	if err := base.Validate(); err != nil {
+		t.Fatalf("expected configured people foundation to validate: %v", err)
+	}
+	for _, mutate := range []func(*Config){
+		func(cfg *Config) { cfg.DataEncryptionActiveKeyID = "" },
+		func(cfg *Config) { cfg.DataEncryptionKeys = "" },
+		func(cfg *Config) { cfg.PersonLookupHMACKey = "" },
+	} {
+		current := base
+		mutate(&current)
+		if err := current.Validate(); err == nil {
+			t.Fatal("expected people foundation without a required key to fail")
+		}
+	}
+}

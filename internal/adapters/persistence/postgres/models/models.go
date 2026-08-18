@@ -186,8 +186,9 @@ type UserModel struct {
 }
 
 type StudentModel struct {
-	ID                        string `gorm:"primaryKey"`
-	BoxID                     string `gorm:"index"`
+	ID                        string  `gorm:"primaryKey"`
+	PersonID                  *string `gorm:"index"`
+	BoxID                     string  `gorm:"index"`
 	Name                      string
 	Email                     string
 	Phone                     string
@@ -208,6 +209,76 @@ type StudentModel struct {
 	AnonymizedAt              *time.Time
 	CreatedAt                 time.Time
 	UpdatedAt                 time.Time
+}
+
+type PersonModel struct {
+	ID             string `gorm:"primaryKey"`
+	OrganizationID string `gorm:"index"`
+	Name           string
+	PhoneE164      *string
+	Email          *string
+	CPFEncrypted   *string
+	CPFLookupHash  *string
+	CPFLast2       *string
+	ProfileStatus  string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+}
+
+type PersonAddressModel struct {
+	ID              string `gorm:"primaryKey"`
+	PersonID        string `gorm:"index"`
+	OrganizationID  string
+	AddressType     string
+	PostalCode      *string
+	Street          *string
+	Number          *string
+	Complement      *string
+	District        *string
+	City            *string
+	State           *string
+	Country         string
+	CreatedByUserID string
+	UpdatedByUserID string
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+}
+
+type PersonUnitRelationshipModel struct {
+	ID                 string `gorm:"primaryKey"`
+	OrganizationID     string
+	PersonID           string `gorm:"index"`
+	UnitID             string `gorm:"index"`
+	RelationshipStatus string
+	StartedAt          time.Time
+	EndedAt            *time.Time
+	StatusReason       string
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
+}
+
+type PersonCreationRequestModel struct {
+	ID                 string `gorm:"primaryKey"`
+	OrganizationID     string
+	UnitID             string
+	ActorUserID        string
+	IdempotencyKey     string
+	RequestFingerprint string
+	PersonID           string
+	StudentID          string
+	CreatedAt          time.Time
+}
+
+type PeopleAuditEventModel struct {
+	ID             string `gorm:"primaryKey"`
+	OrganizationID string
+	UnitID         string
+	ActorUserID    string
+	Action         string
+	PersonID       string
+	StudentID      *string
+	Metadata       []byte `gorm:"type:jsonb"`
+	CreatedAt      time.Time
 }
 
 type ImportHistoryModel struct {
