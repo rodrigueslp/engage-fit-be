@@ -105,3 +105,22 @@ func TestPeopleCapabilityBlocksOnlyPeopleUnitRoutes(t *testing.T) {
 		t.Fatalf("spaces route should not be blocked by people capability: %d", response.Code)
 	}
 }
+
+func TestEnrollmentCapabilityBlocksOnlyEnrollmentRoutes(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.Use(FeatureGates(Capabilities{Enrollments: false, Memberships: true, People: true}))
+	router.Any("/*path", func(c *gin.Context) { c.Status(http.StatusNoContent) })
+	for _, path := range []string{"/api/v1/units/unit-1/students/student-1/enrollments", "/api/v1/units/unit-1/enrollments/enrollment-1", "/api/v1/units/unit-1/enrollments/enrollment-1/end"} {
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, path, nil))
+		if response.Code != http.StatusNotFound || !strings.Contains(response.Body.String(), "capability_disabled") {
+			t.Fatalf("%s should be blocked by enrollment capability: %d %s", path, response.Code, response.Body.String())
+		}
+	}
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/units/unit-1/students/student-1", nil))
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("student route should not be blocked by enrollment capability: %d", response.Code)
+	}
+}

@@ -52,3 +52,20 @@ func RecordMembershipCommand(ctx context.Context, command, result string, elapse
 	commands.Add(ctx, 1, attrs)
 	duration.Record(ctx, elapsed.Seconds(), attrs)
 }
+
+func RecordEnrollmentCommand(ctx context.Context, command, result string, elapsed time.Duration, conflict, expirationReconciled bool) {
+	meter := otel.Meter("engagefit/business")
+	commands, _ := meter.Int64Counter("engagefit.enrollments.commands", metric.WithDescription("Comandos de matrículas"))
+	duration, _ := meter.Float64Histogram("engagefit.enrollments.command.duration", metric.WithUnit("s"), metric.WithDescription("Latência dos comandos de matrículas"))
+	attrs := metric.WithAttributes(attribute.String("command", command), attribute.String("result", result))
+	commands.Add(ctx, 1, attrs)
+	duration.Record(ctx, elapsed.Seconds(), attrs)
+	if conflict {
+		conflicts, _ := meter.Int64Counter("engagefit.enrollments.conflicts", metric.WithDescription("Conflitos de matrículas"))
+		conflicts.Add(ctx, 1, attrs)
+	}
+	if expirationReconciled {
+		reconciled, _ := meter.Int64Counter("engagefit.enrollments.expiration_reconciled", metric.WithDescription("Matrículas expiradas reconciliadas"))
+		reconciled.Add(ctx, 1)
+	}
+}

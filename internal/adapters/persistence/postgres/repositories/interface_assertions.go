@@ -7,6 +7,9 @@ var (
 	_ portrepo.CatalogRepository             = CatalogGormRepository{}
 	_ portrepo.CatalogPlanReferenceResolver  = CatalogGormRepository{}
 	_ portrepo.MembershipRepository          = MembershipGormRepository{}
+	_ portrepo.EnrollmentRepository          = EnrollmentGormRepository{}
+	_ portrepo.EnrollmentPrivacyReader       = EnrollmentGormRepository{}
+	_ portrepo.EnrollmentSubjectResolver     = PeopleGormRepository{}
 	_ portrepo.PeopleRepository              = PeopleGormRepository{}
 	_ portrepo.BillingRepository             = BillingGormRepository{}
 	_ portrepo.UserRepository                = UserGormRepository{}

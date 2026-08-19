@@ -29,5 +29,6 @@ type StudentPrivacyExport struct {
 	Communications         []PrivacyCommunication
 	ContactConsents        []ContactConsentEvent
 	RetentionInterventions []RetentionIntervention
+	Enrollments            []EnrollmentPrivacyExport
 	ExportedAt             time.Time
 }

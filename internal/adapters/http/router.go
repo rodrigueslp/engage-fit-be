@@ -55,6 +55,7 @@ type RouterDependencies struct {
 	CatalogService            *catalog.Service
 	PeopleService             *people.Service
 	MembershipService         *memberships.Service
+	EnrollmentService         *memberships.EnrollmentService
 
 	ListStudentsUseCase            students.ListStudentsUseCase
 	GetStudentUseCase              students.GetStudentUseCase
@@ -370,6 +371,15 @@ func NewRouter(deps RouterDependencies) *gin.Engine {
 		ownerMemberships.POST("/membership-plans/:id/versions", membershipHandler.NewVersion)
 		ownerMemberships.POST("/membership-plans/:id/archive", membershipHandler.Archive)
 		ownerMemberships.POST("/membership-plans/:id/reactivate", membershipHandler.Reactivate)
+	}
+	if deps.EnrollmentService != nil {
+		enrollmentHandler := handlers.NewEnrollmentHandler(deps.EnrollmentService)
+		ownerEnrollments := protected.Group("")
+		ownerEnrollments.Use(middleware.Owner())
+		ownerEnrollments.GET("/units/:unit_id/students/:student_id/enrollments", enrollmentHandler.ListForStudent)
+		ownerEnrollments.POST("/units/:unit_id/students/:student_id/enrollments", enrollmentHandler.Create)
+		ownerEnrollments.GET("/units/:unit_id/enrollments/:enrollment_id", enrollmentHandler.Get)
+		ownerEnrollments.POST("/units/:unit_id/enrollments/:enrollment_id/end", enrollmentHandler.End)
 	}
 
 	dashboardHandler := handlers.NewDashboardHandler(deps.DashboardSummaryUseCase, deps.DashboardActiveCampaignsUseCase, deps.DashboardNearGoalUseCase, deps.DashboardAtRiskUseCase, deps.ListPendingRewardDeliveriesUseCase)

@@ -21,6 +21,42 @@ type duplicateMatchRow struct {
 	RelationshipStatus string
 }
 
+func (r PeopleGormRepository) ResolveEnrollmentSubject(ctx context.Context, organizationID, unitID, studentID domain.ID) (*domain.EnrollmentSubject, error) {
+	var row struct {
+		PersonID           *string
+		DisplayName        string
+		AnonymizedAt       *string
+		ProfileStatus      *string
+		RelationshipStatus *string
+	}
+	err := databaseForContext(r.db, ctx).Table("students s").
+		Select("s.person_id, s.name AS display_name, s.anonymized_at::text AS anonymized_at, p.profile_status, r.relationship_status").
+		Joins("JOIN boxes b ON b.id = s.box_id AND b.organization_id = ?", stringID(organizationID)).
+		Joins("LEFT JOIN persons p ON p.id = s.person_id AND p.organization_id = b.organization_id").
+		Joins("LEFT JOIN person_unit_relationships r ON r.person_id = p.id AND r.organization_id = p.organization_id AND r.unit_id = s.box_id").
+		Where("s.id = ? AND s.box_id = ?", stringID(studentID), stringID(unitID)).
+		Take(&row).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if row.PersonID == nil || *row.PersonID == "" {
+		return nil, nil
+	}
+	subject := &domain.EnrollmentSubject{PersonID: domainID(*row.PersonID), DisplayName: row.DisplayName, Eligible: true}
+	switch {
+	case row.AnonymizedAt != nil || row.ProfileStatus == nil || *row.ProfileStatus == string(domain.PersonProfileAnonymized):
+		subject.Eligible, subject.IneligibleReason = false, "person_anonymized"
+	case *row.ProfileStatus != string(domain.PersonProfileActive):
+		subject.Eligible, subject.IneligibleReason = false, "person_inactive"
+	case row.RelationshipStatus == nil || *row.RelationshipStatus != string(domain.PersonRelationshipActive):
+		subject.Eligible, subject.IneligibleReason = false, "relationship_inactive"
+	}
+	return subject, nil
+}
+
 func (r PeopleGormRepository) DuplicateCheck(ctx context.Context, organizationID, unitID domain.ID, cpfLookupHash, phoneE164 string) (*domain.PersonDuplicateCheck, error) {
 	db := databaseForContext(r.db, ctx)
 	result := &domain.PersonDuplicateCheck{PhoneMatches: []domain.PersonDuplicateMatch{}}

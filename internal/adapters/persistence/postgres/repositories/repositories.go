@@ -29,6 +29,14 @@ func NewMembershipGormRepository(db *gorm.DB) MembershipGormRepository {
 	return MembershipGormRepository{db: db}
 }
 
+type EnrollmentGormRepository struct {
+	db *gorm.DB
+}
+
+func NewEnrollmentGormRepository(db *gorm.DB) EnrollmentGormRepository {
+	return EnrollmentGormRepository{db: db}
+}
+
 type BillingGormRepository struct {
 	db *gorm.DB
 }

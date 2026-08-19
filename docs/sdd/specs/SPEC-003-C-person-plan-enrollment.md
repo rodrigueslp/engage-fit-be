@@ -1,6 +1,6 @@
 # SPEC-003/C — Matrícula da pessoa em plano publicado
 
-- Status: `ready`
+- Status: `validated locally`
 - Versão: `1.0`
 - Data: 2026-08-19
 - Depende de: `ARCH-001`, `SPEC-001/B-D`, `SPEC-002/A`, `SPEC-003/A`
@@ -756,3 +756,26 @@ padrão de observabilidade já usado em `memberships`.
 
 Essas decisões não impedem esta slice porque matrícula preserva pessoa, unidade
 e versão imutável sem afirmar estados dos módulos futuros.
+
+## 23. Evidências de validação local
+
+Validação concluída em 2026-08-19, sem divergência do contrato desta spec:
+
+- PostgreSQL temporário exclusivo aplicou `001..058` em banco vazio; a segunda
+  execução aplicou zero migrations;
+- teste de upgrade real `057 -> 058` com pessoa, vínculo, aluno e plano
+  publicado confirmou zero backfill nas três tabelas novas;
+- constraints, FKs compostas, índice parcial, rollback de evento, isolamento,
+  idempotência, revisão, expiração reconciliada, versão substituída,
+  arquivamento, anonimização e corrida real passaram;
+- `go test -count=1 ./...` e `go vet ./...` passaram com PostgreSQL real;
+- `go test -race -count=1 ./...` passou em contêiner Linux com CGO e PostgreSQL
+  real, pois o host não possui compilador C;
+- TypeScript e build Vite passaram;
+- Playwright focado passou 4 cenários de matrícula, incluindo `360x800`, foco,
+  Escape, duplo toque, conflitos, estados e encerramento;
+- regressão Playwright passou 29 testes; 2 fluxos de API real permaneceram
+  ignorados por serem opt-in;
+- revisão visual em `360x800` confirmou painel sem overflow horizontal;
+- o banco compartilhado `boxengage`, produção e feature flags não foram
+  alterados. A migration `058` permanece provisória para o integrador.

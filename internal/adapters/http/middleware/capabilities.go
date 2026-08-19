@@ -19,6 +19,7 @@ type Capabilities struct {
 	ServiceCatalog bool `json:"service_catalog"`
 	People         bool `json:"people"`
 	Memberships    bool `json:"memberships"`
+	Enrollments    bool `json:"enrollments"`
 }
 
 func FeatureGates(capabilities Capabilities) gin.HandlerFunc {
@@ -43,6 +44,8 @@ func FeatureGates(capabilities Capabilities) gin.HandlerFunc {
 			disabled = !capabilities.Catalog || !capabilities.ServiceCatalog
 		case isCatalogPath(path):
 			disabled = !capabilities.Catalog
+		case isEnrollmentPath(path):
+			disabled = !capabilities.Enrollments
 		case isPeoplePath(path):
 			disabled = !capabilities.People
 		case strings.HasPrefix(path, "/api/v1/membership-plans"):
@@ -54,6 +57,14 @@ func FeatureGates(capabilities Capabilities) gin.HandlerFunc {
 		}
 		c.Next()
 	}
+}
+
+func isEnrollmentPath(path string) bool {
+	parts := strings.Split(strings.TrimPrefix(path, "/api/v1/units/"), "/")
+	if len(parts) < 3 || parts[0] == "" {
+		return false
+	}
+	return parts[1] == "enrollments" || (parts[1] == "students" && len(parts) >= 4 && parts[3] == "enrollments")
 }
 
 func isServiceCatalogPath(path string) bool {

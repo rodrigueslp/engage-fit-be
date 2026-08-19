@@ -39,14 +39,15 @@ type PrivacyCommunicationResponse struct {
 }
 
 type StudentPrivacyExportResponse struct {
-	Student                StudentResponse                 `json:"student"`
-	Person                 *PersonPrivacyExportResponse    `json:"person,omitempty"`
-	Checkins               []CheckinResponse               `json:"checkins"`
-	Progress               []CampaignProgressResponse      `json:"campaign_progress"`
-	Communications         []PrivacyCommunicationResponse  `json:"communications"`
-	ContactConsents        []ContactConsentResponse        `json:"contact_consents"`
-	RetentionInterventions []RetentionInterventionResponse `json:"retention_interventions"`
-	ExportedAt             string                          `json:"exported_at"`
+	Student                StudentResponse                   `json:"student"`
+	Person                 *PersonPrivacyExportResponse      `json:"person,omitempty"`
+	Checkins               []CheckinResponse                 `json:"checkins"`
+	Progress               []CampaignProgressResponse        `json:"campaign_progress"`
+	Communications         []PrivacyCommunicationResponse    `json:"communications"`
+	ContactConsents        []ContactConsentResponse          `json:"contact_consents"`
+	RetentionInterventions []RetentionInterventionResponse   `json:"retention_interventions"`
+	Enrollments            []EnrollmentPrivacyExportResponse `json:"enrollments"`
+	ExportedAt             string                            `json:"exported_at"`
 }
 
 type PersonPrivacyExportResponse struct {

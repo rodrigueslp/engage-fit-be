@@ -45,7 +45,7 @@ func (h StudentsHandler) ExportData(c *gin.Context) {
 		respondError(c, err)
 		return
 	}
-	response := dto.StudentPrivacyExportResponse{Student: studentResponse(result.Student), ExportedAt: result.ExportedAt.Format(time.RFC3339), Checkins: []dto.CheckinResponse{}, Progress: []dto.CampaignProgressResponse{}, Communications: []dto.PrivacyCommunicationResponse{}, ContactConsents: []dto.ContactConsentResponse{}, RetentionInterventions: []dto.RetentionInterventionResponse{}}
+	response := dto.StudentPrivacyExportResponse{Student: studentResponse(result.Student), ExportedAt: result.ExportedAt.Format(time.RFC3339), Checkins: []dto.CheckinResponse{}, Progress: []dto.CampaignProgressResponse{}, Communications: []dto.PrivacyCommunicationResponse{}, ContactConsents: []dto.ContactConsentResponse{}, RetentionInterventions: []dto.RetentionInterventionResponse{}, Enrollments: []dto.EnrollmentPrivacyExportResponse{}}
 	if result.Person != nil {
 		person := dto.PersonPrivacyExportResponse{ID: string(result.Person.ID), Name: result.Person.Name, Phone: result.Person.PhoneE164, Email: result.Person.Email, CPF: result.Person.CPF, ProfileStatus: string(result.Person.ProfileStatus)}
 		if result.Person.Address != nil {
@@ -80,6 +80,13 @@ func (h StudentsHandler) ExportData(c *gin.Context) {
 	}
 	for _, intervention := range result.RetentionInterventions {
 		response.RetentionInterventions = append(response.RetentionInterventions, retentionInterventionResponse(intervention))
+	}
+	for _, exported := range result.Enrollments {
+		item := dto.EnrollmentPrivacyExportResponse{Enrollment: enrollmentResponse(exported.Enrollment), Events: []dto.EnrollmentEventResponse{}}
+		for _, event := range exported.Events {
+			item.Events = append(item.Events, dto.EnrollmentEventResponse{Action: event.Action, BeforeData: event.BeforeData, AfterData: event.AfterData, Reason: event.Reason, CreatedAt: event.CreatedAt.Format(time.RFC3339)})
+		}
+		response.Enrollments = append(response.Enrollments, item)
 	}
 	c.Header("Content-Disposition", `attachment; filename="student-data-export.json"`)
 	c.JSON(http.StatusOK, response)

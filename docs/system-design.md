@@ -71,7 +71,10 @@ O módulo `memberships` mantém o catálogo comercial de planos na organização
 mas fixa `home_unit_id` na unidade da sessão que criou o plano. Somente essa
 unidade pode consultar ou operar o plano, mesmo quando outra unidade pertence à
 mesma organização. O owner é o único papel autorizado; coach e platform admin
-não recebem essa superfície. A slice não cria matrícula nem decide acesso.
+não recebem essa superfície. Matrículas vinculam a `Person` elegível à versão
+publicada exata na unidade atual, preservam histórico comercial e projetam os
+estados `scheduled|active|expired|ended`; elas não criam contrato, cobrança ou
+decisão de acesso.
 
 ### 3.2 `OWNER`
 
@@ -300,11 +303,12 @@ Existem duas decisões diferentes:
 | Serviços ofertáveis | `FEATURE_CATALOG_ENABLED` + `FEATURE_SERVICE_CATALOG_ENABLED` | não possui efeito externo |
 | Fundação de pessoas | `FEATURE_PEOPLE_FOUNDATION_ENABLED` | não possui efeito externo |
 | Catálogo de planos | `FEATURE_MEMBERSHIPS_ENABLED` + catálogo | não possui efeito externo |
+| Matrículas | `FEATURE_ENROLLMENTS_ENABLED` + memberships + people | não possui efeito externo |
 
 Defaults:
 
-- development: capabilities ligadas, exceto `people` e `memberships`, efeitos
-  reais desligados;
+- development: capabilities ligadas, exceto `people`, `memberships` e
+  `enrollments`, efeitos reais desligados;
 - production: capabilities desligadas, efeitos reais desligados;
 - mocks continuam permitidos para testes sem rede externa.
 
@@ -316,6 +320,8 @@ Dependências validadas no startup:
 
 - worker exige feature automação;
 - LLM exige workouts;
+- memberships exige catálogo;
+- enrollments exige memberships e people;
 - permissão de envio WhatsApp/e-mail exige a feature correspondente.
 
 ## 9. Modelo de dados
@@ -357,6 +363,10 @@ erDiagram
     BOXES ||--o{ MEMBERSHIP_PLANS : originates
     MEMBERSHIP_PLANS ||--|{ MEMBERSHIP_PLAN_VERSIONS : versions
     MEMBERSHIP_PLAN_VERSIONS ||--|{ MEMBERSHIP_PLAN_ENTITLEMENTS : grants
+    PERSONS ||--o{ ENROLLMENTS : owns
+    BOXES ||--o{ ENROLLMENTS : hosts
+    MEMBERSHIP_PLAN_VERSIONS ||--o{ ENROLLMENTS : preserves
+    ENROLLMENTS ||--o{ ENROLLMENT_EVENTS : audits
 ```
 
 ### 9.2 Grupos de tabelas
@@ -377,6 +387,7 @@ erDiagram
 | Catálogo | `modalities`, `unit_modalities`, `spaces`, `service_offerings`, `unit_service_offerings`, `catalog_audit_events` | modalidades e serviços da organização, ativações por unidade, espaços e auditoria |
 | Pessoas | `persons`, `person_addresses`, `person_unit_relationships`, `person_creation_requests`, `people_audit_events` | identidade humana, endereço, participação na unidade, idempotência e auditoria sem PII |
 | Planos comerciais | `membership_plans`, `membership_plan_versions`, `membership_plan_entitlements`, `membership_plan_command_requests`, `membership_plan_audit_events` | catálogo por organização/unidade de origem, versões imutáveis, direitos, idempotência e auditoria |
+| Matrículas | `enrollments`, `enrollment_command_requests`, `enrollment_events` | vínculo da pessoa à versão imutável, vigência, encerramento, idempotência e auditoria sem PII |
 | Schema | `schema_migrations` | versão, checksum e tempo de execução |
 
 ### 9.3 Invariantes relevantes do banco
@@ -410,7 +421,13 @@ erDiagram
 - todo direito referencia exatamente uma modalidade ou serviço da mesma
   organização, e publicação exige que o alvo esteja ativo na unidade de origem;
 - criar plano, publicar e criar nova versão mantêm replay idempotente por
-  organização, comando e chave, recusando a reutilização com outro payload.
+  organização, comando e chave, recusando a reutilização com outro payload;
+- uma pessoa tem no máximo uma matrícula `lifecycle_status=active` por unidade,
+  reforçada por índice parcial e FKs compostas de organização;
+- matrícula recorrente não possui `valid_until`; pagamento único calcula fim
+  inclusivo em calendário e nunca altera a versão imutável vinculada;
+- encerramento preenche todos os campos administrativos, incrementa revisão e
+  mantém command request e evento na mesma transação.
 
 ### 9.4 Fundação de pessoas e compatibilidade
 
@@ -459,6 +476,24 @@ auditoria. O replay devolve o snapshot original mesmo se o plano já tiver uma
 versão posterior e volta a validar a unidade de origem. Métricas e logs usam
 somente ação, IDs, resultado e versão; a auditoria transacional preserva preço
 e direitos, sem registrar seu corpo nos logs.
+
+### 9.6 Matrícula operacional da pessoa
+
+`Enrollment` referencia `Person`, unidade principal e uma versão imutável do
+plano. `lifecycle_status` persiste apenas `active|ended`; a leitura projeta
+`scheduled`, `active`, `expired` ou `ended` usando o relógio local de
+`America/Sao_Paulo`. Uma matrícula de pagamento único vencida continua aberta
+até a próxima criação: nessa transação ela é encerrada com data final original,
+evento `enrollment.expiration_reconciled` e só então a nova matrícula é criada.
+
+O caso de uso resolve a pessoa por uma porta pública de `people`; o repositório
+de matrículas não consulta `students`, `persons` ou vínculos. O comando valida a
+versão ainda publicada e os alvos do catálogo ainda ativos, usa advisory lock
+por pessoa/unidade, índice parcial, revisão otimista, fingerprint e resposta
+idempotente persistida. O export de privacidade compõe o leitor público de
+`memberships`, sem acoplar o repositório de privacidade às tabelas comerciais.
+Nenhuma operação muda `membership_started_at`, check-ins, contrato, cobrança,
+agenda, consumo ou autorização de acesso.
 
 ## 10. Fluxo de importação
 
@@ -1275,6 +1310,28 @@ publicação, nova versão e arquivamento e somente então considerar a habilita
 O rollback operacional desliga a flag e, se necessário, reverte os binários; o
 schema aditivo permanece. A API não executa migration no startup.
 
+### 17.6 Rollout de matrículas da pessoa
+
+A migration provisória `058_create_person_plan_enrollments.sql` é somente
+aditiva e cria `enrollments`, `enrollment_command_requests` e
+`enrollment_events`, sem backfill. O integrador confirma ou renumera `058` no
+merge. Em upgrade desde `057`, estas contagens precisam começar em zero:
+
+```sql
+SELECT COUNT(*) FROM enrollments;
+SELECT COUNT(*) FROM enrollment_command_requests;
+SELECT COUNT(*) FROM enrollment_events;
+```
+
+Publicar primeiro a migration e o backend com
+`FEATURE_ENROLLMENTS_ENABLED=false`. O startup recusa a flag se
+`FEATURE_MEMBERSHIPS_ENABLED` ou `FEATURE_PEOPLE_FOUNDATION_ENABLED` estiverem
+desligadas. O frontend tolera capability ausente como `false`; depois de sua
+publicação, homologar owner, criação recorrente e one-time, conflito, expiração,
+encerramento e export de privacidade em dados não reais antes de habilitar. O
+rollback operacional desliga somente `enrollments`; registros já criados e o
+schema permanecem, sem alterar planos, pessoas, check-ins ou financeiro.
+
 ## 18. Runtime, containers e shutdown
 
 ### 18.1 API
@@ -1361,6 +1418,7 @@ A lista executável completa está em `.env.example`. Os grupos conceituais são
 | Criptografia | `DATA_ENCRYPTION_*` | perda irreversível de credenciais |
 | Identidade/CPF | `FEATURE_PEOPLE_FOUNDATION_ENABLED`, `PERSON_LOOKUP_HMAC_KEY` | enumeração de CPF, indisponibilidade de cadastro ou perda de lookup |
 | Planos | `FEATURE_MEMBERSHIPS_ENABLED` (depende de `FEATURE_CATALOG_ENABLED`) | exposição prematura do catálogo comercial |
+| Matrículas | `FEATURE_ENROLLMENTS_ENABLED` (depende de memberships e people) | exposição prematura do vínculo comercial da pessoa |
 | Retenção | `PRIVACY_RETENTION_*` | exclusão prematura ou retenção excessiva |
 
 Production faz fail-fast para banco, JWT, cookie Secure, admin e cifra. Setup/Prometheus habilitados exigem tokens fortes.
@@ -1378,6 +1436,7 @@ O contrato definitivo está em `internal/adapters/http/router.go`. Mapa resumido
 | `/api/v1/organization`, `/modalities`, `/service-offerings`, `/units/:unit_id/{modalities,spaces,service-offerings}` | OWNER/COACH para leitura; OWNER para mutação | organização atual, modalidades, espaços e serviços ofertáveis |
 | `/api/v1/units/:unit_id/people` | OWNER + capability `people` | duplicate check e cadastro manual idempotente |
 | `/api/v1/membership-plans*` | OWNER + capability `memberships` | catálogo comercial, rascunho, publicação, nova versão e arquivamento |
+| `/api/v1/units/:unit_id/{students/:student_id/enrollments,enrollments/:enrollment_id*}` | OWNER + capability `enrollments` | consulta, criação idempotente e encerramento de matrícula |
 | `/api/v1/retention*`, `/students/:id/retention-monitoring`, `/team/members` | OWNER/COACH | radar, jornada, exclusões reversíveis, ações e consulta da equipe |
 | `/api/v1/imports`, `/checkin-ingestion*` | OWNER ou credencial de ingestão | upload manual e entrada recorrente |
 | `/api/v1/team/coaches*` | OWNER | criação, desativação e senha de coaches |
@@ -1431,6 +1490,9 @@ Ao adicionar endpoint:
 | migration alterada | checksum e idempotência |
 | termos publicados alterados | triggers de imutabilidade em versão e direitos |
 | comando de plano duplicado | advisory lock, fingerprint e resposta persistida |
+| duas matrículas abertas para a mesma pessoa/unidade | advisory lock, índice parcial e teste concorrente PostgreSQL |
+| versão revisada trocada silenciosamente | validação da versão publicada exata e conflito estável |
+| auditoria de matrícula parcial | evento, command request e mutação na mesma transação |
 | duas réplicas executarem schedule | claim concorrente PostgreSQL |
 | ultrapassar limite WhatsApp | reserva concorrente e testes de governance |
 | reimportar aluno anonimizado | teste de privacy suppression |
@@ -1521,6 +1583,8 @@ Hoje há lógica de audiência semelhante em três packages. Mudanças devem ser
 | sem RLS | código/repositories mais simples | isolamento depende de disciplina/testes |
 | `Organization` adicionada sem trocar o tenant da sessão | evolução aditiva e sem regressão dos fluxos atuais | multiunidade ainda exige memberships, allowlist e seleção explícita de contexto |
 | plano pertence à organização, mas é operado só pela unidade de origem | prepara identidade organizacional sem ampliar autorização | catálogo compartilhado entre unidades exige contrato futuro explícito |
+| matrícula referencia a versão em vez de duplicar termos | preserva snapshot comercial sem PII redundante | histórico depende da retenção das versões imutáveis |
+| estado efetivo de matrícula calculado na leitura | evita worker diário e segundo status persistido | expiração só é reconciliada administrativamente na criação seguinte |
 | preservar check-ins após anonimização | métricas históricas | dado comportamental continua armazenado anonimamente |
 | frontend sem state/router libs | pequena superfície | mais código manual e menos cache |
 
@@ -1539,9 +1603,9 @@ Hoje há lógica de audiência semelhante em três packages. Mudanças devem ser
 
 ### Produto/qualidade
 
-- implementar matrículas e acesso multiunidade nas slices futuras; até lá
-  `users.box_id` continua sendo o único contexto autorizado e planos não são
-  vendidos a pessoas;
+- implementar adicionais, contratos, cobrança, consumo/decisão de acesso e
+  acesso multiunidade nas slices futuras; a matrícula atual continua
+  operacional e restrita ao `users.box_id`;
 - recuperação de senha por token/e-mail;
 - paginação e filtros server-side;
 - histórico e conversão de brindes/mensagens;
@@ -1678,6 +1742,7 @@ Você domina o núcleo quando consegue explicar:
 | Domínio | `internal/domain` |
 | Catálogo de estrutura e serviços | `internal/app/catalog`, `catalog_repository.go`, `catalog_handler.go` |
 | Catálogo versionado de planos | `internal/app/memberships`, `membership_repository.go`, `membership_handler.go`, `engage-fit-fe/src/pages/plans/PlansPage.tsx` |
+| Matrículas | `internal/app/memberships/enrollment_service.go`, `enrollment_repository.go`, `enrollment_handler.go`, `engage-fit-fe/src/features/enrollments/EnrollmentPanel.tsx` |
 | Pessoas/cadastro manual | `internal/app/people`, `people_repository.go`, `people_handler.go` |
 | Importação | `internal/app/imports/import_checkins_usecase.go` |
 | Campanhas/progresso | `internal/app/campaigns/campaign_usecases.go` |

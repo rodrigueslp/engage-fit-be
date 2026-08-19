@@ -168,6 +168,50 @@ type MembershipPlanAuditEventModel struct {
 	CreatedAt      time.Time
 }
 
+type EnrollmentModel struct {
+	ID              string `gorm:"primaryKey"`
+	OrganizationID  string `gorm:"index"`
+	PersonID        string `gorm:"index"`
+	HomeUnitID      string `gorm:"index"`
+	PlanVersionID   string `gorm:"index"`
+	LifecycleStatus string
+	StartsOn        time.Time  `gorm:"type:date"`
+	ValidUntil      *time.Time `gorm:"type:date"`
+	EndedOn         *time.Time `gorm:"type:date"`
+	EndedAt         *time.Time
+	EndedReason     *string
+	Revision        int
+	CreatedByUserID string
+	EndedByUserID   *string
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+}
+
+type EnrollmentCommandRequestModel struct {
+	ID                 string `gorm:"primaryKey"`
+	OrganizationID     string `gorm:"index"`
+	Command            string
+	IdempotencyKey     string
+	RequestFingerprint string
+	EnrollmentID       string
+	ResponseData       []byte `gorm:"type:jsonb"`
+	CreatedAt          time.Time
+}
+
+type EnrollmentEventModel struct {
+	ID             string `gorm:"primaryKey"`
+	OrganizationID string `gorm:"index"`
+	UnitID         string
+	PersonID       string `gorm:"index"`
+	EnrollmentID   string `gorm:"index"`
+	ActorUserID    string
+	Action         string
+	BeforeData     []byte `gorm:"type:jsonb"`
+	AfterData      []byte `gorm:"type:jsonb"`
+	Reason         *string
+	CreatedAt      time.Time
+}
+
 type BillingPlanModel struct {
 	ID                  string `gorm:"primaryKey"`
 	Code                string

@@ -22,6 +22,9 @@ func (MembershipPlanCommandRequestModel) TableName() string {
 	return "membership_plan_command_requests"
 }
 func (MembershipPlanAuditEventModel) TableName() string { return "membership_plan_audit_events" }
+func (EnrollmentModel) TableName() string               { return "enrollments" }
+func (EnrollmentCommandRequestModel) TableName() string { return "enrollment_command_requests" }
+func (EnrollmentEventModel) TableName() string          { return "enrollment_events" }
 
 func (BillingPlanModel) TableName() string         { return "billing_plans" }
 func (BillingCustomerModel) TableName() string     { return "billing_customers" }

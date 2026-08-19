@@ -116,3 +116,19 @@ func TestEmbeddedMigrationsIncludeMembershipPlanCatalog(t *testing.T) {
 	}
 	t.Fatal("membership plan catalog migration not found")
 }
+
+func TestEmbeddedMigrationsIncludePersonPlanEnrollments(t *testing.T) {
+	loaded, err := Load(Files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, migration := range loaded {
+		if migration.Version == 58 {
+			if migration.Name != "create_person_plan_enrollments" || !strings.Contains(migration.SQL, "CREATE TABLE enrollments") || !strings.Contains(migration.SQL, "idx_enrollments_one_open_per_person_unit") {
+				t.Fatalf("unexpected enrollment migration: %+v", migration)
+			}
+			return
+		}
+	}
+	t.Fatal("person plan enrollment migration not found")
+}

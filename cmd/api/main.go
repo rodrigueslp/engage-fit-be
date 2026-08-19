@@ -126,6 +126,7 @@ func main() {
 	boxRepository := pgrepo.NewBoxGormRepository(db)
 	catalogRepository := pgrepo.NewCatalogGormRepository(db)
 	membershipRepository := pgrepo.NewMembershipGormRepository(db)
+	enrollmentRepository := pgrepo.NewEnrollmentGormRepository(db)
 	userRepository := pgrepo.NewUserGormRepository(db)
 	teamRepository := pgrepo.NewTeamGormRepository(db)
 	studentRepository := pgrepo.NewStudentGormRepository(db)
@@ -200,6 +201,7 @@ func main() {
 	updateBoxUseCase := boxes.NewUpdateBoxUseCase(boxRepository)
 	catalogService := catalog.NewService(catalogRepository, transactionManager)
 	membershipService := memberships.NewService(membershipRepository, catalogRepository, boxRepository, transactionManager)
+	enrollmentService := memberships.NewEnrollmentService(enrollmentRepository, peopleRepository, catalogRepository, boxRepository, transactionManager)
 	teamService := team.NewService(userRepository, teamRepository, passwordService)
 	var peopleService *people.Service
 	if cfg.FeaturePeopleFoundationEnabled {
@@ -218,7 +220,7 @@ func main() {
 	getStudentUseCase := students.NewGetStudentUseCase(studentRepository)
 	listStudentCheckinsUseCase := students.NewListStudentCheckinsUseCase(checkinRepository)
 	updateStudentRiskStatusUseCase := students.NewUpdateStudentRiskStatusUseCase(studentRepository)
-	exportStudentDataUseCase := students.NewExportStudentDataUseCase(privacyRepository)
+	exportStudentDataUseCase := students.NewExportStudentDataUseCase(privacyRepository, enrollmentService)
 	updateContactPreferenceUseCase := students.NewUpdateContactPreferenceUseCase(studentRepository, privacyRepository)
 	anonymizeStudentUseCase := students.NewAnonymizeStudentUseCase(privacyRepository)
 
@@ -330,6 +332,7 @@ func main() {
 		CatalogService:            catalogService,
 		PeopleService:             peopleService,
 		MembershipService:         membershipService,
+		EnrollmentService:         enrollmentService,
 
 		ListStudentsUseCase:            listStudentsUseCase,
 		GetStudentUseCase:              getStudentUseCase,
@@ -463,6 +466,7 @@ func main() {
 			ServiceCatalog: cfg.FeatureServiceCatalogEnabled,
 			People:         cfg.FeaturePeopleFoundationEnabled,
 			Memberships:    cfg.FeatureMembershipsEnabled,
+			Enrollments:    cfg.FeatureEnrollmentsEnabled,
 		},
 		BillingService: billingService,
 		AthleteService: athleteService,

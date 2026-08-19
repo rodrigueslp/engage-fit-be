@@ -87,6 +87,7 @@ type Config struct {
 	FeatureServiceCatalogEnabled      bool
 	FeaturePeopleFoundationEnabled    bool
 	FeatureMembershipsEnabled         bool
+	FeatureEnrollmentsEnabled         bool
 	BuildVersion                      string
 	BuildCommit                       string
 	BuildTime                         string
@@ -173,6 +174,7 @@ func Load() Config {
 		FeatureServiceCatalogEnabled:      getEnvBool("FEATURE_SERVICE_CATALOG_ENABLED", appEnv != "production"),
 		FeaturePeopleFoundationEnabled:    getEnvBool("FEATURE_PEOPLE_FOUNDATION_ENABLED", false),
 		FeatureMembershipsEnabled:         getEnvBool("FEATURE_MEMBERSHIPS_ENABLED", false),
+		FeatureEnrollmentsEnabled:         getEnvBool("FEATURE_ENROLLMENTS_ENABLED", false),
 		BuildVersion:                      getEnv("BUILD_VERSION", ""),
 		BuildCommit:                       getEnv("BUILD_COMMIT", ""),
 		BuildTime:                         getEnv("BUILD_TIME", ""),
@@ -240,6 +242,9 @@ func (c Config) Validate() error {
 	}
 	if c.FeatureMembershipsEnabled && !c.FeatureCatalogEnabled {
 		return errors.New("FEATURE_MEMBERSHIPS_ENABLED exige FEATURE_CATALOG_ENABLED")
+	}
+	if c.FeatureEnrollmentsEnabled && (!c.FeatureMembershipsEnabled || !c.FeaturePeopleFoundationEnabled) {
+		return errors.New("FEATURE_ENROLLMENTS_ENABLED exige FEATURE_MEMBERSHIPS_ENABLED e FEATURE_PEOPLE_FOUNDATION_ENABLED")
 	}
 	if c.WhatsappAllowRealSend && !c.FeatureWhatsappEnabled {
 		return errors.New("WHATSAPP_ALLOW_REAL_SEND exige FEATURE_WHATSAPP_ENABLED")

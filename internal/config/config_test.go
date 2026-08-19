@@ -153,3 +153,34 @@ func TestPeopleFoundationRequiresDedicatedEncryptionAndLookupKeys(t *testing.T) 
 		}
 	}
 }
+
+func TestEnrollmentsRequireMembershipsAndPeopleFoundation(t *testing.T) {
+	base := Config{
+		AppEnv: "development", DatabaseURL: "postgres://database", HTTPMaxBodyBytes: 1, ImportMaxUploadBytes: 1,
+		LoginRateLimitRequests: 1, LoginRateLimitWindowSeconds: 1, SetupRateLimitRequests: 1, SetupRateLimitWindowSeconds: 1,
+		HTTPReadHeaderTimeoutSeconds: 1, HTTPReadTimeoutSeconds: 1, HTTPWriteTimeoutSeconds: 1, HTTPIdleTimeoutSeconds: 1, HTTPShutdownTimeoutSeconds: 1,
+		DBMaxOpenConnections: 2, DBMaxIdleConnections: 1, DBConnectionMaxLifetimeSeconds: 1, DBConnectionMaxIdleTimeSeconds: 1,
+		AutomationStaleRunMinutes: 1, AutomationCatchupWindowMinutes: 1, AuthCookieName: "session", AuthCookieSameSite: "lax", AuthSessionMaxAgeSeconds: 1,
+	}
+	base.FeatureEnrollmentsEnabled = true
+	base.FeatureMembershipsEnabled = true
+	base.FeaturePeopleFoundationEnabled = true
+	base.FeatureCatalogEnabled = true
+	base.DataEncryptionActiveKeyID = "active"
+	base.DataEncryptionKeys = "active:key"
+	base.PersonLookupHMACKey = "lookup"
+	if err := base.Validate(); err != nil {
+		t.Fatalf("valid enrollment dependencies: %v", err)
+	}
+
+	withoutMemberships := base
+	withoutMemberships.FeatureMembershipsEnabled = false
+	if err := withoutMemberships.Validate(); err == nil {
+		t.Fatal("enrollments should require memberships")
+	}
+	withoutPeople := base
+	withoutPeople.FeaturePeopleFoundationEnabled = false
+	if err := withoutPeople.Validate(); err == nil {
+		t.Fatal("enrollments should require people foundation")
+	}
+}

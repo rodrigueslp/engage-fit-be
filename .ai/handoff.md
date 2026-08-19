@@ -4,68 +4,62 @@ Manual canônico de arquitetura e negócio: `docs/system-design.md`.
 
 Guia operacional consolidado: `docs/application-readiness-guide.md`.
 
-Atualizado em: 2026-08-19 (SPEC-003/A integrada e homologada; SPEC-003/C pronta
-para execução; sem push/deploy)
+Atualizado em: 2026-08-19 (SPEC-003/C implementada e validada localmente; sem
+push/deploy)
 
-## Checkpoint atual — catálogo homologado e matrícula preparada
+## Checkpoint atual — matrícula implementada e validada localmente
 
 Este checkpoint prevalece sobre todos os registros históricos abaixo.
 
-Estado homologado:
+Entrega local:
 
-- `SPEC-001/D`, `SPEC-002/A` e `SPEC-003/A` estão integradas e homologadas
-  manualmente no banco local compartilhado, sem divergência reportada;
-- o banco local `boxengage` está em `057`; a migration final do catálogo é
-  `057_create_membership_plan_catalog.sql`;
-- o owner validou criação/publicação de planos e o cenário mensal de CrossFit;
-- `FEATURE_MEMBERSHIPS_ENABLED=true` existe somente no arquivo local ignorado
-  `.env.billing.local` para homologação;
-- produção permanece em `052`, sem as novas capabilities habilitadas.
+- backend e frontend da `SPEC-003/C` estão implementados na branch
+  `feature/spec-003-enrollment-lifecycle` de cada worktree;
+- owner consulta, cria e encerra matrícula a partir de `Alunos`, com versão
+  exata do plano, vigência inclusiva one-time, histórico e estados efetivos;
+- concorrência, replay, revisão otimista, reconciliação de expirada, auditoria
+  transacional, tenancy e export de privacidade estão cobertos;
+- `FEATURE_ENROLLMENTS_ENABLED=false` continua sendo o default e depende de
+  `memberships` + `people`; capability ausente é falsa no frontend;
+- a migration `058_create_person_plan_enrollments.sql` é provisória e somente
+  aditiva, sem backfill. O integrador confirma ou renumera no merge;
+- `SPEC-003/C` foi atualizada para `validated locally`, sem alteração do
+  contrato executável.
+
+Validação concluída:
+
+- PostgreSQL temporário: `001..058`, segunda execução zero e upgrade
+  `057 -> 058` com zero backfill;
+- `go test -count=1 ./...`, `go vet ./...` e race completo em contêiner Linux
+  com PostgreSQL real passaram;
+- TypeScript, build Vite, 4 testes Playwright focados e regressão com 29 testes
+  passaram; 2 fluxos reais opt-in ficaram ignorados;
+- revisão visual `360x800` confirmou foco, Escape, rolagem interna e ausência
+  de overflow horizontal;
+- nenhum dado real, banco compartilhado, produção ou feature flag foi tocado.
 
 Git e publicação:
 
-- backend `main` contém a integração da `SPEC-003/A` em `e6e11eb`, incluindo o
-  reforço de imutabilidade `b786442`;
-- frontend `main` contém a integração em `ced77c7`;
-- os dois repositórios continuam apenas locais e à frente de `origin/main`;
+- os commits locais separados de backend e frontend são a entrega para revisão
+  do integrador;
 - Railway usa `main` como source automático e o pre-deploy do backend executa
   migrations. Portanto não fazer push enquanto deploy e migrations de
   produção não forem explicitamente autorizados/preparados;
-- não houve push, deploy, migration de produção ou alteração de flags externas;
-- preservar sem adicionar, editar ou remover os arquivos não rastreados do
-  usuário `.ai/acordo-fundadores-engagefit.md` e
-  `docs/proposta-engagefit-guilherme.html`.
+- não houve push, merge, deploy, migration de produção ou alteração de flags
+  externas.
 
-Decisão de produto seguinte:
+Limites preservados:
 
-- a `SPEC-003/A` foi fechada como `validated`;
-- `SPEC-003/C — Matrícula da pessoa em plano publicado` está `ready` e é a
-  única próxima slice autorizada;
-- a matrícula começa no card do aluno, registra a `Person` canônica e a versão
-  exata do plano, aceita início/vigência e permite encerramento auditável;
-- `active` significa somente adesão operacional. A slice não afirma contrato
-  assinado, pagamento, adimplência ou direito de acesso;
-- adicionais (`003/B`) e decisão/consumo de acesso (`003/D`) continuam em
-  `draft` e não devem ser iniciados em paralelo;
-- a capability nova será `enrollments`, desligada por padrão e dependente de
-  `memberships` + `people`;
-- migration esperada `058_create_person_plan_enrollments.sql`, provisória até
-  o integrador confirmar a ordem.
+- `active` é adesão operacional, não contrato, pagamento, adimplência ou
+  decisão de acesso;
+- `membership_started_at`, check-ins, agenda, reservas, consumo, notificações e
+  financeiro permanecem inalterados;
+- adicionais (`SPEC-003/B`), acesso/consumo (`SPEC-003/D`), contratos, PAR-Q,
+  cobrança e multiunidade continuam fora do escopo.
 
-Workspace da próxima execução:
-
-- raiz: `/home/luiz-paulo/workspace/engage-fit-worktrees/spec-003-c/`;
-- backend: branch `feature/spec-003-enrollment-lifecycle`;
-- frontend: branch `feature/spec-003-enrollment-lifecycle`;
-- instruções compartilhadas: `AGENTS.md` na raiz do workspace;
-- prompt: `EXECUTION-PROMPT.md` na raiz do workspace;
-- o agente deve entregar commits separados e não pode tocar no banco
-  compartilhado `boxengage`, em produção ou em outro workspace.
-
-Próxima ação: abrir um novo agente na raiz `spec-003-c`, colar o conteúdo
-integral de `EXECUTION-PROMPT.md` e aguardar o relatório com commits e
-validações. Depois revisar e integrar uma slice por vez. Não iniciar
-`SPEC-003/B`, `SPEC-003/D` ou specs financeiras/agenda durante essa execução.
+Próxima ação: revisar os dois commits, confirmar ou renumerar a migration `058`
+durante a integração e repetir a validação antes de qualquer homologação. Não
+fazer push/deploy nem habilitar `enrollments` sem autorização explícita.
 
 ## Checkpoint histórico — serviços e fundação de pessoas integrados
 
