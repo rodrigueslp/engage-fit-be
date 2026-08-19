@@ -92,6 +92,7 @@ func TestMembershipPlanCatalogUpgradeAndDatabaseImmutability(t *testing.T) {
 
 	const planID = "50000000-0000-4000-8000-000000000001"
 	const versionOne = "60000000-0000-4000-8000-000000000001"
+	const versionTwo = "60000000-0000-4000-8000-000000000002"
 	const entitlementOne = "70000000-0000-4000-8000-000000000001"
 	if _, err := testDB.ExecContext(ctx, `INSERT INTO membership_plans (id, organization_id, home_unit_id, name, name_key) VALUES ($1, $2, $2, 'Pilates 2x', 'pilates 2x')`, planID, unitOne); err != nil {
 		t.Fatal(err)
@@ -101,6 +102,9 @@ func TestMembershipPlanCatalogUpgradeAndDatabaseImmutability(t *testing.T) {
 	}
 	if _, err := testDB.ExecContext(ctx, `INSERT INTO membership_plan_entitlements (id, organization_id, plan_version_id, modality_id, access_type, quantity, period_unit) VALUES ($1, $2, $3, $4, 'sessions_per_period', 2, 'week')`, entitlementOne, unitOne, versionOne, modalityOne); err != nil {
 		t.Fatal(err)
+	}
+	if _, err := testDB.ExecContext(ctx, `UPDATE membership_plan_entitlements SET daily_limit=1 WHERE id=$1`, entitlementOne); err != nil {
+		t.Fatalf("database rejected draft entitlement mutation: %v", err)
 	}
 	if _, err := testDB.ExecContext(ctx, `INSERT INTO membership_plan_entitlements (id, organization_id, plan_version_id, modality_id, access_type) VALUES ('70000000-0000-4000-8000-000000000002', $1, $2, $3, 'open_access')`, unitOne, versionOne, modalityTwo); err == nil {
 		t.Fatal("database accepted a catalog target from another organization")
@@ -117,8 +121,27 @@ func TestMembershipPlanCatalogUpgradeAndDatabaseImmutability(t *testing.T) {
 	if _, err := testDB.ExecContext(ctx, `DELETE FROM membership_plan_entitlements WHERE id=$1`, entitlementOne); err == nil {
 		t.Fatal("database allowed published entitlement deletion")
 	}
+	if _, err := testDB.ExecContext(ctx, `INSERT INTO membership_plan_versions (id, organization_id, plan_id, version_number, revision, status, name, price_cents, currency, billing_cycle) VALUES ($1, $2, $3, 2, 1, 'draft', 'Pilates 2x', 26000, 'BRL', 'monthly')`, versionTwo, unitOne, planID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := testDB.ExecContext(ctx, `UPDATE membership_plan_entitlements SET plan_version_id=$2 WHERE id=$1`, entitlementOne, versionTwo); err == nil {
+		t.Fatal("database allowed published entitlement relocation to a draft")
+	}
+	var publishedRights, draftRights int
+	if err := testDB.QueryRowContext(ctx, `SELECT COUNT(*) FROM membership_plan_entitlements WHERE plan_version_id=$1`, versionOne).Scan(&publishedRights); err != nil {
+		t.Fatal(err)
+	}
+	if err := testDB.QueryRowContext(ctx, `SELECT COUNT(*) FROM membership_plan_entitlements WHERE plan_version_id=$1`, versionTwo).Scan(&draftRights); err != nil {
+		t.Fatal(err)
+	}
+	if publishedRights != 1 || draftRights != 0 {
+		t.Fatalf("published entitlement relocation changed rights: published=%d draft=%d", publishedRights, draftRights)
+	}
 	if _, err := testDB.ExecContext(ctx, `UPDATE membership_plan_versions SET status='retired' WHERE id=$1`, versionOne); err != nil {
 		t.Fatalf("published to retired transition rejected: %v", err)
+	}
+	if _, err := testDB.ExecContext(ctx, `UPDATE membership_plan_entitlements SET plan_version_id=$2 WHERE id=$1`, entitlementOne, versionTwo); err == nil {
+		t.Fatal("database allowed retired entitlement relocation to a draft")
 	}
 	if _, err := testDB.ExecContext(ctx, `UPDATE membership_plan_versions SET status='published' WHERE id=$1`, versionOne); err == nil {
 		t.Fatal("database allowed retired version mutation")

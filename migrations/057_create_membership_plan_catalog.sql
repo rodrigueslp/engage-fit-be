@@ -219,15 +219,22 @@ $$ LANGUAGE plpgsql;
 CREATE OR REPLACE FUNCTION prevent_published_membership_entitlement_mutation()
 RETURNS TRIGGER AS $$
 DECLARE
-    current_version_id UUID;
-    current_status VARCHAR(16);
+    old_status VARCHAR(16);
+    new_status VARCHAR(16);
 BEGIN
-    current_version_id := CASE WHEN TG_OP = 'DELETE' THEN OLD.plan_version_id ELSE NEW.plan_version_id END;
-    SELECT status INTO current_status
-    FROM membership_plan_versions
-    WHERE id = current_version_id;
+    IF TG_OP IN ('UPDATE', 'DELETE') THEN
+        SELECT status INTO old_status
+        FROM membership_plan_versions
+        WHERE id = OLD.plan_version_id;
+    END IF;
 
-    IF current_status IN ('published', 'retired') THEN
+    IF TG_OP IN ('INSERT', 'UPDATE') THEN
+        SELECT status INTO new_status
+        FROM membership_plan_versions
+        WHERE id = NEW.plan_version_id;
+    END IF;
+
+    IF old_status IN ('published', 'retired') OR new_status IN ('published', 'retired') THEN
         RAISE EXCEPTION 'published membership plan entitlements are immutable' USING ERRCODE = '55000';
     END IF;
     RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
