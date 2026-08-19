@@ -38,3 +38,9 @@ type CatalogRepository interface {
 	UpdateSpace(ctx context.Context, space domain.Space) error
 	CreateAuditEvent(ctx context.Context, event *domain.CatalogAuditEvent) error
 }
+
+// CatalogPlanReferenceResolver is the catalog module's narrow public contract
+// for consumers that compose plans. It does not expose catalog persistence.
+type CatalogPlanReferenceResolver interface {
+	ResolvePlanReferences(ctx context.Context, organizationID, unitID domain.ID, modalityIDs, serviceOfferingIDs []domain.ID) ([]domain.CatalogPlanReference, error)
+}

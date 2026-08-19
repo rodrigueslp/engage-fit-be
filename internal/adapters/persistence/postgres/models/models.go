@@ -96,6 +96,78 @@ type CatalogAuditEventModel struct {
 	CreatedAt      time.Time
 }
 
+type MembershipPlanModel struct {
+	ID             string `gorm:"primaryKey"`
+	OrganizationID string `gorm:"index"`
+	HomeUnitID     string `gorm:"index"`
+	Name           string
+	NameKey        string
+	Status         string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+}
+
+type MembershipPlanVersionModel struct {
+	ID             string `gorm:"primaryKey"`
+	OrganizationID string `gorm:"index"`
+	PlanID         string `gorm:"index"`
+	VersionNumber  int
+	Revision       int
+	Status         string `gorm:"index"`
+	Name           string
+	Description    string
+	PriceCents     int
+	Currency       string
+	BillingCycle   string
+	ValidityCount  *int
+	ValidityUnit   *string
+	PublishedAt    *time.Time
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+}
+
+type MembershipPlanEntitlementModel struct {
+	ID                string `gorm:"primaryKey"`
+	OrganizationID    string `gorm:"index"`
+	PlanVersionID     string `gorm:"index"`
+	ModalityID        *string
+	ServiceOfferingID *string
+	AccessType        string
+	Quantity          *int
+	PeriodUnit        *string
+	DailyLimit        *int
+	DeliveryMode      *string
+	BookingRequired   bool
+	Position          int
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+}
+
+type MembershipPlanCommandRequestModel struct {
+	ID                 string `gorm:"primaryKey"`
+	OrganizationID     string `gorm:"index"`
+	Command            string
+	IdempotencyKey     string
+	RequestFingerprint string
+	PlanID             string
+	PlanVersionID      string
+	ResponseData       []byte `gorm:"type:jsonb"`
+	CreatedAt          time.Time
+}
+
+type MembershipPlanAuditEventModel struct {
+	ID             string `gorm:"primaryKey"`
+	OrganizationID string `gorm:"index"`
+	UnitID         string
+	ActorUserID    string
+	Action         string
+	PlanID         string
+	PlanVersionID  *string
+	BeforeData     []byte `gorm:"type:jsonb"`
+	AfterData      []byte `gorm:"type:jsonb"`
+	CreatedAt      time.Time
+}
+
 type BillingPlanModel struct {
 	ID                  string `gorm:"primaryKey"`
 	Code                string
