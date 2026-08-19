@@ -1,12 +1,12 @@
 # SPEC-003/A — Catálogo versionado de planos
 
-- Status: `validated locally`
+- Status: `validated`
 - Versão: `1.0`
 - Data: 2026-08-18
 - Depende de: `ARCH-001`, `SPEC-001/B-D`, `SPEC-002/A`, `SPEC-003`
 - Ownership: módulo novo `memberships`
 - Repositórios envolvidos: `engage-fit-be` e `engage-fit-fe`
-- Migration: `057_create_membership_plan_catalog.sql` (número provisório)
+- Migration final: `057_create_membership_plan_catalog.sql`
 
 ## 1. Resultado esperado
 
@@ -560,5 +560,16 @@ Validação concluída em 2026-08-18 nos worktrees dedicados da SPEC-003/A:
   horizontal;
 - capability permanece desligada por padrão e nenhuma ação externa é criada.
 
-Não houve divergência de contrato. A migration `057` continua provisória para
-confirmação ou renumeração pelo integrador.
+Não houve divergência de contrato. A migration `057` foi confirmada como final
+na integração ao `main`.
+
+## 19. Integração e homologação
+
+- backend integrado no commit `e6e11eb`, incluindo o reforço de imutabilidade
+  de versões e direitos publicados do commit `b786442`;
+- frontend integrado no commit `ced77c7`;
+- owner homologou manualmente criação, publicação e visualização de planos no
+  banco local compartilhado em 2026-08-19, sem divergência reportada;
+- banco local alcançou a migration `057`; produção permanece em `052`;
+- não houve push, deploy, migration de produção ou habilitação da capability
+  em produção.

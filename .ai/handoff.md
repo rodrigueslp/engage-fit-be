@@ -4,72 +4,68 @@ Manual canônico de arquitetura e negócio: `docs/system-design.md`.
 
 Guia operacional consolidado: `docs/application-readiness-guide.md`.
 
-Atualizado em: 2026-08-18 (homologação manual concluída e SPEC-003/A pronta
+Atualizado em: 2026-08-19 (SPEC-003/A integrada e homologada; SPEC-003/C pronta
 para execução; sem push/deploy)
 
-## Checkpoint atual — homologação fechada e SPEC-003/A preparada
+## Checkpoint atual — catálogo homologado e matrícula preparada
 
 Este checkpoint prevalece sobre todos os registros históricos abaixo.
 
-Homologação e banco local:
+Estado homologado:
 
-- o owner homologou manualmente `Serviços` e `Novo aluno` no banco local
-  compartilhado, sem divergência funcional reportada;
-- o cenário de CPFs diferentes com o mesmo WhatsApp foi aceito após revisão
-  explícita, conforme o contrato de produto;
-- o banco local `boxengage` está agora em `056`; `055` e `056` foram aplicadas
-  conscientemente pelo usuário;
-- `SPEC-001/D` e `SPEC-002/A` passaram de `validated locally` para
-  `validated`;
-- produção continua em `052`, com as capabilities novas desligadas.
+- `SPEC-001/D`, `SPEC-002/A` e `SPEC-003/A` estão integradas e homologadas
+  manualmente no banco local compartilhado, sem divergência reportada;
+- o banco local `boxengage` está em `057`; a migration final do catálogo é
+  `057_create_membership_plan_catalog.sql`;
+- o owner validou criação/publicação de planos e o cenário mensal de CrossFit;
+- `FEATURE_MEMBERSHIPS_ENABLED=true` existe somente no arquivo local ignorado
+  `.env.billing.local` para homologação;
+- produção permanece em `052`, sem as novas capabilities habilitadas.
 
 Git e publicação:
 
-- backend `main` inclui os merges `34a8b17`/`7de1d1b`, o fechamento anterior
-  `e3721b1`, a preparação SDD `14a9278` e o handoff `a9b00f3`;
-- frontend `main` permanece em `d42ef05`;
-- o push dos dois `main` foi autorizado, mas não executado porque a inspeção
-  somente leitura do Railway confirmou que `engage-fit-api`,
-  `engage-fit-billing-reconcile` e `engage-fit-web` usam os repositórios no
-  branch `main` como source automático;
-- no backend, o pre-deploy de produção executa
-  `/usr/local/bin/engagefit-migrate up`; portanto um push também faria deploy
-  e poderia aplicar `053..056` em produção. Não fazer push enquanto o deploy
-  de produção não for explicitamente autorizado/preparado ou o auto-deploy
-  não for desabilitado de forma controlada;
-- não houve deploy, migration de produção, alteração de flags ou push;
-- preservar os arquivos não rastreados do usuário
-  `.ai/acordo-fundadores-engagefit.md` e
+- backend `main` contém a integração da `SPEC-003/A` em `e6e11eb`, incluindo o
+  reforço de imutabilidade `b786442`;
+- frontend `main` contém a integração em `ced77c7`;
+- os dois repositórios continuam apenas locais e à frente de `origin/main`;
+- Railway usa `main` como source automático e o pre-deploy do backend executa
+  migrations. Portanto não fazer push enquanto deploy e migrations de
+  produção não forem explicitamente autorizados/preparados;
+- não houve push, deploy, migration de produção ou alteração de flags externas;
+- preservar sem adicionar, editar ou remover os arquivos não rastreados do
+  usuário `.ai/acordo-fundadores-engagefit.md` e
   `docs/proposta-engagefit-guilherme.html`.
 
-SDD seguinte:
+Decisão de produto seguinte:
 
-- a spec-guia `SPEC-003` está `reviewed` e dividida em A catálogo, B
-  adicionais, C matrículas e D decisão de acesso;
-- somente `SPEC-003/A — Catálogo versionado de planos` está `ready` e
-  autorizada;
-- a slice A entrega plano em rascunho, publicação imutável, nova versão,
-  direitos base de modalidades/serviços, capability `memberships` e UI mobile;
-- adicionais, matrícula, contrato, cobrança, agenda, reserva, consumo,
-  multiunidade e integrações corporativas estão explicitamente fora desta
-  execução;
-- migration esperada `057`, ainda provisória até a integração.
+- a `SPEC-003/A` foi fechada como `validated`;
+- `SPEC-003/C — Matrícula da pessoa em plano publicado` está `ready` e é a
+  única próxima slice autorizada;
+- a matrícula começa no card do aluno, registra a `Person` canônica e a versão
+  exata do plano, aceita início/vigência e permite encerramento auditável;
+- `active` significa somente adesão operacional. A slice não afirma contrato
+  assinado, pagamento, adimplência ou direito de acesso;
+- adicionais (`003/B`) e decisão/consumo de acesso (`003/D`) continuam em
+  `draft` e não devem ser iniciados em paralelo;
+- a capability nova será `enrollments`, desligada por padrão e dependente de
+  `memberships` + `people`;
+- migration esperada `058_create_person_plan_enrollments.sql`, provisória até
+  o integrador confirmar a ordem.
 
-Workspace preparado:
+Workspace da próxima execução:
 
-- raiz: `/home/luiz-paulo/workspace/engage-fit-worktrees/spec-003-a/`;
-- backend: branch `feature/spec-003-plan-catalog`, criada em `14a9278` e
-  atualizada até `a9b00f3`;
-- frontend: branch `feature/spec-003-plan-catalog`, base `d42ef05`;
-- instruções: `AGENTS.md` na raiz do workspace;
-- prompt pronto: `EXECUTION-PROMPT.md` na raiz do workspace;
-- o agente não pode tocar no banco compartilhado `boxengage`; migrations e
-  integrações usam bancos temporários removidos ao final.
+- raiz: `/home/luiz-paulo/workspace/engage-fit-worktrees/spec-003-c/`;
+- backend: branch `feature/spec-003-enrollment-lifecycle`;
+- frontend: branch `feature/spec-003-enrollment-lifecycle`;
+- instruções compartilhadas: `AGENTS.md` na raiz do workspace;
+- prompt: `EXECUTION-PROMPT.md` na raiz do workspace;
+- o agente deve entregar commits separados e não pode tocar no banco
+  compartilhado `boxengage`, em produção ou em outro workspace.
 
-Próxima ação: abrir um novo agente na raiz do workspace `spec-003-a`, colar o
-conteúdo integral de `EXECUTION-PROMPT.md` e deixá-lo entregar commits separados
-de backend/frontend. Depois trazer o relatório para revisão e integração; não
-iniciar `SPEC-003/B-D` em paralelo.
+Próxima ação: abrir um novo agente na raiz `spec-003-c`, colar o conteúdo
+integral de `EXECUTION-PROMPT.md` e aguardar o relatório com commits e
+validações. Depois revisar e integrar uma slice por vez. Não iniciar
+`SPEC-003/B`, `SPEC-003/D` ou specs financeiras/agenda durante essa execução.
 
 ## Checkpoint histórico — serviços e fundação de pessoas integrados
 
@@ -2814,5 +2810,5 @@ WodScope. Antes de produção, implementar recuperação/verificação de conta.
 Mensagem sugerida:
 
 ```txt
-Leia integralmente `.ai/handoff.md`, começando pelo checkpoint atual do topo, e use `docs/system-design.md`, `docs/sdd/REQ-001-primeiro-passo-operacional.md`, `docs/sdd/ARCH-001-modular-foundation.md` e as SPECs como fontes canônicas. Estado local: SPEC-001/D e SPEC-002/A estão integradas, automatizadas e homologadas; o banco local compartilhado está em `056`, mas produção continua em `052`. SPEC-003/A está `ready` e possui workspace em `/home/luiz-paulo/workspace/engage-fit-worktrees/spec-003-a/`, com prompt próprio; SPEC-003/B-D não estão autorizadas. Não faça push dos `main`: Railway usa esses branches como source automático e o backend executa migrations no pre-deploy, portanto push implica deploy de produção. Preserve `.ai/acordo-fundadores-engagefit.md`, `docs/proposta-engagefit-guilherme.html` e qualquer outra alteração não commitada.
+Leia integralmente `.ai/handoff.md`, começando pelo checkpoint atual do topo, e use `docs/system-design.md`, `docs/sdd/REQ-001-primeiro-passo-operacional.md`, `docs/sdd/ARCH-001-modular-foundation.md` e as SPECs como fontes canônicas. Estado local: SPEC-001/D, SPEC-002/A e SPEC-003/A estão integradas e homologadas; o banco local compartilhado está em `057`, mas produção continua em `052`. SPEC-003/C está `ready` e possui workspace em `/home/luiz-paulo/workspace/engage-fit-worktrees/spec-003-c/`, com prompt próprio; SPEC-003/B e SPEC-003/D não estão autorizadas. Não faça push dos `main`: Railway usa esses branches como source automático e o backend executa migrations no pre-deploy, portanto push implica deploy de produção. Preserve `.ai/acordo-fundadores-engagefit.md`, `docs/proposta-engagefit-guilherme.html` e qualquer outra alteração não commitada.
 ```

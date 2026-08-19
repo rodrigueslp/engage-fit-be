@@ -70,9 +70,10 @@ Uma spec em `draft` não autoriza migrations ou contratos públicos definitivos.
 2. `SPEC-001` — organização, unidades, modalidades e espaços.
 3. `SPEC-001/D` e `SPEC-002/A` — integradas, automatizadas e homologadas
    manualmente, sem habilitação em produção.
-4. Implementar `SPEC-003/A` — catálogo versionado de planos; manter adicionais,
-   matrículas e decisão de acesso nas slices B–D.
-5. Contratos, financeiro do aluno e agenda podem avançar em paralelo quando a
+4. `SPEC-003/A` — catálogo versionado de planos — integrada e homologada.
+5. Implementar `SPEC-003/C` — matrícula operacional da pessoa em um plano
+   publicado; manter adicionais e decisão de acesso nas slices B e D.
+6. Contratos, financeiro do aluno e agenda podem avançar em paralelo quando a
    fundação aplicável (`SPEC-001/B-D`, `SPEC-002` e `SPEC-003`) estiver
    `ready`.
 
@@ -123,3 +124,4 @@ permitirem.
 - [SPEC-002/A — Fundação e cadastro manual](specs/SPEC-002-A-person-foundation-manual-registration.md)
 - [SPEC-003 — Planos, matrículas e acesso](specs/SPEC-003-plans-enrollments-entitlements.md)
 - [SPEC-003/A — Catálogo versionado de planos](specs/SPEC-003-A-versioned-membership-plan-catalog.md)
+- [SPEC-003/C — Matrícula em plano publicado](specs/SPEC-003-C-person-plan-enrollment.md)

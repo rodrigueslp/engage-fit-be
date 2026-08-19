@@ -20,13 +20,16 @@ implementação.
 | `SPEC-002` Pessoa, identidades e vínculos | `reviewed` | `ARCH-001`, `SPEC-001/A-B` | iniciativa de identidade humana dividida em slices |
 | `SPEC-002/A` Fundação e cadastro manual | `validated` | `SPEC-001/A-B` | pessoa, backfill seguro e novo aluno compatível |
 | `SPEC-003` Planos, matrículas, adicionais e direitos | `reviewed` | `ARCH-001`, `SPEC-001/B-D`, `SPEC-002` | iniciativa dividida em catálogo, composição, matrícula e acesso |
-| `SPEC-003/A` Catálogo versionado de planos | `ready` | `SPEC-001/B-D`, `SPEC-002/A` | criação mobile, direitos base e publicação imutável |
+| `SPEC-003/A` Catálogo versionado de planos | `validated` | `SPEC-001/B-D`, `SPEC-002/A` | criação mobile, direitos base e publicação imutável |
+| `SPEC-003/C` Matrícula em plano publicado | `ready` | `SPEC-002/A`, `SPEC-003/A` | adesão operacional simples, vigência e encerramento auditável |
 
 `001-D` e `002-A` estão integradas e homologadas manualmente no banco local. As
 migrations finais são, respectivamente, `055_create_service_offerings.sql` e
-`056_create_people_foundation.sql`. A `SPEC-003` foi dividida em quatro slices;
-somente `003-A` está pronta e autorizada. `001-C`, `002/B-C` e `003/B-D`
-continuam adiadas ou em detalhamento.
+`056_create_people_foundation.sql`. A `SPEC-003/A` também está integrada e
+homologada com `057_create_membership_plan_catalog.sql`. A iniciativa foi
+dividida em quatro slices; somente `003-C` está pronta e autorizada para a
+próxima implementação. `001-C`, `002/B-C`, `003/B` e `003/D` continuam
+adiadas ou em detalhamento.
 
 ## Onda 2 — trilhas paralelas
 

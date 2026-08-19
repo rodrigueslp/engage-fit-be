@@ -1,8 +1,8 @@
 # SPEC-003 — Planos, matrículas e direitos de acesso
 
 - Status: `reviewed`
-- Versão: `0.3`
-- Data: 2026-08-18
+- Versão: `0.4`
+- Data: 2026-08-19
 - Depende de: `ARCH-001`, `SPEC-001/B-D`, `SPEC-002`
 - Bloqueia: contratos, cobrança do aluno, agenda, reservas e acesso
 
@@ -13,16 +13,18 @@ composição comercial, matrícula e decisão operacional não sejam implementad
 na mesma branch:
 
 - [`SPEC-003/A`](SPEC-003-A-versioned-membership-plan-catalog.md) — catálogo,
-  direitos base e publicação versionada; estado `ready`;
+  direitos base e publicação versionada; estado `validated`;
 - `SPEC-003/B` — adicionais versionados e composição comercial; estado
   `draft`;
-- `SPEC-003/C` — matrícula da pessoa e ciclo de vida; estado `draft`;
+- [`SPEC-003/C`](SPEC-003-C-person-plan-enrollment.md) — matrícula da pessoa,
+  vigência e encerramento operacional; estado `ready`;
 - `SPEC-003/D` — decisão de acesso, contadores e transição do legado; estado
   `draft`.
 
-Somente a slice A está autorizada para implementação. Ela não cria matrícula,
-contrato, cobrança, consumo, agenda nem adicional. As decisões abertas das
-slices B–D não podem ampliar silenciosamente a primeira entrega.
+A slice A está integrada e homologada. Somente a slice C está autorizada para
+a próxima implementação. Ela não cria contrato, cobrança, pausa, consumo,
+agenda, decisão de acesso nem adicional. As decisões abertas das slices B e D
+não podem ampliar silenciosamente essa entrega.
 
 ## 1. Resultado esperado
 
@@ -178,12 +180,12 @@ como dezenas de campos obrigatórios no plano básico.
 
 ### Matricular pessoa
 
-1. No perfil, owner toca em `Vender plano`.
+1. Na lista de alunos, owner abre `Matrícula` para a pessoa.
 2. Escolhe entre poucos planos ativos e vê preço/direitos essenciais.
 3. Define início; fim é calculado quando aplicável.
-4. Confirma uma matrícula `pending_contract` ou `active`, conforme as features
-   de contrato/pagamento disponíveis.
-5. O perfil passa a mostrar plano, vigência e próxima pendência.
+4. Confirma uma matrícula operacional `active`, sem inferir contrato assinado,
+   pagamento aprovado ou acesso liberado.
+5. O painel passa a mostrar plano, vigência e histórico de encerramento.
 
 ### Alterar oferta
 
@@ -250,8 +252,9 @@ Uma nova composição exige nova versão do plano.
 
 - `id`, `organization_id`, `person_id`, `home_unit_id`;
 - `plan_version_id`;
-- `status`: `pending`, `active`, `paused`, `ended`, `cancelled`;
-- `starts_on`, `ends_on`, timestamps;
+- `status`: `active`, `ended` na slice C; pausa e cancelamento jurídico ficam
+  para contratos;
+- `starts_on`, `valid_until`, `ended_on`, timestamps;
 - motivo e autor de transições sensíveis.
 
 Eventos de status ficam em `enrollment_events` para auditoria e reconstrução da
@@ -297,11 +300,8 @@ Razões estáveis incluem:
 - `PATCH /api/v1/membership-plans/:id/draft`
 - `POST /api/v1/membership-plans/:id/publish`
 - `POST /api/v1/membership-plans/:id/retire`
-- `GET /api/v1/units/:unit_id/enrollments`
-- `POST /api/v1/units/:unit_id/enrollments`
+- `GET/POST /api/v1/units/:unit_id/students/:student_id/enrollments`
 - `GET /api/v1/units/:unit_id/enrollments/:id`
-- `POST /api/v1/units/:unit_id/enrollments/:id/pause`
-- `POST /api/v1/units/:unit_id/enrollments/:id/resume`
 - `POST /api/v1/units/:unit_id/enrollments/:id/end`
 - `POST /api/v1/access-decisions/evaluate` — preferencialmente interno; expor
   somente se catracas/integradores exigirem.
@@ -331,7 +331,9 @@ separados para revisão e auditoria.
   valor e sem alterar acesso, apenas se necessário para compatibilidade;
 - até a atribuição real, check-in atual continua permitido pela regra legada;
 - telemetria mede quantos mensalistas permanecem sem matrícula;
-- ativação por unidade usa `FEATURE_MEMBERSHIPS_ENABLED`.
+- o catálogo usa `FEATURE_MEMBERSHIPS_ENABLED`; matrícula possui rollout
+  separado por `FEATURE_ENROLLMENTS_ENABLED`, dependente de `memberships` e
+  `people`.
 
 O rollout não pode bloquear acesso de aluno existente por ausência de dados que
 o sistema antigo nunca coletou.
@@ -368,9 +370,7 @@ o sistema antigo nunca coletou.
 
 ## 17. Decisões abertas
 
-- estado inicial da matrícula antes de contrato/pagamento estarem disponíveis;
 - se preço zero representa cortesia ou exige tipo explícito;
-- política de matrícula simultânea em mais de um plano;
 - se adicionais poderão ser compartilhados entre planos ou sempre pertencerão
   a uma versão específica;
 - combinações permitidas, desconto e remoção de adicional durante vigência;
