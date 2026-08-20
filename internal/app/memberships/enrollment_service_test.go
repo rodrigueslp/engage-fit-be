@@ -1,11 +1,37 @@
 package memberships
 
 import (
+	"errors"
 	"testing"
 	"time"
 
 	"boxengage/backend/internal/domain"
 )
+
+func TestEnrollmentCommandObservabilityLabels(t *testing.T) {
+	if got := enrollmentCommandResultLabel(nil, true); got != "replay" {
+		t.Fatalf("replay result = %q, want replay", got)
+	}
+	if got := enrollmentCommandResultLabel(nil, false); got != "success" {
+		t.Fatalf("success result = %q, want success", got)
+	}
+	tests := []struct {
+		err  error
+		want string
+	}{
+		{ErrActiveEnrollmentExists, "active_enrollment_exists"},
+		{ErrPlanVersionChanged, "plan_version_changed"},
+		{ErrEnrollmentRevisionConflict, "enrollment_revision_conflict"},
+		{ErrEnrollmentIdempotencyReused, "idempotency_key_reused"},
+		{ErrEnrollmentAlreadyEnded, "enrollment_already_ended"},
+		{errors.New("unexpected"), ""},
+	}
+	for _, test := range tests {
+		if got := enrollmentConflictReason(test.err); got != test.want {
+			t.Errorf("enrollmentConflictReason(%v) = %q, want %q", test.err, got, test.want)
+		}
+	}
+}
 
 func TestCalculateValidUntilUsesInclusiveCalendarArithmetic(t *testing.T) {
 	location := time.FixedZone("America/Sao_Paulo", -3*60*60)

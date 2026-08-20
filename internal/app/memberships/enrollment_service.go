@@ -212,8 +212,9 @@ func (s *EnrollmentService) Create(ctx context.Context, unitID, studentID, actor
 		result = enrollment
 		return nil
 	})
-	observability.RecordEnrollmentCommand(ctx, "create", enrollmentResult(err), time.Since(startedAt), errors.Is(err, ErrActiveEnrollmentExists), expirationReconciled)
-	logEnrollmentCommand("create", organizationID, unitID, actorID, result, err)
+	elapsed := time.Since(startedAt)
+	observability.RecordEnrollmentCommand(ctx, "create", enrollmentCommandResultLabel(err, replayed), enrollmentConflictReason(err), elapsed, expirationReconciled && err == nil)
+	logEnrollmentCommand("create", organizationID, unitID, actorID, result, replayed, elapsed, err)
 	return result, replayed, err
 }
 
@@ -293,8 +294,9 @@ func (s *EnrollmentService) End(ctx context.Context, unitID, enrollmentID, actor
 		}
 		return s.repository.CreateCommand(txctx, &domain.EnrollmentCommandRequest{OrganizationID: organizationID, Command: "end", IdempotencyKey: idempotencyKey, Fingerprint: fingerprint, EnrollmentID: enrollmentID, ResponseData: enrollmentCommandResponse(result), CreatedAt: commandTime})
 	})
-	observability.RecordEnrollmentCommand(ctx, "end", enrollmentResult(err), time.Since(startedAt), errors.Is(err, ErrEnrollmentRevisionConflict), false)
-	logEnrollmentCommand("end", organizationID, unitID, actorID, result, err)
+	elapsed := time.Since(startedAt)
+	observability.RecordEnrollmentCommand(ctx, "end", enrollmentCommandResultLabel(err, replayed), enrollmentConflictReason(err), elapsed, false)
+	logEnrollmentCommand("end", organizationID, unitID, actorID, result, replayed, elapsed, err)
 	return result, replayed, err
 }
 
@@ -509,10 +511,34 @@ func enrollmentResult(err error) string {
 	return "error"
 }
 
-func logEnrollmentCommand(action string, organizationID, unitID, actorID domain.ID, enrollment *domain.Enrollment, err error) {
+func enrollmentCommandResultLabel(err error, replayed bool) string {
+	if err == nil && replayed {
+		return "replay"
+	}
+	return enrollmentResult(err)
+}
+
+func enrollmentConflictReason(err error) string {
+	switch {
+	case errors.Is(err, ErrActiveEnrollmentExists):
+		return "active_enrollment_exists"
+	case errors.Is(err, ErrPlanVersionChanged):
+		return "plan_version_changed"
+	case errors.Is(err, ErrEnrollmentRevisionConflict):
+		return "enrollment_revision_conflict"
+	case errors.Is(err, ErrEnrollmentIdempotencyReused):
+		return "idempotency_key_reused"
+	case errors.Is(err, ErrEnrollmentAlreadyEnded):
+		return "enrollment_already_ended"
+	default:
+		return ""
+	}
+}
+
+func logEnrollmentCommand(action string, organizationID, unitID, actorID domain.ID, enrollment *domain.Enrollment, replayed bool, elapsed time.Duration, err error) {
 	enrollmentID, planVersionID := domain.ID(""), domain.ID("")
 	if enrollment != nil {
 		enrollmentID, planVersionID = enrollment.ID, enrollment.PlanVersionID
 	}
-	slog.Info("enrollment_command", "action", action, "organization_id", organizationID, "unit_id", unitID, "actor_user_id", actorID, "enrollment_id", enrollmentID, "plan_version_id", planVersionID, "result", enrollmentResult(err))
+	slog.Info("enrollment_command", "action", action, "organization_id", organizationID, "unit_id", unitID, "actor_user_id", actorID, "enrollment_id", enrollmentID, "plan_version_id", planVersionID, "result", enrollmentCommandResultLabel(err, replayed), "conflict_reason", enrollmentConflictReason(err), "replayed", replayed, "rolled_back", err != nil, "duration_ms", elapsed.Milliseconds())
 }
