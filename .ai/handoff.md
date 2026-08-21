@@ -4,49 +4,60 @@ Manual canônico de arquitetura e negócio: `docs/system-design.md`.
 
 Guia operacional consolidado: `docs/application-readiness-guide.md`.
 
-Atualizado em: 2026-08-19 (SPEC-003/C implementada e validada localmente; sem
-push/deploy)
+Atualizado em: 2026-08-21 (homologação local da matrícula para Wellhub/TotalPass;
+sem push/deploy)
 
-## Checkpoint atual — matrícula implementada e validada localmente
+## Checkpoint atual — aviso de matrícula própria para Wellhub/TotalPass
 
 Este checkpoint prevalece sobre todos os registros históricos abaixo.
 
 Entrega local:
 
-- backend e frontend da `SPEC-003/C` estão implementados na branch
-  `feature/spec-003-enrollment-lifecycle` de cada worktree;
+- `SPEC-003/C` está integrada nos `main` locais; o frontend recebeu o ajuste
+  local `ab8af06` (`fix(enrollments): clarify own plans for partners`);
 - owner consulta, cria e encerra matrícula a partir de `Alunos`, com versão
   exata do plano, vigência inclusiva one-time, histórico e estados efetivos;
+- ao abrir a matrícula de aluno com origem `wellhub` ou `totalpass`, o frontend
+  exibe o aviso "Plano próprio da academia", esclarecendo que a matrícula usa
+  um plano próprio e não altera o vínculo externo;
+- o aviso permanece visível durante a seleção e a revisão da matrícula; para
+  alunos `box_member`, ele não é exibido;
+- o ajuste está em `engage-fit-fe/src/features/enrollments/EnrollmentPanel.tsx`
+  e possui cobertura em `engage-fit-fe/tests/enrollments.spec.ts`;
 - concorrência, replay, revisão otimista, reconciliação de expirada, auditoria
   transacional, tenancy e export de privacidade estão cobertos;
-- `FEATURE_ENROLLMENTS_ENABLED=false` continua sendo o default e depende de
-  `memberships` + `people`; capability ausente é falsa no frontend;
-- a migration `058_create_person_plan_enrollments.sql` é provisória e somente
-  aditiva, sem backfill. O integrador confirma ou renumera no merge;
-- `SPEC-003/C` foi atualizada para `validated locally`, sem alteração do
-  contrato executável.
+- no ambiente local compartilhado, `058_create_person_plan_enrollments.sql` foi
+  aplicada e `FEATURE_ENROLLMENTS_ENABLED=true`, junto de `memberships` e
+  `people`; nenhum registro de matrícula foi criado durante esta alteração;
+- a migration `058` continua aditiva e sem backfill; a produção não foi
+  alterada.
 
 Validação concluída:
 
-- PostgreSQL temporário: `001..058`, segunda execução zero e upgrade
-  `057 -> 058` com zero backfill;
+- banco local compartilhado: migration `058` aplicada com sucesso; há 55
+  alunos `wellhub`, 206 `totalpass` e 3 `box_member` disponíveis para
+  homologação;
 - `go test -count=1 ./...`, `go vet ./...` e race completo em contêiner Linux
   com PostgreSQL real passaram;
-- TypeScript, build Vite, 4 testes Playwright focados e regressão com 29 testes
-  passaram; 2 fluxos reais opt-in ficaram ignorados;
+- TypeScript e build Vite passaram; o teste focado de matrículas passou em
+  `5/5`;
+- regressão completa do frontend passou com `30` testes; `2` fluxos reais
+  opt-in ficaram ignorados por exigirem `E2E_REAL_API=true`;
 - revisão visual `360x800` confirmou foco, Escape, rolagem interna e ausência
   de overflow horizontal;
-- nenhum dado real, banco compartilhado, produção ou feature flag foi tocado.
+- backend e frontend locais responderam `200` em health/ready e na página web.
 
 Git e publicação:
 
-- os commits locais separados de backend e frontend são a entrega para revisão
-  do integrador;
+- backend local está em `141527e`; frontend local está em `ab8af06`;
+- o frontend está limpo após o commit. No backend permanecem somente os dois
+  arquivos não rastreados preexistentes do usuário:
+  `.ai/acordo-fundadores-engagefit.md` e
+  `docs/proposta-engagefit-guilherme.html`;
 - Railway usa `main` como source automático e o pre-deploy do backend executa
   migrations. Portanto não fazer push enquanto deploy e migrations de
   produção não forem explicitamente autorizados/preparados;
-- não houve push, merge, deploy, migration de produção ou alteração de flags
-  externas.
+- não houve push, deploy, migration de produção ou alteração de flags externas.
 
 Limites preservados:
 
@@ -57,9 +68,16 @@ Limites preservados:
 - adicionais (`SPEC-003/B`), acesso/consumo (`SPEC-003/D`), contratos, PAR-Q,
   cobrança e multiunidade continuam fora do escopo.
 
-Próxima ação: revisar os dois commits, confirmar ou renumerar a migration `058`
-durante a integração e repetir a validação antes de qualquer homologação. Não
-fazer push/deploy nem habilitar `enrollments` sem autorização explícita.
+Próxima ação: homologar localmente em `http://localhost:5173/#/students`,
+entrando com `owner@example.com` / `change-me`, escolhendo um aluno Wellhub ou
+TotalPass e abrindo `Matrícula`. Confirmar o aviso na tela inicial e na revisão;
+em seguida testar um `box_member` para confirmar que o aviso não aparece. Não
+fazer push/deploy sem autorização explícita.
+
+Ressalva do ambiente local: existem três pessoas antigas com CPF cifrado usando
+chaves efêmeras que não estão mais disponíveis. Isso não interfere na
+homologação de matrículas, mas pode afetar lookup/exportação de CPF desses três
+registros específicos; não remover nem alterar esses dados sem decisão explícita.
 
 ## Checkpoint histórico — serviços e fundação de pessoas integrados
 
