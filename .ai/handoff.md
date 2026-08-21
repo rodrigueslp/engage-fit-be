@@ -4,10 +4,9 @@ Manual canônico de arquitetura e negócio: `docs/system-design.md`.
 
 Guia operacional consolidado: `docs/application-readiness-guide.md`.
 
-Atualizado em: 2026-08-21 (homologação local da matrícula para Wellhub/TotalPass;
-sem push/deploy)
+Atualizado em: 2026-08-21 (SPEC-003/C homologada manualmente; sem push/deploy)
 
-## Checkpoint atual — aviso de matrícula própria para Wellhub/TotalPass
+## Checkpoint atual — SPEC-003/C homologada localmente
 
 Este checkpoint prevalece sobre todos os registros históricos abaixo.
 
@@ -47,6 +46,14 @@ Validação concluída:
   de overflow horizontal;
 - backend e frontend locais responderam `200` em health/ready e na página web.
 
+Homologação manual concluída pelo usuário:
+
+- fluxo de alunos, planos e matrículas validado na interface;
+- criação e comportamento das matrículas confirmados;
+- alunos com origem Wellhub e TotalPass validados com o aviso de plano próprio;
+- vínculo externo preservado e conceito de matrícula própria considerado claro;
+- não é necessário repetir a homologação da `SPEC-003/C` no próximo contexto.
+
 Git e publicação:
 
 - backend local está em `141527e`; frontend local está em `ab8af06`;
@@ -68,11 +75,10 @@ Limites preservados:
 - adicionais (`SPEC-003/B`), acesso/consumo (`SPEC-003/D`), contratos, PAR-Q,
   cobrança e multiunidade continuam fora do escopo.
 
-Próxima ação: homologar localmente em `http://localhost:5173/#/students`,
-entrando com `owner@example.com` / `change-me`, escolhendo um aluno Wellhub ou
-TotalPass e abrindo `Matrícula`. Confirmar o aviso na tela inicial e na revisão;
-em seguida testar um `box_member` para confirmar que o aviso não aparece. Não
-fazer push/deploy sem autorização explícita.
+Próxima ação: considerar a `SPEC-003/C` concluída e priorizar a próxima frente
+do produto. As opções naturais são adicionais dos planos, contratos/pagamentos
+ou acesso/consumo. Antes de qualquer publicação, continuar exigindo revisão
+explícita para push, deploy e migrations de produção.
 
 Ressalva do ambiente local: existem três pessoas antigas com CPF cifrado usando
 chaves efêmeras que não estão mais disponíveis. Isso não interfere na
