@@ -9,17 +9,19 @@ import (
 )
 
 type Capabilities struct {
-	Whatsapp       bool `json:"whatsapp"`
-	Email          bool `json:"email"`
-	Automation     bool `json:"automation"`
-	Workouts       bool `json:"workouts"`
-	LLM            bool `json:"llm"`
-	Billing        bool `json:"billing"`
-	Catalog        bool `json:"catalog"`
-	ServiceCatalog bool `json:"service_catalog"`
-	People         bool `json:"people"`
-	Memberships    bool `json:"memberships"`
-	Enrollments    bool `json:"enrollments"`
+	Whatsapp                    bool `json:"whatsapp"`
+	Email                       bool `json:"email"`
+	Automation                  bool `json:"automation"`
+	Workouts                    bool `json:"workouts"`
+	LLM                         bool `json:"llm"`
+	Billing                     bool `json:"billing"`
+	Catalog                     bool `json:"catalog"`
+	ServiceCatalog              bool `json:"service_catalog"`
+	People                      bool `json:"people"`
+	Memberships                 bool `json:"memberships"`
+	Enrollments                 bool `json:"enrollments"`
+	Contracts                   bool `json:"contracts"`
+	ContractAcceptanceSimulator bool `json:"contract_acceptance_simulator"`
 }
 
 func FeatureGates(capabilities Capabilities) gin.HandlerFunc {
@@ -44,6 +46,10 @@ func FeatureGates(capabilities Capabilities) gin.HandlerFunc {
 			disabled = !capabilities.Catalog || !capabilities.ServiceCatalog
 		case isCatalogPath(path):
 			disabled = !capabilities.Catalog
+		case strings.HasPrefix(path, "/api/v1/public/contract-acceptance"):
+			disabled = !capabilities.Contracts || !capabilities.ContractAcceptanceSimulator
+		case isContractPath(path):
+			disabled = !capabilities.Contracts
 		case isEnrollmentPath(path):
 			disabled = !capabilities.Enrollments
 		case isPeoplePath(path):
@@ -92,4 +98,20 @@ func isCatalogPath(path string) bool {
 		return len(parts) == 2 || (len(parts) == 3 && parts[2] != "")
 	}
 	return parts[1] == "modalities" && len(parts) == 3 && parts[2] != ""
+}
+
+func isContractPath(path string) bool {
+	if path == "/api/v1/contract-templates" || strings.HasPrefix(path, "/api/v1/contract-templates/") {
+		return true
+	}
+	parts := strings.Split(strings.TrimPrefix(path, "/api/v1/units/"), "/")
+	if len(parts) >= 2 && parts[0] != "" {
+		if parts[1] == "contracts" {
+			return true
+		}
+		if len(parts) >= 4 && parts[1] == "enrollments" && parts[3] == "contracts" {
+			return true
+		}
+	}
+	return false
 }

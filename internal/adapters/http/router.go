@@ -20,6 +20,7 @@ import (
 	"boxengage/backend/internal/app/catalog"
 	"boxengage/backend/internal/app/checkiningestion"
 	"boxengage/backend/internal/app/contactactivation"
+	"boxengage/backend/internal/app/contracts"
 	"boxengage/backend/internal/app/dashboard"
 	"boxengage/backend/internal/app/email"
 	"boxengage/backend/internal/app/imports"
@@ -56,6 +57,7 @@ type RouterDependencies struct {
 	PeopleService             *people.Service
 	MembershipService         *memberships.Service
 	EnrollmentService         *memberships.EnrollmentService
+	ContractService           *contracts.Service
 
 	ListStudentsUseCase            students.ListStudentsUseCase
 	GetStudentUseCase              students.GetStudentUseCase
@@ -380,6 +382,30 @@ func NewRouter(deps RouterDependencies) *gin.Engine {
 		ownerEnrollments.POST("/units/:unit_id/students/:student_id/enrollments", enrollmentHandler.Create)
 		ownerEnrollments.GET("/units/:unit_id/enrollments/:enrollment_id", enrollmentHandler.Get)
 		ownerEnrollments.POST("/units/:unit_id/enrollments/:enrollment_id/end", enrollmentHandler.End)
+	}
+	if deps.ContractService != nil {
+		contractHandler := handlers.NewContractHandler(deps.ContractService)
+		api.GET("/public/contract-acceptance/:token", contractHandler.GetPublicAcceptanceSession)
+		api.POST("/public/contract-acceptance/:token/accept", contractHandler.AcceptContract)
+
+		ownerContracts := protected.Group("")
+		ownerContracts.Use(middleware.Owner())
+		ownerContracts.GET("/contract-templates", contractHandler.ListTemplates)
+		ownerContracts.POST("/contract-templates", contractHandler.CreateTemplate)
+		ownerContracts.GET("/contract-templates/:template_id", contractHandler.GetTemplate)
+		ownerContracts.PATCH("/contract-templates/:template_id/draft", contractHandler.UpdateTemplateDraft)
+		ownerContracts.POST("/contract-templates/:template_id/publish", contractHandler.PublishTemplate)
+		ownerContracts.POST("/contract-templates/:template_id/versions", contractHandler.CreateNewVersion)
+		ownerContracts.POST("/contract-templates/:template_id/archive", contractHandler.ArchiveTemplate)
+		ownerContracts.POST("/contract-templates/:template_id/reactivate", contractHandler.ReactivateTemplate)
+
+		ownerContracts.GET("/units/:unit_id/enrollments/:enrollment_id/contracts", contractHandler.ListForEnrollment)
+		ownerContracts.POST("/units/:unit_id/enrollments/:enrollment_id/contracts/preview", contractHandler.PreviewContract)
+		ownerContracts.POST("/units/:unit_id/enrollments/:enrollment_id/contracts", contractHandler.CreateInstanceDraft)
+		ownerContracts.GET("/units/:unit_id/contracts/:contract_id", contractHandler.GetInstance)
+		ownerContracts.POST("/units/:unit_id/contracts/:contract_id/issue", contractHandler.IssueInstance)
+		ownerContracts.POST("/units/:unit_id/contracts/:contract_id/discard", contractHandler.DiscardInstance)
+		ownerContracts.POST("/units/:unit_id/contracts/:contract_id/acceptance-sessions", contractHandler.CreateAcceptanceSession)
 	}
 
 	dashboardHandler := handlers.NewDashboardHandler(deps.DashboardSummaryUseCase, deps.DashboardActiveCampaignsUseCase, deps.DashboardNearGoalUseCase, deps.DashboardAtRiskUseCase, deps.ListPendingRewardDeliveriesUseCase)

@@ -38,6 +38,14 @@ func (s *peopleRepositoryStub) Create(_ context.Context, command domain.CreatePe
 func (*peopleRepositoryStub) CountStudentsWithoutPerson(context.Context) (int64, error) {
 	return 0, nil
 }
+func (*peopleRepositoryStub) ResolveContractParty(_ context.Context, organizationID, personID domain.ID) (*domain.ContractPartyResolution, error) {
+	return &domain.ContractPartyResolution{
+		PersonID:      personID,
+		DisplayName:   "Teste",
+		ProfileStatus: domain.PersonProfileActive,
+		Eligible:      true,
+	}, nil
+}
 
 type boxRepositoryStub struct{ box domain.Box }
 

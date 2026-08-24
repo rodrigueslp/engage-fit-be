@@ -184,3 +184,60 @@ func TestEnrollmentsRequireMembershipsAndPeopleFoundation(t *testing.T) {
 		t.Fatal("enrollments should require people foundation")
 	}
 }
+
+func TestContractsValidationRules(t *testing.T) {
+	base := Config{
+		AppEnv: "development", DatabaseURL: "postgres://database", HTTPMaxBodyBytes: 1, ImportMaxUploadBytes: 1,
+		LoginRateLimitRequests: 1, LoginRateLimitWindowSeconds: 1, SetupRateLimitRequests: 1, SetupRateLimitWindowSeconds: 1,
+		HTTPReadHeaderTimeoutSeconds: 1, HTTPReadTimeoutSeconds: 1, HTTPWriteTimeoutSeconds: 1, HTTPIdleTimeoutSeconds: 1, HTTPShutdownTimeoutSeconds: 1,
+		DBMaxOpenConnections: 2, DBMaxIdleConnections: 1, DBConnectionMaxLifetimeSeconds: 1, DBConnectionMaxIdleTimeSeconds: 1,
+		AutomationStaleRunMinutes: 1, AutomationCatchupWindowMinutes: 1, AuthCookieName: "session", AuthCookieSameSite: "lax", AuthSessionMaxAgeSeconds: 1,
+	}
+	base.FeatureContractsEnabled = true
+	base.FeatureEnrollmentsEnabled = true
+	base.FeatureMembershipsEnabled = true
+	base.FeaturePeopleFoundationEnabled = true
+	base.FeatureCatalogEnabled = true
+	base.DataEncryptionActiveKeyID = "active"
+	base.DataEncryptionKeys = "active:key"
+	base.PersonLookupHMACKey = "lookup"
+	base.ContractAcceptanceAdapter = "local_simulator"
+	base.ContractAcceptanceSimulatorEnabled = true
+	base.ContractAcceptanceSessionTTLMinutes = 30
+
+	if err := base.Validate(); err != nil {
+		t.Fatalf("expected valid contracts config, got %v", err)
+	}
+
+	// Contracts requires enrollments
+	withoutEnrollments := base
+	withoutEnrollments.FeatureEnrollmentsEnabled = false
+	if err := withoutEnrollments.Validate(); err == nil {
+		t.Fatal("expected contracts without enrollments to fail")
+	}
+
+	// Simulator enabled in production fails
+	prodWithSimulator := base
+	prodWithSimulator.AppEnv = "production"
+	prodWithSimulator.JWTSecret = "01234567890123456789012345678901"
+	prodWithSimulator.PlatformAdminEmail = "admin@example.com"
+	prodWithSimulator.PlatformAdminPassword = "password"
+	prodWithSimulator.AuthCookieSecure = true
+	if err := prodWithSimulator.Validate(); err == nil {
+		t.Fatal("expected simulator enabled in production to fail")
+	}
+
+	// Simulator requires adapter=local_simulator
+	simulatorWrongAdapter := base
+	simulatorWrongAdapter.ContractAcceptanceAdapter = "disabled"
+	if err := simulatorWrongAdapter.Validate(); err == nil {
+		t.Fatal("expected simulator without local_simulator adapter to fail")
+	}
+
+	// Invalid session TTL
+	invalidTTL := base
+	invalidTTL.ContractAcceptanceSessionTTLMinutes = 2000
+	if err := invalidTTL.Validate(); err == nil {
+		t.Fatal("expected session TTL > 1440 to fail")
+	}
+}

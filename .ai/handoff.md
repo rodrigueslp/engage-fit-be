@@ -4,11 +4,32 @@ Manual canônico de arquitetura e negócio: `docs/system-design.md`.
 
 Guia operacional consolidado: `docs/application-readiness-guide.md`.
 
-Atualizado em: 2026-08-24 (SPEC-004/A revisada e pronta; somente documentação, sem implementação/push/deploy)
+Atualizado em: 2026-08-24 (SPEC-004/A implementada localmente em worktrees dedicados; sem push, merge ou deploy)
 
-## Checkpoint atual — SPEC-004/A revisada e pronta para implementação local
+## Checkpoint atual — SPEC-004/A implementada localmente (Fundação de contratos e simulador de aceite)
 
 Este checkpoint prevalece sobre todos os registros históricos abaixo.
+
+A vertical slice completa da especificação
+`docs/sdd/specs/SPEC-004-A-contract-foundation-enrollment-issuance.md` (SPEC-004/A)
+foi implementada nos worktrees dedicados sem qualquer alteração externa:
+
+- **Backend (`engage-fit-be`):**
+  - Migration `060_create_contract_foundation.sql`: tabelas `contract_templates`, `contract_template_versions`, `contract_instances`, `contract_acceptance_sessions`, `contract_command_requests`, `contract_audit_events`.
+  - Triggers PostgreSQL de imutabilidade de versões publicadas (`protect_contract_template_version_content`) e snapshots comerciais (`protect_contract_instance_snapshot`).
+  - Domínio `internal/domain/contract.go`: templates, instâncias, snapshots de 6 blocos (`schema_version`, `enrollment_id`, `plan`, `pricing`, `dates`, `party`), renderer determinístico markdown-v1.
+  - Aplicação `internal/app/contracts`: listagem, rascunhos, publicação, preview, criação de minuta vinculada à matrícula, emissão, descarte, sessões de aceite público.
+  - Adapter `LocalSimulatorAdapter`: token criptográfico aleatório (SHA-256 no banco), expiração em 30 minutos, retenção curta `retention_class = 'local_simulator'`.
+  - Purge de retenção em `cmd/privacy-retention/main.go` e exportação LGPD via `exportStudentDataUseCase.WithContracts()`.
+  - Roteamento e autorização: owner protegido por RBAC e tenancy, rotas públicas sem sessão com `Cache-Control: no-store`.
+
+- **Frontend (`engage-fit-fe`):**
+  - Modelos de Contrato: editor Markdown com preview em tempo real com amostra, inserção assistida de placeholders e modal de publicação com hash SHA-256.
+  - Matrículas (`EnrollmentContractSection.tsx`): aviso obrigatório *"Esta etapa não gera cobrança, não altera a matrícula e não libera acesso"*, preview determinístico, criação de rascunho, emissão, descarte e gerador de link do simulador.
+  - Simulador público (`ContractAcceptanceSimulatorPage.tsx`): acessível via rota hash pública `#/public/contract-acceptance/:token`, visualizador do documento, quebra comercial e confirmação de aceite.
+  - Testes Playwright (`tests/contracts.spec.ts`) e build de produção Vite 100% verificados.
+
+## Checkpoint anterior — SPEC-004/A revisada e pronta para implementação local
 
 Foi revisada integralmente a especificação
 `docs/sdd/specs/SPEC-004-A-contract-foundation-enrollment-issuance.md`, versão

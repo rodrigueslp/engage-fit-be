@@ -15,6 +15,7 @@ var ErrInvalidPrivacyRequest = errors.New("invalid privacy request")
 type ExportStudentDataUseCase struct {
 	privacy     repositories.PrivacyRepository
 	enrollments repositories.EnrollmentPrivacyReader
+	contracts   repositories.ContractPrivacyReader
 }
 
 func NewExportStudentDataUseCase(privacy repositories.PrivacyRepository, enrollmentReaders ...repositories.EnrollmentPrivacyReader) ExportStudentDataUseCase {
@@ -25,6 +26,10 @@ func NewExportStudentDataUseCase(privacy repositories.PrivacyRepository, enrollm
 	return ExportStudentDataUseCase{privacy: privacy, enrollments: enrollmentReader}
 }
 
+func (uc *ExportStudentDataUseCase) WithContracts(contracts repositories.ContractPrivacyReader) {
+	uc.contracts = contracts
+}
+
 func (uc ExportStudentDataUseCase) Execute(ctx context.Context, boxID, studentID, actorUserID domain.ID) (*domain.StudentPrivacyExport, error) {
 	result, err := uc.privacy.ExportStudent(ctx, boxID, studentID)
 	if err != nil {
@@ -32,6 +37,12 @@ func (uc ExportStudentDataUseCase) Execute(ctx context.Context, boxID, studentID
 	}
 	if uc.enrollments != nil && result.Person != nil {
 		result.Enrollments, err = uc.enrollments.ListPrivacy(ctx, boxID, result.Person.ID)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if uc.contracts != nil && result.Person != nil {
+		result.Contracts, err = uc.contracts.ListPrivacy(ctx, boxID, result.Person.ID)
 		if err != nil {
 			return nil, err
 		}

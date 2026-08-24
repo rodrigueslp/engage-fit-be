@@ -12,6 +12,7 @@ import (
 	"time"
 
 	billingadapter "boxengage/backend/internal/adapters/billing"
+	contractsadapter "boxengage/backend/internal/adapters/contracts"
 	"boxengage/backend/internal/adapters/email"
 	apphttp "boxengage/backend/internal/adapters/http"
 	"boxengage/backend/internal/adapters/http/middleware"
@@ -32,6 +33,7 @@ import (
 	"boxengage/backend/internal/app/catalog"
 	"boxengage/backend/internal/app/checkiningestion"
 	"boxengage/backend/internal/app/contactactivation"
+	contractsapp "boxengage/backend/internal/app/contracts"
 	"boxengage/backend/internal/app/dashboard"
 	emailapp "boxengage/backend/internal/app/email"
 	"boxengage/backend/internal/app/imports"
@@ -202,6 +204,20 @@ func main() {
 	catalogService := catalog.NewService(catalogRepository, transactionManager)
 	membershipService := memberships.NewService(membershipRepository, catalogRepository, boxRepository, transactionManager)
 	enrollmentService := memberships.NewEnrollmentService(enrollmentRepository, peopleRepository, catalogRepository, boxRepository, transactionManager)
+	contractRepository := pgrepo.NewContractGormRepository(db)
+	var simAdapter portservices.ContractAcceptancePort
+	if cfg.ContractAcceptanceAdapter == "local_simulator" {
+		simAdapter = contractsadapter.NewLocalSimulatorAdapter(cfg.AppEnv, cfg.ContractAcceptanceSimulatorEnabled)
+	}
+	contractService := contractsapp.NewService(
+		contractRepository,
+		enrollmentService,
+		peopleRepository,
+		boxRepository,
+		simAdapter,
+		transactionManager,
+		contractsapp.WithSessionTTL(time.Duration(cfg.ContractAcceptanceSessionTTLMinutes)*time.Minute),
+	)
 	teamService := team.NewService(userRepository, teamRepository, passwordService)
 	var peopleService *people.Service
 	if cfg.FeaturePeopleFoundationEnabled {
@@ -221,6 +237,7 @@ func main() {
 	listStudentCheckinsUseCase := students.NewListStudentCheckinsUseCase(checkinRepository)
 	updateStudentRiskStatusUseCase := students.NewUpdateStudentRiskStatusUseCase(studentRepository)
 	exportStudentDataUseCase := students.NewExportStudentDataUseCase(privacyRepository, enrollmentService)
+	exportStudentDataUseCase.WithContracts(contractRepository)
 	updateContactPreferenceUseCase := students.NewUpdateContactPreferenceUseCase(studentRepository, privacyRepository)
 	anonymizeStudentUseCase := students.NewAnonymizeStudentUseCase(privacyRepository)
 
@@ -333,6 +350,7 @@ func main() {
 		PeopleService:             peopleService,
 		MembershipService:         membershipService,
 		EnrollmentService:         enrollmentService,
+		ContractService:           contractService,
 
 		ListStudentsUseCase:            listStudentsUseCase,
 		GetStudentUseCase:              getStudentUseCase,
@@ -463,10 +481,12 @@ func main() {
 			Whatsapp: cfg.FeatureWhatsappEnabled, Email: cfg.FeatureEmailEnabled,
 			Automation: cfg.FeatureAutomationEnabled, Workouts: cfg.FeatureWorkoutsEnabled, LLM: cfg.FeatureLLMEnabled,
 			Billing: cfg.FeatureBillingEnabled, Catalog: cfg.FeatureCatalogEnabled,
-			ServiceCatalog: cfg.FeatureServiceCatalogEnabled,
-			People:         cfg.FeaturePeopleFoundationEnabled,
-			Memberships:    cfg.FeatureMembershipsEnabled,
-			Enrollments:    cfg.FeatureEnrollmentsEnabled,
+			ServiceCatalog:              cfg.FeatureServiceCatalogEnabled,
+			People:                      cfg.FeaturePeopleFoundationEnabled,
+			Memberships:                 cfg.FeatureMembershipsEnabled,
+			Enrollments:                 cfg.FeatureEnrollmentsEnabled,
+			Contracts:                   cfg.FeatureContractsEnabled,
+			ContractAcceptanceSimulator: cfg.ContractAcceptanceSimulatorEnabled,
 		},
 		BillingService: billingService,
 		AthleteService: athleteService,

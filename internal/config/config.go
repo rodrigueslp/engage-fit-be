@@ -11,86 +11,90 @@ import (
 )
 
 type Config struct {
-	AppEnv                            string
-	HTTPHost                          string
-	HTTPPort                          string
-	HTTPMaxBodyBytes                  int
-	ImportMaxUploadBytes              int
-	LoginRateLimitRequests            int
-	LoginRateLimitWindowSeconds       int
-	SetupRateLimitRequests            int
-	SetupRateLimitWindowSeconds       int
-	TrustedProxies                    string
-	HTTPReadHeaderTimeoutSeconds      int
-	HTTPReadTimeoutSeconds            int
-	HTTPWriteTimeoutSeconds           int
-	HTTPIdleTimeoutSeconds            int
-	HTTPShutdownTimeoutSeconds        int
-	DBMaxOpenConnections              int
-	DBMaxIdleConnections              int
-	DBConnectionMaxLifetimeSeconds    int
-	DBConnectionMaxIdleTimeSeconds    int
-	DatabaseURL                       string
-	JWTSecret                         string
-	AuthCookieName                    string
-	AuthCookieSecure                  bool
-	AuthCookieSameSite                string
-	AuthSessionMaxAgeSeconds          int
-	CORSAllowedOrigins                string
-	PublicWebURL                      string
-	PlatformAdminName                 string
-	PlatformAdminEmail                string
-	PlatformAdminPassword             string
-	OwnerSetupEnabled                 bool
-	OwnerSetupToken                   string
-	WhatsappAllowRealSend             bool
-	WhatsappDevRecipientPhone         string
-	WhatsappDevAllowedRecipientPhones string
-	WhatsappPlatformEnabled           bool
-	WhatsappPlatformBaseURL           string
-	WhatsappPlatformSender            string
-	WhatsappPlatformAccountSID        string
-	WhatsappPlatformAuthToken         string
-	WhatsappPlatformAlmostThereSID    string
-	WhatsappPlatformGoalReachedSID    string
-	WhatsappPlatformWeMissYouSID      string
-	TwilioInboundWebhookURL           string
-	EmailAllowRealSend                bool
-	EmailDevRecipientEmail            string
-	AutomationWorkerEnabled           bool
-	AutomationWorkerIntervalSeconds   int
-	AutomationStaleRunMinutes         int
-	AutomationCatchupWindowMinutes    int
-	OpenAIAPIKey                      string
-	OpenAIModel                       string
-	OpenAITimeoutSeconds              int
-	OTelEnabled                       bool
-	OTelServiceName                   string
-	OTelServiceVersion                string
-	OTelTraceSampleRatio              float64
-	PrometheusEnabled                 bool
-	PrometheusBearerToken             string
-	DataEncryptionActiveKeyID         string
-	DataEncryptionKeys                string
-	PersonLookupHMACKey               string
-	AsaasBaseURL                      string
-	AsaasAPIKey                       string
-	AsaasWebhookToken                 string
-	AsaasTimeoutSeconds               int
-	FeatureWhatsappEnabled            bool
-	FeatureEmailEnabled               bool
-	FeatureAutomationEnabled          bool
-	FeatureWorkoutsEnabled            bool
-	FeatureLLMEnabled                 bool
-	FeatureBillingEnabled             bool
-	FeatureCatalogEnabled             bool
-	FeatureServiceCatalogEnabled      bool
-	FeaturePeopleFoundationEnabled    bool
-	FeatureMembershipsEnabled         bool
-	FeatureEnrollmentsEnabled         bool
-	BuildVersion                      string
-	BuildCommit                       string
-	BuildTime                         string
+	AppEnv                              string
+	HTTPHost                            string
+	HTTPPort                            string
+	HTTPMaxBodyBytes                    int
+	ImportMaxUploadBytes                int
+	LoginRateLimitRequests              int
+	LoginRateLimitWindowSeconds         int
+	SetupRateLimitRequests              int
+	SetupRateLimitWindowSeconds         int
+	TrustedProxies                      string
+	HTTPReadHeaderTimeoutSeconds        int
+	HTTPReadTimeoutSeconds              int
+	HTTPWriteTimeoutSeconds             int
+	HTTPIdleTimeoutSeconds              int
+	HTTPShutdownTimeoutSeconds          int
+	DBMaxOpenConnections                int
+	DBMaxIdleConnections                int
+	DBConnectionMaxLifetimeSeconds      int
+	DBConnectionMaxIdleTimeSeconds      int
+	DatabaseURL                         string
+	JWTSecret                           string
+	AuthCookieName                      string
+	AuthCookieSecure                    bool
+	AuthCookieSameSite                  string
+	AuthSessionMaxAgeSeconds            int
+	CORSAllowedOrigins                  string
+	PublicWebURL                        string
+	PlatformAdminName                   string
+	PlatformAdminEmail                  string
+	PlatformAdminPassword               string
+	OwnerSetupEnabled                   bool
+	OwnerSetupToken                     string
+	WhatsappAllowRealSend               bool
+	WhatsappDevRecipientPhone           string
+	WhatsappDevAllowedRecipientPhones   string
+	WhatsappPlatformEnabled             bool
+	WhatsappPlatformBaseURL             string
+	WhatsappPlatformSender              string
+	WhatsappPlatformAccountSID          string
+	WhatsappPlatformAuthToken           string
+	WhatsappPlatformAlmostThereSID      string
+	WhatsappPlatformGoalReachedSID      string
+	WhatsappPlatformWeMissYouSID        string
+	TwilioInboundWebhookURL             string
+	EmailAllowRealSend                  bool
+	EmailDevRecipientEmail              string
+	AutomationWorkerEnabled             bool
+	AutomationWorkerIntervalSeconds     int
+	AutomationStaleRunMinutes           int
+	AutomationCatchupWindowMinutes      int
+	OpenAIAPIKey                        string
+	OpenAIModel                         string
+	OpenAITimeoutSeconds                int
+	OTelEnabled                         bool
+	OTelServiceName                     string
+	OTelServiceVersion                  string
+	OTelTraceSampleRatio                float64
+	PrometheusEnabled                   bool
+	PrometheusBearerToken               string
+	DataEncryptionActiveKeyID           string
+	DataEncryptionKeys                  string
+	PersonLookupHMACKey                 string
+	AsaasBaseURL                        string
+	AsaasAPIKey                         string
+	AsaasWebhookToken                   string
+	AsaasTimeoutSeconds                 int
+	FeatureWhatsappEnabled              bool
+	FeatureEmailEnabled                 bool
+	FeatureAutomationEnabled            bool
+	FeatureWorkoutsEnabled              bool
+	FeatureLLMEnabled                   bool
+	FeatureBillingEnabled               bool
+	FeatureCatalogEnabled               bool
+	FeatureServiceCatalogEnabled        bool
+	FeaturePeopleFoundationEnabled      bool
+	FeatureMembershipsEnabled           bool
+	FeatureEnrollmentsEnabled           bool
+	FeatureContractsEnabled             bool
+	ContractAcceptanceAdapter           string
+	ContractAcceptanceSimulatorEnabled  bool
+	ContractAcceptanceSessionTTLMinutes int
+	BuildVersion                        string
+	BuildCommit                         string
+	BuildTime                           string
 }
 
 func Load() Config {
@@ -98,86 +102,90 @@ func Load() Config {
 	appEnv := getEnv("APP_ENV", "development")
 
 	return Config{
-		AppEnv:                            appEnv,
-		HTTPHost:                          getEnv("HTTP_HOST", "0.0.0.0"),
-		HTTPPort:                          getEnv("HTTP_PORT", getEnv("PORT", "8080")),
-		HTTPMaxBodyBytes:                  getEnvInt("HTTP_MAX_BODY_BYTES", 1_048_576),
-		ImportMaxUploadBytes:              getEnvInt("IMPORT_MAX_UPLOAD_BYTES", 10_485_760),
-		LoginRateLimitRequests:            getEnvInt("LOGIN_RATE_LIMIT_REQUESTS", 10),
-		LoginRateLimitWindowSeconds:       getEnvInt("LOGIN_RATE_LIMIT_WINDOW_SECONDS", 60),
-		SetupRateLimitRequests:            getEnvInt("SETUP_RATE_LIMIT_REQUESTS", 5),
-		SetupRateLimitWindowSeconds:       getEnvInt("SETUP_RATE_LIMIT_WINDOW_SECONDS", 3600),
-		TrustedProxies:                    getEnv("TRUSTED_PROXIES", ""),
-		HTTPReadHeaderTimeoutSeconds:      getEnvInt("HTTP_READ_HEADER_TIMEOUT_SECONDS", 5),
-		HTTPReadTimeoutSeconds:            getEnvInt("HTTP_READ_TIMEOUT_SECONDS", 30),
-		HTTPWriteTimeoutSeconds:           getEnvInt("HTTP_WRITE_TIMEOUT_SECONDS", 300),
-		HTTPIdleTimeoutSeconds:            getEnvInt("HTTP_IDLE_TIMEOUT_SECONDS", 120),
-		HTTPShutdownTimeoutSeconds:        getEnvInt("HTTP_SHUTDOWN_TIMEOUT_SECONDS", 20),
-		DBMaxOpenConnections:              getEnvInt("DB_MAX_OPEN_CONNECTIONS", 10),
-		DBMaxIdleConnections:              getEnvInt("DB_MAX_IDLE_CONNECTIONS", 5),
-		DBConnectionMaxLifetimeSeconds:    getEnvInt("DB_CONNECTION_MAX_LIFETIME_SECONDS", 1800),
-		DBConnectionMaxIdleTimeSeconds:    getEnvInt("DB_CONNECTION_MAX_IDLE_TIME_SECONDS", 300),
-		DatabaseURL:                       getEnv("DATABASE_URL", ""),
-		JWTSecret:                         getEnv("JWT_SECRET", "change-me"),
-		AuthCookieName:                    getEnv("AUTH_COOKIE_NAME", "engagefit_session"),
-		AuthCookieSecure:                  getEnvBool("AUTH_COOKIE_SECURE", appEnv == "production"),
-		AuthCookieSameSite:                getEnv("AUTH_COOKIE_SAME_SITE", "lax"),
-		AuthSessionMaxAgeSeconds:          getEnvInt("AUTH_SESSION_MAX_AGE_SECONDS", 86400),
-		CORSAllowedOrigins:                getEnv("CORS_ALLOWED_ORIGINS", ""),
-		PublicWebURL:                      getEnv("PUBLIC_WEB_URL", "http://localhost:5173"),
-		PlatformAdminName:                 getEnv("PLATFORM_ADMIN_NAME", "Administrador EngageFit"),
-		PlatformAdminEmail:                getEnv("PLATFORM_ADMIN_EMAIL", ""),
-		PlatformAdminPassword:             getEnv("PLATFORM_ADMIN_PASSWORD", ""),
-		OwnerSetupEnabled:                 getEnvBool("OWNER_SETUP_ENABLED", appEnv != "production"),
-		OwnerSetupToken:                   getEnv("OWNER_SETUP_TOKEN", ""),
-		WhatsappAllowRealSend:             getEnv("WHATSAPP_ALLOW_REAL_SEND", "false") == "true",
-		WhatsappDevRecipientPhone:         getEnv("WHATSAPP_DEV_RECIPIENT_PHONE", ""),
-		WhatsappDevAllowedRecipientPhones: getEnv("WHATSAPP_DEV_ALLOWED_RECIPIENT_PHONES", ""),
-		WhatsappPlatformEnabled:           getEnv("WHATSAPP_PLATFORM_ENABLED", "false") == "true",
-		WhatsappPlatformBaseURL:           getEnv("WHATSAPP_PLATFORM_BASE_URL", ""),
-		WhatsappPlatformSender:            getEnv("WHATSAPP_PLATFORM_TWILIO_SENDER", ""),
-		WhatsappPlatformAccountSID:        getEnv("WHATSAPP_PLATFORM_TWILIO_ACCOUNT_SID", ""),
-		WhatsappPlatformAuthToken:         getEnv("WHATSAPP_PLATFORM_TWILIO_AUTH_TOKEN", ""),
-		WhatsappPlatformAlmostThereSID:    getEnv("WHATSAPP_PLATFORM_TWILIO_CONTENT_SID_ALMOST_THERE", ""),
-		WhatsappPlatformGoalReachedSID:    getEnv("WHATSAPP_PLATFORM_TWILIO_CONTENT_SID_GOAL_REACHED", ""),
-		WhatsappPlatformWeMissYouSID:      getEnv("WHATSAPP_PLATFORM_TWILIO_CONTENT_SID_WE_MISS_YOU", ""),
-		TwilioInboundWebhookURL:           getEnv("TWILIO_INBOUND_WEBHOOK_URL", ""),
-		EmailAllowRealSend:                getEnv("EMAIL_ALLOW_REAL_SEND", "false") == "true",
-		EmailDevRecipientEmail:            getEnv("EMAIL_DEV_RECIPIENT_EMAIL", ""),
-		AutomationWorkerEnabled:           getEnv("AUTOMATION_WORKER_ENABLED", "false") == "true",
-		AutomationWorkerIntervalSeconds:   getEnvInt("AUTOMATION_WORKER_INTERVAL_SECONDS", 60),
-		AutomationStaleRunMinutes:         getEnvInt("AUTOMATION_STALE_RUN_MINUTES", 120),
-		AutomationCatchupWindowMinutes:    getEnvInt("AUTOMATION_CATCHUP_WINDOW_MINUTES", 15),
-		OpenAIAPIKey:                      getEnv("OPENAI_API_KEY", ""),
-		OpenAIModel:                       getEnv("OPENAI_MODEL", "gpt-4.1-mini"),
-		OpenAITimeoutSeconds:              getEnvInt("OPENAI_TIMEOUT_SECONDS", 30),
-		OTelEnabled:                       getEnvBool("OTEL_ENABLED", false),
-		OTelServiceName:                   getEnv("OTEL_SERVICE_NAME", "engagefit-api"),
-		OTelServiceVersion:                getEnv("OTEL_SERVICE_VERSION", "dev"),
-		OTelTraceSampleRatio:              getEnvFloat("OTEL_TRACE_SAMPLE_RATIO", 0.1),
-		PrometheusEnabled:                 getEnvBool("PROMETHEUS_ENABLED", appEnv != "production"),
-		PrometheusBearerToken:             getEnv("PROMETHEUS_BEARER_TOKEN", ""),
-		DataEncryptionActiveKeyID:         getEnv("DATA_ENCRYPTION_ACTIVE_KEY_ID", ""),
-		DataEncryptionKeys:                getEnv("DATA_ENCRYPTION_KEYS", ""),
-		PersonLookupHMACKey:               getEnv("PERSON_LOOKUP_HMAC_KEY", ""),
-		AsaasBaseURL:                      getEnv("ASAAS_BASE_URL", "https://api-sandbox.asaas.com/v3"),
-		AsaasAPIKey:                       getEnv("ASAAS_API_KEY", ""),
-		AsaasWebhookToken:                 getEnv("ASAAS_WEBHOOK_TOKEN", ""),
-		AsaasTimeoutSeconds:               getEnvInt("ASAAS_TIMEOUT_SECONDS", 15),
-		FeatureWhatsappEnabled:            getEnvBool("FEATURE_WHATSAPP_ENABLED", appEnv != "production"),
-		FeatureEmailEnabled:               getEnvBool("FEATURE_EMAIL_ENABLED", appEnv != "production"),
-		FeatureAutomationEnabled:          getEnvBool("FEATURE_AUTOMATION_ENABLED", appEnv != "production"),
-		FeatureWorkoutsEnabled:            getEnvBool("FEATURE_WORKOUTS_ENABLED", appEnv != "production"),
-		FeatureLLMEnabled:                 getEnvBool("FEATURE_LLM_ENABLED", appEnv != "production"),
-		FeatureBillingEnabled:             getEnvBool("FEATURE_BILLING_ENABLED", false),
-		FeatureCatalogEnabled:             getEnvBool("FEATURE_CATALOG_ENABLED", appEnv != "production"),
-		FeatureServiceCatalogEnabled:      getEnvBool("FEATURE_SERVICE_CATALOG_ENABLED", appEnv != "production"),
-		FeaturePeopleFoundationEnabled:    getEnvBool("FEATURE_PEOPLE_FOUNDATION_ENABLED", false),
-		FeatureMembershipsEnabled:         getEnvBool("FEATURE_MEMBERSHIPS_ENABLED", false),
-		FeatureEnrollmentsEnabled:         getEnvBool("FEATURE_ENROLLMENTS_ENABLED", false),
-		BuildVersion:                      getEnv("BUILD_VERSION", ""),
-		BuildCommit:                       getEnv("BUILD_COMMIT", ""),
-		BuildTime:                         getEnv("BUILD_TIME", ""),
+		AppEnv:                              appEnv,
+		HTTPHost:                            getEnv("HTTP_HOST", "0.0.0.0"),
+		HTTPPort:                            getEnv("HTTP_PORT", getEnv("PORT", "8080")),
+		HTTPMaxBodyBytes:                    getEnvInt("HTTP_MAX_BODY_BYTES", 1_048_576),
+		ImportMaxUploadBytes:                getEnvInt("IMPORT_MAX_UPLOAD_BYTES", 10_485_760),
+		LoginRateLimitRequests:              getEnvInt("LOGIN_RATE_LIMIT_REQUESTS", 10),
+		LoginRateLimitWindowSeconds:         getEnvInt("LOGIN_RATE_LIMIT_WINDOW_SECONDS", 60),
+		SetupRateLimitRequests:              getEnvInt("SETUP_RATE_LIMIT_REQUESTS", 5),
+		SetupRateLimitWindowSeconds:         getEnvInt("SETUP_RATE_LIMIT_WINDOW_SECONDS", 3600),
+		TrustedProxies:                      getEnv("TRUSTED_PROXIES", ""),
+		HTTPReadHeaderTimeoutSeconds:        getEnvInt("HTTP_READ_HEADER_TIMEOUT_SECONDS", 5),
+		HTTPReadTimeoutSeconds:              getEnvInt("HTTP_READ_TIMEOUT_SECONDS", 30),
+		HTTPWriteTimeoutSeconds:             getEnvInt("HTTP_WRITE_TIMEOUT_SECONDS", 300),
+		HTTPIdleTimeoutSeconds:              getEnvInt("HTTP_IDLE_TIMEOUT_SECONDS", 120),
+		HTTPShutdownTimeoutSeconds:          getEnvInt("HTTP_SHUTDOWN_TIMEOUT_SECONDS", 20),
+		DBMaxOpenConnections:                getEnvInt("DB_MAX_OPEN_CONNECTIONS", 10),
+		DBMaxIdleConnections:                getEnvInt("DB_MAX_IDLE_CONNECTIONS", 5),
+		DBConnectionMaxLifetimeSeconds:      getEnvInt("DB_CONNECTION_MAX_LIFETIME_SECONDS", 1800),
+		DBConnectionMaxIdleTimeSeconds:      getEnvInt("DB_CONNECTION_MAX_IDLE_TIME_SECONDS", 300),
+		DatabaseURL:                         getEnv("DATABASE_URL", ""),
+		JWTSecret:                           getEnv("JWT_SECRET", "change-me"),
+		AuthCookieName:                      getEnv("AUTH_COOKIE_NAME", "engagefit_session"),
+		AuthCookieSecure:                    getEnvBool("AUTH_COOKIE_SECURE", appEnv == "production"),
+		AuthCookieSameSite:                  getEnv("AUTH_COOKIE_SAME_SITE", "lax"),
+		AuthSessionMaxAgeSeconds:            getEnvInt("AUTH_SESSION_MAX_AGE_SECONDS", 86400),
+		CORSAllowedOrigins:                  getEnv("CORS_ALLOWED_ORIGINS", ""),
+		PublicWebURL:                        getEnv("PUBLIC_WEB_URL", "http://localhost:5173"),
+		PlatformAdminName:                   getEnv("PLATFORM_ADMIN_NAME", "Administrador EngageFit"),
+		PlatformAdminEmail:                  getEnv("PLATFORM_ADMIN_EMAIL", ""),
+		PlatformAdminPassword:               getEnv("PLATFORM_ADMIN_PASSWORD", ""),
+		OwnerSetupEnabled:                   getEnvBool("OWNER_SETUP_ENABLED", appEnv != "production"),
+		OwnerSetupToken:                     getEnv("OWNER_SETUP_TOKEN", ""),
+		WhatsappAllowRealSend:               getEnv("WHATSAPP_ALLOW_REAL_SEND", "false") == "true",
+		WhatsappDevRecipientPhone:           getEnv("WHATSAPP_DEV_RECIPIENT_PHONE", ""),
+		WhatsappDevAllowedRecipientPhones:   getEnv("WHATSAPP_DEV_ALLOWED_RECIPIENT_PHONES", ""),
+		WhatsappPlatformEnabled:             getEnv("WHATSAPP_PLATFORM_ENABLED", "false") == "true",
+		WhatsappPlatformBaseURL:             getEnv("WHATSAPP_PLATFORM_BASE_URL", ""),
+		WhatsappPlatformSender:              getEnv("WHATSAPP_PLATFORM_TWILIO_SENDER", ""),
+		WhatsappPlatformAccountSID:          getEnv("WHATSAPP_PLATFORM_TWILIO_ACCOUNT_SID", ""),
+		WhatsappPlatformAuthToken:           getEnv("WHATSAPP_PLATFORM_TWILIO_AUTH_TOKEN", ""),
+		WhatsappPlatformAlmostThereSID:      getEnv("WHATSAPP_PLATFORM_TWILIO_CONTENT_SID_ALMOST_THERE", ""),
+		WhatsappPlatformGoalReachedSID:      getEnv("WHATSAPP_PLATFORM_TWILIO_CONTENT_SID_GOAL_REACHED", ""),
+		WhatsappPlatformWeMissYouSID:        getEnv("WHATSAPP_PLATFORM_TWILIO_CONTENT_SID_WE_MISS_YOU", ""),
+		TwilioInboundWebhookURL:             getEnv("TWILIO_INBOUND_WEBHOOK_URL", ""),
+		EmailAllowRealSend:                  getEnv("EMAIL_ALLOW_REAL_SEND", "false") == "true",
+		EmailDevRecipientEmail:              getEnv("EMAIL_DEV_RECIPIENT_EMAIL", ""),
+		AutomationWorkerEnabled:             getEnv("AUTOMATION_WORKER_ENABLED", "false") == "true",
+		AutomationWorkerIntervalSeconds:     getEnvInt("AUTOMATION_WORKER_INTERVAL_SECONDS", 60),
+		AutomationStaleRunMinutes:           getEnvInt("AUTOMATION_STALE_RUN_MINUTES", 120),
+		AutomationCatchupWindowMinutes:      getEnvInt("AUTOMATION_CATCHUP_WINDOW_MINUTES", 15),
+		OpenAIAPIKey:                        getEnv("OPENAI_API_KEY", ""),
+		OpenAIModel:                         getEnv("OPENAI_MODEL", "gpt-4.1-mini"),
+		OpenAITimeoutSeconds:                getEnvInt("OPENAI_TIMEOUT_SECONDS", 30),
+		OTelEnabled:                         getEnvBool("OTEL_ENABLED", false),
+		OTelServiceName:                     getEnv("OTEL_SERVICE_NAME", "engagefit-api"),
+		OTelServiceVersion:                  getEnv("OTEL_SERVICE_VERSION", "dev"),
+		OTelTraceSampleRatio:                getEnvFloat("OTEL_TRACE_SAMPLE_RATIO", 0.1),
+		PrometheusEnabled:                   getEnvBool("PROMETHEUS_ENABLED", appEnv != "production"),
+		PrometheusBearerToken:               getEnv("PROMETHEUS_BEARER_TOKEN", ""),
+		DataEncryptionActiveKeyID:           getEnv("DATA_ENCRYPTION_ACTIVE_KEY_ID", ""),
+		DataEncryptionKeys:                  getEnv("DATA_ENCRYPTION_KEYS", ""),
+		PersonLookupHMACKey:                 getEnv("PERSON_LOOKUP_HMAC_KEY", ""),
+		AsaasBaseURL:                        getEnv("ASAAS_BASE_URL", "https://api-sandbox.asaas.com/v3"),
+		AsaasAPIKey:                         getEnv("ASAAS_API_KEY", ""),
+		AsaasWebhookToken:                   getEnv("ASAAS_WEBHOOK_TOKEN", ""),
+		AsaasTimeoutSeconds:                 getEnvInt("ASAAS_TIMEOUT_SECONDS", 15),
+		FeatureWhatsappEnabled:              getEnvBool("FEATURE_WHATSAPP_ENABLED", appEnv != "production"),
+		FeatureEmailEnabled:                 getEnvBool("FEATURE_EMAIL_ENABLED", appEnv != "production"),
+		FeatureAutomationEnabled:            getEnvBool("FEATURE_AUTOMATION_ENABLED", appEnv != "production"),
+		FeatureWorkoutsEnabled:              getEnvBool("FEATURE_WORKOUTS_ENABLED", appEnv != "production"),
+		FeatureLLMEnabled:                   getEnvBool("FEATURE_LLM_ENABLED", appEnv != "production"),
+		FeatureBillingEnabled:               getEnvBool("FEATURE_BILLING_ENABLED", false),
+		FeatureCatalogEnabled:               getEnvBool("FEATURE_CATALOG_ENABLED", appEnv != "production"),
+		FeatureServiceCatalogEnabled:        getEnvBool("FEATURE_SERVICE_CATALOG_ENABLED", appEnv != "production"),
+		FeaturePeopleFoundationEnabled:      getEnvBool("FEATURE_PEOPLE_FOUNDATION_ENABLED", false),
+		FeatureMembershipsEnabled:           getEnvBool("FEATURE_MEMBERSHIPS_ENABLED", appEnv != "production"),
+		FeatureEnrollmentsEnabled:           getEnvBool("FEATURE_ENROLLMENTS_ENABLED", appEnv != "production"),
+		FeatureContractsEnabled:             getEnvBool("FEATURE_CONTRACTS_ENABLED", false),
+		ContractAcceptanceAdapter:           getEnv("CONTRACT_ACCEPTANCE_ADAPTER", "disabled"),
+		ContractAcceptanceSimulatorEnabled:  getEnvBool("CONTRACT_ACCEPTANCE_SIMULATOR_ENABLED", false),
+		ContractAcceptanceSessionTTLMinutes: getEnvInt("CONTRACT_ACCEPTANCE_SESSION_TTL_MINUTES", 30),
+		BuildVersion:                        getEnv("BUILD_VERSION", ""),
+		BuildCommit:                         getEnv("BUILD_COMMIT", ""),
+		BuildTime:                           getEnv("BUILD_TIME", ""),
 	}
 }
 
@@ -257,6 +265,36 @@ func (c Config) Validate() error {
 	}
 	if c.FeaturePeopleFoundationEnabled && (strings.TrimSpace(c.DataEncryptionActiveKeyID) == "" || strings.TrimSpace(c.DataEncryptionKeys) == "" || strings.TrimSpace(c.PersonLookupHMACKey) == "") {
 		return errors.New("FEATURE_PEOPLE_FOUNDATION_ENABLED exige DATA_ENCRYPTION_ACTIVE_KEY_ID, DATA_ENCRYPTION_KEYS e PERSON_LOOKUP_HMAC_KEY")
+	}
+	if c.FeatureContractsEnabled && !c.FeatureEnrollmentsEnabled {
+		return errors.New("FEATURE_CONTRACTS_ENABLED exige FEATURE_ENROLLMENTS_ENABLED")
+	}
+	adapter := c.ContractAcceptanceAdapter
+	if adapter == "" {
+		adapter = "disabled"
+	}
+	if adapter != "disabled" && adapter != "local_simulator" {
+		return errors.New("CONTRACT_ACCEPTANCE_ADAPTER deve ser disabled ou local_simulator")
+	}
+	sessionTTL := c.ContractAcceptanceSessionTTLMinutes
+	if sessionTTL == 0 {
+		sessionTTL = 30
+	}
+	if sessionTTL <= 0 || sessionTTL > 1440 {
+		return errors.New("CONTRACT_ACCEPTANCE_SESSION_TTL_MINUTES deve ser entre 1 e 1440")
+	}
+	if c.ContractAcceptanceSimulatorEnabled {
+		if !c.FeatureContractsEnabled {
+			return errors.New("CONTRACT_ACCEPTANCE_SIMULATOR_ENABLED exige FEATURE_CONTRACTS_ENABLED")
+		}
+		if adapter != "local_simulator" {
+			return errors.New("CONTRACT_ACCEPTANCE_SIMULATOR_ENABLED exige CONTRACT_ACCEPTANCE_ADAPTER=local_simulator")
+		}
+	}
+	if c.AppEnv == "production" {
+		if adapter != "disabled" || c.ContractAcceptanceSimulatorEnabled {
+			return errors.New("simulador de aceite contratual e adapter diferente de disabled sao proibidos em producao")
+		}
 	}
 	if c.AppEnv != "production" {
 		return nil
