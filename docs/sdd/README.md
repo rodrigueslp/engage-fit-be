@@ -134,3 +134,4 @@ permitirem.
 - [Prompt de implementação da SPEC-004/A](prompts/SPEC-004-A-implementation.md)
 - [SPEC-006 — Agenda, profissionais e grade recorrente](specs/SPEC-006-scheduling-professionals-recurring-grid.md)
 - [SPEC-006/A — Fundação de profissionais da agenda](specs/SPEC-006-A-scheduling-professionals.md)
+- [Prompt de implementação da SPEC-006/A](prompts/SPEC-006-A-implementation.md)
