@@ -143,6 +143,7 @@ func NewService(
 
 func (s *Service) CreateTemplate(ctx context.Context, organizationID, homeUnitID, actorUserID domain.ID, idempotencyKey string, input CreateTemplateInput) (*domain.ContractTemplate, bool, error) {
 	started := time.Now()
+	organizationID = s.resolveOrganizationID(ctx, organizationID, homeUnitID)
 	if !idempotencyKeyPattern.MatchString(idempotencyKey) || !validID(organizationID) || !validID(homeUnitID) || !validID(actorUserID) {
 		return nil, false, ErrInvalidContractInput
 	}
@@ -282,6 +283,7 @@ func (s *Service) CreateTemplate(ctx context.Context, organizationID, homeUnitID
 
 func (s *Service) UpdateTemplateDraft(ctx context.Context, organizationID, homeUnitID, templateID, actorUserID domain.ID, input UpdateTemplateDraftInput) (*domain.ContractTemplate, error) {
 	started := time.Now()
+	organizationID = s.resolveOrganizationID(ctx, organizationID, homeUnitID)
 	if !validID(organizationID) || !validID(homeUnitID) || !validID(templateID) || !validID(actorUserID) || input.ExpectedRevision < 1 {
 		return nil, ErrInvalidContractInput
 	}
@@ -353,6 +355,7 @@ func (s *Service) UpdateTemplateDraft(ctx context.Context, organizationID, homeU
 
 func (s *Service) PublishTemplate(ctx context.Context, organizationID, homeUnitID, templateID, actorUserID domain.ID, idempotencyKey string, input PublishTemplateInput) (*domain.ContractTemplate, bool, error) {
 	started := time.Now()
+	organizationID = s.resolveOrganizationID(ctx, organizationID, homeUnitID)
 	if !idempotencyKeyPattern.MatchString(idempotencyKey) || !validID(organizationID) || !validID(homeUnitID) || !validID(templateID) || !validID(actorUserID) || input.DraftRevision < 1 {
 		return nil, false, ErrInvalidContractInput
 	}
@@ -459,6 +462,7 @@ func (s *Service) PublishTemplate(ctx context.Context, organizationID, homeUnitI
 
 func (s *Service) CreateNewVersion(ctx context.Context, organizationID, homeUnitID, templateID, actorUserID domain.ID, idempotencyKey string, input CreateNewVersionInput) (*domain.ContractTemplate, bool, error) {
 	started := time.Now()
+	organizationID = s.resolveOrganizationID(ctx, organizationID, homeUnitID)
 	if !idempotencyKeyPattern.MatchString(idempotencyKey) || !validID(organizationID) || !validID(homeUnitID) || !validID(templateID) || !validID(actorUserID) {
 		return nil, false, ErrInvalidContractInput
 	}
@@ -587,6 +591,7 @@ func (s *Service) CreateNewVersion(ctx context.Context, organizationID, homeUnit
 
 func (s *Service) ArchiveTemplate(ctx context.Context, organizationID, homeUnitID, templateID, actorUserID domain.ID) (*domain.ContractTemplate, error) {
 	started := time.Now()
+	organizationID = s.resolveOrganizationID(ctx, organizationID, homeUnitID)
 	if !validID(organizationID) || !validID(homeUnitID) || !validID(templateID) || !validID(actorUserID) {
 		return nil, ErrInvalidContractInput
 	}
@@ -620,6 +625,7 @@ func (s *Service) ArchiveTemplate(ctx context.Context, organizationID, homeUnitI
 
 func (s *Service) ReactivateTemplate(ctx context.Context, organizationID, homeUnitID, templateID, actorUserID domain.ID) (*domain.ContractTemplate, error) {
 	started := time.Now()
+	organizationID = s.resolveOrganizationID(ctx, organizationID, homeUnitID)
 	if !validID(organizationID) || !validID(homeUnitID) || !validID(templateID) || !validID(actorUserID) {
 		return nil, ErrInvalidContractInput
 	}
@@ -652,17 +658,20 @@ func (s *Service) ReactivateTemplate(ctx context.Context, organizationID, homeUn
 }
 
 func (s *Service) GetTemplate(ctx context.Context, organizationID, homeUnitID, templateID domain.ID) (*domain.ContractTemplate, error) {
+	organizationID = s.resolveOrganizationID(ctx, organizationID, homeUnitID)
 	return s.repository.FindTemplateByID(ctx, organizationID, homeUnitID, templateID)
 }
 
 func (s *Service) ListTemplates(ctx context.Context, organizationID, homeUnitID domain.ID, includeArchived bool) ([]domain.ContractTemplate, error) {
+	organizationID = s.resolveOrganizationID(ctx, organizationID, homeUnitID)
 	return s.repository.ListTemplates(ctx, organizationID, homeUnitID, includeArchived)
 }
 
 // Instances & Preview
 
 func (s *Service) PreviewEnrollmentContract(ctx context.Context, organizationID, unitID, enrollmentID domain.ID, input PreviewContractInput) (*domain.ContractPreview, error) {
-	if !validID(organizationID) || !validID(unitID) || !validID(enrollmentID) || !validID(domain.ID(input.TemplateID)) || !validID(domain.ID(input.TemplateVersionID)) {
+	organizationID = s.resolveOrganizationID(ctx, organizationID, unitID)
+	if !validID(organizationID) || !validID(unitID) || !validID(enrollmentID) || !validID(domain.ID(input.TemplateID)) {
 		return nil, ErrInvalidContractInput
 	}
 
@@ -674,7 +683,17 @@ func (s *Service) PreviewEnrollmentContract(ctx context.Context, organizationID,
 		return nil, ErrContractTemplateNotFound
 	}
 
-	tmplVer, err := s.repository.FindTemplateVersionByID(ctx, organizationID, domain.ID(input.TemplateVersionID))
+	versionID := domain.ID(input.TemplateVersionID)
+	if versionID == "" {
+		if tmpl.CurrentVersion == nil {
+			return nil, ErrContractTemplateNotFound
+		}
+		versionID = tmpl.CurrentVersion.ID
+	} else if !validID(versionID) {
+		return nil, ErrInvalidContractInput
+	}
+
+	tmplVer, err := s.repository.FindTemplateVersionByID(ctx, organizationID, versionID)
 	if err != nil {
 		return nil, err
 	}
@@ -683,6 +702,9 @@ func (s *Service) PreviewEnrollmentContract(ctx context.Context, organizationID,
 	}
 
 	enrSnapshot, err := s.enrollmentResolver.ResolveContractEnrollmentSnapshot(ctx, organizationID, unitID, enrollmentID, s.now())
+	if errors.Is(err, portrepo.ErrEnrollmentNotFound) {
+		return nil, ErrContractEnrollmentUnavailable
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -805,7 +827,8 @@ func (s *Service) PreviewEnrollmentContract(ctx context.Context, organizationID,
 
 func (s *Service) CreateInstanceDraft(ctx context.Context, organizationID, unitID, enrollmentID, actorUserID domain.ID, idempotencyKey string, input CreateInstanceDraftInput) (*domain.ContractInstance, bool, error) {
 	started := time.Now()
-	if !idempotencyKeyPattern.MatchString(idempotencyKey) || !validID(organizationID) || !validID(unitID) || !validID(enrollmentID) || !validID(actorUserID) || input.ExpectedPreviewSHA256 == "" {
+	organizationID = s.resolveOrganizationID(ctx, organizationID, unitID)
+	if !idempotencyKeyPattern.MatchString(idempotencyKey) || !validID(organizationID) || !validID(unitID) || !validID(enrollmentID) || !validID(actorUserID) || !validID(domain.ID(input.TemplateID)) {
 		return nil, false, ErrInvalidContractInput
 	}
 
@@ -817,9 +840,12 @@ func (s *Service) CreateInstanceDraft(ctx context.Context, organizationID, unitI
 		return nil, false, err
 	}
 
-	if preview.PreviewSHA256 != input.ExpectedPreviewSHA256 {
+	if input.ExpectedPreviewSHA256 != "" && preview.PreviewSHA256 != input.ExpectedPreviewSHA256 {
 		return nil, false, ErrContractPreviewChanged
 	}
+
+	templateVersionID := string(preview.TemplateVersionID)
+	expectedSHA := preview.PreviewSHA256
 
 	fingerprint := commandFingerprint(struct {
 		OrgID             domain.ID `json:"organization_id"`
@@ -827,7 +853,7 @@ func (s *Service) CreateInstanceDraft(ctx context.Context, organizationID, unitI
 		EnrollmentID      domain.ID `json:"enrollment_id"`
 		TemplateVersionID string    `json:"template_version_id"`
 		ExpectedSHA       string    `json:"expected_preview_sha256"`
-	}{organizationID, unitID, enrollmentID, input.TemplateVersionID, input.ExpectedPreviewSHA256})
+	}{organizationID, unitID, enrollmentID, templateVersionID, expectedSHA})
 
 	var result *domain.ContractInstance
 	var replayed bool
@@ -859,6 +885,9 @@ func (s *Service) CreateInstanceDraft(ctx context.Context, organizationID, unitI
 		}
 
 		enrSnapshot, err := s.enrollmentResolver.ResolveContractEnrollmentSnapshot(txCtx, organizationID, unitID, enrollmentID, s.now())
+		if errors.Is(err, portrepo.ErrEnrollmentNotFound) {
+			return ErrContractEnrollmentUnavailable
+		}
 		if err != nil {
 			return err
 		}
@@ -964,6 +993,7 @@ func (s *Service) CreateInstanceDraft(ctx context.Context, organizationID, unitI
 
 func (s *Service) IssueInstance(ctx context.Context, organizationID, unitID, contractID, actorUserID domain.ID, idempotencyKey string, input IssueInstanceInput) (*domain.ContractInstance, bool, error) {
 	started := time.Now()
+	organizationID = s.resolveOrganizationID(ctx, organizationID, unitID)
 	if !idempotencyKeyPattern.MatchString(idempotencyKey) || !validID(organizationID) || !validID(unitID) || !validID(contractID) || !validID(actorUserID) || input.ExpectedRevision < 1 {
 		return nil, false, ErrInvalidContractInput
 	}
@@ -1070,6 +1100,7 @@ func (s *Service) IssueInstance(ctx context.Context, organizationID, unitID, con
 
 func (s *Service) DiscardInstance(ctx context.Context, organizationID, unitID, contractID, actorUserID domain.ID, idempotencyKey string, input DiscardInstanceInput) (*domain.ContractInstance, bool, error) {
 	started := time.Now()
+	organizationID = s.resolveOrganizationID(ctx, organizationID, unitID)
 	if !idempotencyKeyPattern.MatchString(idempotencyKey) || !validID(organizationID) || !validID(unitID) || !validID(contractID) || !validID(actorUserID) || input.ExpectedRevision < 1 {
 		return nil, false, ErrInvalidContractInput
 	}
@@ -1159,10 +1190,12 @@ func (s *Service) DiscardInstance(ctx context.Context, organizationID, unitID, c
 }
 
 func (s *Service) GetInstance(ctx context.Context, organizationID, unitID, instanceID domain.ID) (*domain.ContractInstance, error) {
+	organizationID = s.resolveOrganizationID(ctx, organizationID, unitID)
 	return s.repository.FindInstanceByID(ctx, organizationID, unitID, instanceID)
 }
 
 func (s *Service) ListForEnrollment(ctx context.Context, organizationID, unitID, enrollmentID domain.ID) ([]domain.ContractInstance, error) {
+	organizationID = s.resolveOrganizationID(ctx, organizationID, unitID)
 	return s.repository.ListInstancesForEnrollment(ctx, organizationID, unitID, enrollmentID)
 }
 
@@ -1173,6 +1206,7 @@ func (s *Service) CreateAcceptanceSession(ctx context.Context, organizationID, u
 	if s.acceptancePort == nil {
 		return nil, false, ErrContractAcceptanceUnavailable
 	}
+	organizationID = s.resolveOrganizationID(ctx, organizationID, unitID)
 	if !idempotencyKeyPattern.MatchString(idempotencyKey) || !validID(organizationID) || !validID(unitID) || !validID(contractID) || !validID(actorUserID) {
 		return nil, false, ErrInvalidContractInput
 	}
@@ -1305,12 +1339,14 @@ func (s *Service) GetPublicAcceptanceSession(ctx context.Context, token string) 
 	return &domain.PublicAcceptanceSessionData{
 		Token:                      token,
 		Status:                     string(instance.Status),
+		ContractID:                 instance.ID,
 		DocumentTitle:              instance.DocumentTitle,
 		DocumentBodyMarkdown:       instance.DocumentBodyMarkdown,
 		AcceptanceStatement:        instance.AcceptanceStatement,
 		AcceptanceStatementVersion: instance.AcceptanceStatementVersion,
 		DocumentSHA256:             instance.DocumentSHA256,
 		CommercialSnapshot:         instance.CommercialSnapshot,
+		PartySnapshot:              instance.PartySnapshot,
 		ExpiresAt:                  session.ExpiresAt,
 		IsSimulator:                true,
 		Warning:                    "Simulador local de homologação — sem validade jurídica de assinatura eletrônica.",
@@ -1499,6 +1535,15 @@ func instanceResultID(i *domain.ContractInstance) domain.ID {
 		return i.ID
 	}
 	return ""
+}
+
+func (s *Service) resolveOrganizationID(ctx context.Context, orgOrUnitID, unitID domain.ID) domain.ID {
+	if s.boxes != nil && validID(unitID) {
+		if box, err := s.boxes.FindByID(ctx, unitID); err == nil && box != nil && box.OrganizationID != "" {
+			return box.OrganizationID
+		}
+	}
+	return orgOrUnitID
 }
 
 func (s *Service) logCommand(action string, orgID, unitID, actorID, targetID domain.ID, replayed bool, duration time.Duration, err error) {

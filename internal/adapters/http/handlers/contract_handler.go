@@ -8,7 +8,9 @@ import (
 	"boxengage/backend/internal/adapters/http/dto"
 	"boxengage/backend/internal/adapters/http/middleware"
 	contractsapp "boxengage/backend/internal/app/contracts"
+	"boxengage/backend/internal/app/memberships"
 	"boxengage/backend/internal/domain"
+	portrepo "boxengage/backend/internal/ports/repositories"
 	"github.com/gin-gonic/gin"
 )
 
@@ -424,12 +426,14 @@ func (h ContractHandler) GetPublicAcceptanceSession(c *gin.Context) {
 	c.JSON(http.StatusOK, dto.PublicContractAcceptanceSessionResponse{
 		Token:                      sessionData.Token,
 		Status:                     sessionData.Status,
+		ContractID:                 string(sessionData.ContractID),
 		DocumentTitle:              sessionData.DocumentTitle,
 		DocumentBodyMarkdown:       sessionData.DocumentBodyMarkdown,
 		AcceptanceStatement:        sessionData.AcceptanceStatement,
 		AcceptanceStatementVersion: sessionData.AcceptanceStatementVersion,
 		DocumentSHA256:             sessionData.DocumentSHA256,
 		CommercialSnapshot:         sessionData.CommercialSnapshot,
+		PartySnapshot:              sessionData.PartySnapshot,
 		ExpiresAt:                  sessionData.ExpiresAt,
 		IsSimulator:                sessionData.IsSimulator,
 		Warning:                    sessionData.Warning,
@@ -629,6 +633,11 @@ func instanceToDTO(inst domain.ContractInstance) dto.ContractInstanceResponse {
 
 func respondContractError(c *gin.Context, err error) {
 	switch {
+	case errors.Is(err, domain.ErrInvalidContractTemplate),
+		errors.Is(err, domain.ErrUnknownPlaceholder),
+		errors.Is(err, domain.ErrUnclosedPlaceholder),
+		errors.Is(err, domain.ErrDisallowedMarkdownTag):
+		respondPublicError(c, http.StatusUnprocessableEntity, "contract_template_invalid", "conteúdo do modelo de contrato inválido")
 	case errors.Is(err, contractsapp.ErrInvalidContractInput):
 		respondPublicError(c, http.StatusBadRequest, "invalid_contract_input", "dados de contrato inválidos")
 	case errors.Is(err, contractsapp.ErrContractTemplateNotFound):
@@ -655,12 +664,9 @@ func respondContractError(c *gin.Context, err error) {
 		respondPublicError(c, http.StatusConflict, "contract_acceptance_document_changed", "o documento contratual foi alterado")
 	case errors.Is(err, contractsapp.ErrContractCommandIdempotencyReused):
 		respondPublicError(c, http.StatusConflict, "idempotency_key_reused", "chave de idempotência reutilizada")
-	case errors.Is(err, domain.ErrInvalidContractTemplate),
-		errors.Is(err, domain.ErrUnknownPlaceholder),
-		errors.Is(err, domain.ErrUnclosedPlaceholder),
-		errors.Is(err, domain.ErrDisallowedMarkdownTag):
-		respondPublicError(c, http.StatusUnprocessableEntity, "contract_template_invalid", "conteúdo do modelo de contrato inválido")
-	case errors.Is(err, contractsapp.ErrContractEnrollmentUnavailable):
+	case errors.Is(err, contractsapp.ErrContractEnrollmentUnavailable),
+		errors.Is(err, portrepo.ErrEnrollmentNotFound),
+		errors.Is(err, memberships.ErrEnrollmentNotFound):
 		respondPublicError(c, http.StatusUnprocessableEntity, "contract_enrollment_unavailable", "matrícula indisponível para contrato")
 	case errors.Is(err, contractsapp.ErrContractPartyIneligible):
 		respondPublicError(c, http.StatusUnprocessableEntity, "contract_party_ineligible", "pessoa inelegível para contrato")

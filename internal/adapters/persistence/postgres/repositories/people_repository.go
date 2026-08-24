@@ -62,10 +62,9 @@ func (r PeopleGormRepository) ResolveContractParty(ctx context.Context, organiza
 		ID            string
 		Name          string
 		ProfileStatus string
-		AnonymizedAt  *string
 	}
 	err := databaseForContext(r.db, ctx).Table("persons").
-		Select("id, name, profile_status, anonymized_at::text AS anonymized_at").
+		Select("id, name, profile_status").
 		Where("id = ? AND organization_id = ?", stringID(personID), stringID(organizationID)).
 		Take(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -74,7 +73,7 @@ func (r PeopleGormRepository) ResolveContractParty(ctx context.Context, organiza
 	if err != nil {
 		return nil, err
 	}
-	eligible := row.ProfileStatus == string(domain.PersonProfileActive) && row.AnonymizedAt == nil
+	eligible := row.ProfileStatus == string(domain.PersonProfileActive)
 	return &domain.ContractPartyResolution{
 		PersonID:      domainID(row.ID),
 		DisplayName:   row.Name,

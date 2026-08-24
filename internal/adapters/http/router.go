@@ -394,6 +394,7 @@ func NewRouter(deps RouterDependencies) *gin.Engine {
 		ownerContracts.POST("/contract-templates", contractHandler.CreateTemplate)
 		ownerContracts.GET("/contract-templates/:template_id", contractHandler.GetTemplate)
 		ownerContracts.PATCH("/contract-templates/:template_id/draft", contractHandler.UpdateTemplateDraft)
+		ownerContracts.PUT("/contract-templates/:template_id/draft", contractHandler.UpdateTemplateDraft)
 		ownerContracts.POST("/contract-templates/:template_id/publish", contractHandler.PublishTemplate)
 		ownerContracts.POST("/contract-templates/:template_id/versions", contractHandler.CreateNewVersion)
 		ownerContracts.POST("/contract-templates/:template_id/archive", contractHandler.ArchiveTemplate)

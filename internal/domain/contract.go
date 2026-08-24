@@ -328,12 +328,14 @@ type AcceptanceVerificationResult struct {
 type PublicAcceptanceSessionData struct {
 	Token                      string                     `json:"token"`
 	Status                     string                     `json:"status"`
+	ContractID                 ID                         `json:"contract_id"`
 	DocumentTitle              string                     `json:"document_title"`
 	DocumentBodyMarkdown       string                     `json:"document_body_markdown"`
 	AcceptanceStatement        string                     `json:"acceptance_statement"`
 	AcceptanceStatementVersion int                        `json:"acceptance_statement_version"`
 	DocumentSHA256             string                     `json:"document_sha256"`
 	CommercialSnapshot         ContractCommercialSnapshot `json:"commercial_snapshot"`
+	PartySnapshot              ContractPartySnapshot      `json:"party_snapshot"`
 	ExpiresAt                  time.Time                  `json:"expires_at"`
 	IsSimulator                bool                       `json:"is_simulator"`
 	Warning                    string                     `json:"warning"`

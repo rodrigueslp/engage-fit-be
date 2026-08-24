@@ -183,12 +183,14 @@ type ContractAcceptanceSessionLaunchResponse struct {
 type PublicContractAcceptanceSessionResponse struct {
 	Token                      string                            `json:"token"`
 	Status                     string                            `json:"status"`
+	ContractID                 string                            `json:"contract_id"`
 	DocumentTitle              string                            `json:"document_title"`
 	DocumentBodyMarkdown       string                            `json:"document_body_markdown"`
 	AcceptanceStatement        string                            `json:"acceptance_statement"`
 	AcceptanceStatementVersion int                               `json:"acceptance_statement_version"`
 	DocumentSHA256             string                            `json:"document_sha256"`
 	CommercialSnapshot         domain.ContractCommercialSnapshot `json:"commercial_snapshot"`
+	PartySnapshot              domain.ContractPartySnapshot      `json:"party_snapshot"`
 	ExpiresAt                  time.Time                         `json:"expires_at"`
 	IsSimulator                bool                              `json:"is_simulator"`
 	Warning                    string                            `json:"warning"`
