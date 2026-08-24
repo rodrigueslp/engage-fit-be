@@ -1,8 +1,8 @@
 # REQ-001 — Primeiro passo operacional para substituir o Tecnofit
 
 - Status: `reviewed`
-- Versão: `1.0`
-- Data: 2026-08-18
+- Versão: `1.1`
+- Data: 2026-08-24
 - Origem: esboço de produto entregue pelo sócio no documento
   `Primeiro_Passo.pdf`
 - Natureza: entrada de produto; não autoriza implementação isoladamente
@@ -123,7 +123,9 @@ ou avisar sobre a publicação, mas não são sua fonte de verdade.
 | Modalidades e espaços | `SPEC-001/A-B` | implementadas e validadas localmente |
 | Serviços ofertáveis | `SPEC-001/D` | implementada e validada; antecede planos completos |
 | Planos, pacotes e adicionais | `SPEC-003/A-D` | catálogo `003/A`, matrícula `003/C` e adicionais `003/B` validados; acesso `003/D` adiado |
-| Contrato, PAR-Q e assinatura | `SPEC-004` | planejada |
+| Fundação de contrato e emissão | `SPEC-004/A` | spec em `draft`; implementação não autorizada |
+| Aceite eletrônico produtivo | `SPEC-004/B` | planejada; depende de provedor e revisão jurídica |
+| PAR-Q e formulários sensíveis | `SPEC-004/C` (`healthforms`) | planejada e separada de contratos |
 | Financeiro do aluno | `SPEC-005` | planejada |
 | Agenda, profissionais e vagas | `SPEC-006` | planejada |
 | Reservas | `SPEC-007` | planejada |
@@ -149,3 +151,10 @@ ou avisar sobre a publicação, mas não são sua fonte de verdade.
 
 Nenhuma dessas validações exige descartar `Organization`, modalidades, espaços,
 retenção, comunicação ou check-ins já implementados.
+
+O fatiamento da `SPEC-004` preserva a separação desta entrada: a slice A trata
+template, versão, instância, snapshot da matrícula e simulador local; a B
+tratará aceite eletrônico produtivo; a C pertencerá a `healthforms`; e a D
+ficará reservada ao ciclo jurídico posterior, coordenado com o financeiro do
+aluno. A existência da spec A em `draft` não autoriza nenhuma dessas
+implementações.
