@@ -127,7 +127,7 @@ ou avisar sobre a publicação, mas não são sua fonte de verdade.
 | Aceite eletrônico produtivo | `SPEC-004/B` | planejada; depende de provedor e revisão jurídica |
 | PAR-Q e formulários sensíveis | `SPEC-004/C` (`healthforms`) | planejada e separada de contratos |
 | Financeiro do aluno | `SPEC-005` | planejada |
-| Agenda, profissionais e vagas | `SPEC-006` | planejada |
+| Agenda, profissionais e vagas | `SPEC-006` | detalhada inicialmente em `draft`; implementação não autorizada |
 | Reservas | `SPEC-007` | planejada |
 | Check-in e decisão de acesso | `SPEC-008` | planejada; existe fluxo legado compatível |
 | Retenção | módulo atual + `SPEC-009` | base implementada; integração futura |

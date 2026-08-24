@@ -132,3 +132,4 @@ permitirem.
 - [SPEC-003/C — Matrícula em plano publicado](specs/SPEC-003-C-person-plan-enrollment.md)
 - [SPEC-004/A — Fundação de contratos e emissão](specs/SPEC-004-A-contract-foundation-enrollment-issuance.md)
 - [Prompt de implementação da SPEC-004/A](prompts/SPEC-004-A-implementation.md)
+- [SPEC-006 — Agenda, profissionais e grade recorrente](specs/SPEC-006-scheduling-professionals-recurring-grid.md)
