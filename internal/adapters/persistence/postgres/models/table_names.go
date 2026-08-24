@@ -152,3 +152,8 @@ func (WorkoutMessageRecipientModel) TableName() string {
 func (LLMGenerationLogModel) TableName() string {
 	return "llm_generation_logs"
 }
+
+func (SchedulingProfessionalModel) TableName() string     { return "scheduling_professionals" }
+func (SchedulingProfessionalUnitModel) TableName() string { return "scheduling_professional_units" }
+func (SchedulingCommandRequestModel) TableName() string   { return "scheduling_command_requests" }
+func (SchedulingAuditEventModel) TableName() string       { return "scheduling_audit_events" }

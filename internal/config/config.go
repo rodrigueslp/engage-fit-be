@@ -92,6 +92,7 @@ type Config struct {
 	ContractAcceptanceAdapter           string
 	ContractAcceptanceSimulatorEnabled  bool
 	ContractAcceptanceSessionTTLMinutes int
+	FeatureSchedulingEnabled            bool
 	BuildVersion                        string
 	BuildCommit                         string
 	BuildTime                           string
@@ -183,6 +184,7 @@ func Load() Config {
 		ContractAcceptanceAdapter:           getEnv("CONTRACT_ACCEPTANCE_ADAPTER", "disabled"),
 		ContractAcceptanceSimulatorEnabled:  getEnvBool("CONTRACT_ACCEPTANCE_SIMULATOR_ENABLED", false),
 		ContractAcceptanceSessionTTLMinutes: getEnvInt("CONTRACT_ACCEPTANCE_SESSION_TTL_MINUTES", 30),
+		FeatureSchedulingEnabled:            getEnvBool("FEATURE_SCHEDULING_ENABLED", false),
 		BuildVersion:                        getEnv("BUILD_VERSION", ""),
 		BuildCommit:                         getEnv("BUILD_COMMIT", ""),
 		BuildTime:                           getEnv("BUILD_TIME", ""),

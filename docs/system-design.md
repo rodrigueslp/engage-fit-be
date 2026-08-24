@@ -76,6 +76,13 @@ publicada exata na unidade atual, preservam histórico comercial e projetam os
 estados `scheduled|active|expired|ended`; elas não criam contrato, cobrança ou
 decisão de acesso.
 
+O módulo `scheduling` (SPEC-006/A) gerencia os profissionais habilitados para
+conduzir sessões e aulas na organização e na unidade. O owner gerencia cadastro,
+vínculo opcional a contas de acesso (owner/coach) existentes na unidade,
+arquivamento, reativação, exportação e anonimização LGPD. O coach possui
+acesso somente leitura aos profissionais ativos da unidade, sem expor contas
+vinculadas.
+
 ### 3.2 `OWNER`
 
 É o usuário operacional de uma academia. O sistema atual espera conceitualmente um owner por box, embora o banco ainda não imponha uma constraint de unicidade para isso.
@@ -304,11 +311,12 @@ Existem duas decisões diferentes:
 | Fundação de pessoas | `FEATURE_PEOPLE_FOUNDATION_ENABLED` | não possui efeito externo |
 | Catálogo de planos | `FEATURE_MEMBERSHIPS_ENABLED` + catálogo | não possui efeito externo |
 | Matrículas | `FEATURE_ENROLLMENTS_ENABLED` + memberships + people | não possui efeito externo |
+| Profissionais da agenda | `FEATURE_SCHEDULING_ENABLED` | não possui efeito externo |
 
 Defaults:
 
-- development: capabilities ligadas, exceto `people`, `memberships` e
-  `enrollments`, efeitos reais desligados;
+- development: capabilities ligadas, exceto `people`, `memberships`,
+  `enrollments` e `scheduling`, efeitos reais desligados;
 - production: capabilities desligadas, efeitos reais desligados;
 - mocks continuam permitidos para testes sem rede externa.
 
@@ -1463,6 +1471,7 @@ A lista executável completa está em `.env.example`. Os grupos conceituais são
 | Identidade/CPF | `FEATURE_PEOPLE_FOUNDATION_ENABLED`, `PERSON_LOOKUP_HMAC_KEY` | enumeração de CPF, indisponibilidade de cadastro ou perda de lookup |
 | Planos | `FEATURE_MEMBERSHIPS_ENABLED` (depende de `FEATURE_CATALOG_ENABLED`) | exposição prematura do catálogo comercial |
 | Matrículas | `FEATURE_ENROLLMENTS_ENABLED` (depende de memberships e people) | exposição prematura do vínculo comercial da pessoa |
+| Profissionais da agenda | `FEATURE_SCHEDULING_ENABLED` | exposição prematura de profissionais da agenda |
 | Retenção | `PRIVACY_RETENTION_*` | exclusão prematura ou retenção excessiva |
 
 Production faz fail-fast para banco, JWT, cookie Secure, admin e cifra. Setup/Prometheus habilitados exigem tokens fortes.
@@ -1481,6 +1490,7 @@ O contrato definitivo está em `internal/adapters/http/router.go`. Mapa resumido
 | `/api/v1/units/:unit_id/people` | OWNER + capability `people` | duplicate check e cadastro manual idempotente |
 | `/api/v1/membership-plans*` | OWNER + capability `memberships` | catálogo comercial, rascunho, publicação, nova versão e arquivamento |
 | `/api/v1/units/:unit_id/{students/:student_id/enrollments,enrollments/:enrollment_id*}` | OWNER + capability `enrollments` | consulta, criação idempotente e encerramento de matrícula |
+| `/api/v1/units/:unit_id/scheduling/professionals*` | OWNER para mutações/exportação; COACH para leitura ativa | gestão e consulta de profissionais habilitados para agenda |
 | `/api/v1/retention*`, `/students/:id/retention-monitoring`, `/team/members` | OWNER/COACH | radar, jornada, exclusões reversíveis, ações e consulta da equipe |
 | `/api/v1/imports`, `/checkin-ingestion*` | OWNER ou credencial de ingestão | upload manual e entrada recorrente |
 | `/api/v1/team/coaches*` | OWNER | criação, desativação e senha de coaches |
@@ -1788,6 +1798,7 @@ Você domina o núcleo quando consegue explicar:
 | Catálogo versionado de planos | `internal/app/memberships`, `membership_repository.go`, `membership_handler.go`, `engage-fit-fe/src/pages/plans/PlansPage.tsx` |
 | Matrículas | `internal/app/memberships/enrollment_service.go`, `enrollment_repository.go`, `enrollment_handler.go`, `engage-fit-fe/src/features/enrollments/EnrollmentPanel.tsx` |
 | Contratos e termos de adesão | `internal/app/contracts`, `contract_repository.go`, `contract_handler.go`, `engage-fit-fe/src/features/contracts` |
+| Profissionais da agenda | `internal/app/scheduling`, `scheduling_repository.go`, `scheduling_handler.go`, `engage-fit-fe/src/pages/schedule/SchedulePage.tsx` |
 | Pessoas/cadastro manual | `internal/app/people`, `people_repository.go`, `people_handler.go` |
 | Importação | `internal/app/imports/import_checkins_usecase.go` |
 | Campanhas/progresso | `internal/app/campaigns/campaign_usecases.go` |

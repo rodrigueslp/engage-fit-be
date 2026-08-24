@@ -4,9 +4,39 @@ Manual canônico de arquitetura e negócio: `docs/system-design.md`.
 
 Guia operacional consolidado: `docs/application-readiness-guide.md`.
 
-Atualizado em: 2026-08-24 (SPEC-004/A implementada localmente em worktrees dedicados; sem push, merge ou deploy)
+Atualizado em: 2026-08-24 (SPEC-006/A implementada e validada no backend e frontend)
 
-## Checkpoint atual — SPEC-004/A implementada localmente (Fundação de contratos e simulador de aceite)
+## Checkpoint atual — SPEC-006/A implementada e validada (Fundação de Profissionais da Agenda)
+
+Este checkpoint prevalece sobre todos os registros históricos abaixo.
+
+A fatia vertical completa da **SPEC-006/A — Fundação de profissionais da agenda** foi implementada com sucesso nos worktrees locais:
+- Backend: `/home/luiz-paulo/workspace/engage-fit-worktrees/spec-006-a/engage-fit-be` (`feature/spec-006-a-scheduling-professionals`)
+- Frontend: `/home/luiz-paulo/workspace/engage-fit-worktrees/spec-006-a/engage-fit-fe` (`feature/spec-006-a-scheduling-professionals`)
+
+### Escopo entregue e verificado:
+1. **Domínio e Aplicação Backend (`internal/domain`, `internal/app/scheduling`)**:
+   - Tipos de domínio `Professional`, `ProfessionalUnit`, `CommandRequest`, `AuditEvent` com validação estrita (nome 1-100 runes normalizado, homônimos permitidos).
+   - Portas estreitas de repositório e resolução de contexto/contas (`SchedulingRepository`, `SchedulingUnitContextResolver`, `SchedulingAccountResolver`), isolando completamente o módulo `scheduling` de acessos diretos a outras tabelas.
+   - Casos de uso completos com travas consultivas PostgreSQL (`pg_advisory_xact_lock`), idempotência por comando/payload hash, controle de revisão otimista, projeções sanitizadas para COACH (sem conta vinculada) e exportação LGPD.
+2. **Persistência e Migrations (`internal/adapters/persistence/postgres`, `migrations`)**:
+   - Migration `061_create_scheduling_professionals.sql` com tabelas `scheduling_professionals`, `scheduling_professional_units`, `scheduling_command_requests`, `scheduling_audit_events`, índice parcial exclusivo `(organization_id, linked_user_id) WHERE linked_user_id IS NOT NULL` e triggers de atualização.
+   - Implementação GORM e adapters de acesso no repositório Postgres.
+3. **HTTP e Composição (`internal/adapters/http`, `cmd/api`)**:
+   - Endpoints REST sob `/api/v1/units/:unit_id/scheduling/professionals*` protegidos por CSRF, capability `scheduling` (`FEATURE_SCHEDULING_ENABLED`), permissão OWNER para mutações e exportação e permissão de leitura para COACH.
+4. **Frontend (`engage-fit-fe`)**:
+   - Tipos e métodos de API em `types.ts` e `endpoints.ts`.
+   - Navegação 'Agenda' no sidebar e roteamento hash `#/schedule` para OWNER e COACH.
+   - Interface mobile-first (360x800) em `SchedulePage.tsx` com listagem ativa/arquivada, busca, criação, edição, vínculo de conta, arquivamento, reativação, relatório/download de privacidade e anonimização permanente.
+5. **Qualidade e Testes**:
+   - Testes unitários de domínio e aplicação: `go test -count=1 ./...` passando 100%.
+   - Testes de integração Postgres (`scheduling_repository_integration_test.go`) e HTTP (`scheduling_router_test.go`) passando 100%.
+   - Testes E2E Playwright (`tests/schedule.spec.ts`) e suite completa passando 100%.
+   - `gofmt` e `git diff --check` limpos em ambos os repositórios.
+
+---
+
+## Checkpoint anterior — SPEC-004/A implementada localmente (Fundação de contratos e simulador de aceite)
 
 Este checkpoint prevalece sobre todos os registros históricos abaixo.
 

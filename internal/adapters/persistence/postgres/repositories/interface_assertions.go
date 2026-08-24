@@ -23,4 +23,7 @@ var (
 	_ portrepo.WhatsappSettingsRepository    = WhatsappSettingsGormRepository{}
 	_ portrepo.MessageRepository             = MessageGormRepository{}
 	_ portrepo.MessagingGovernanceRepository = MessagingGovernanceGormRepository{}
+	_ portrepo.SchedulingRepository          = SchedulingGormRepository{}
+	_ portrepo.SchedulingUnitContextResolver = SchedulingAccessGormAdapter{}
+	_ portrepo.SchedulingAccountResolver     = SchedulingAccessGormAdapter{}
 )

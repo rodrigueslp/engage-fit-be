@@ -22,6 +22,7 @@ type Capabilities struct {
 	Enrollments                 bool `json:"enrollments"`
 	Contracts                   bool `json:"contracts"`
 	ContractAcceptanceSimulator bool `json:"contract_acceptance_simulator"`
+	Scheduling                  bool `json:"scheduling"`
 }
 
 func FeatureGates(capabilities Capabilities) gin.HandlerFunc {
@@ -56,6 +57,8 @@ func FeatureGates(capabilities Capabilities) gin.HandlerFunc {
 			disabled = !capabilities.People
 		case strings.HasPrefix(path, "/api/v1/membership-plans"):
 			disabled = !capabilities.Memberships
+		case isSchedulingPath(path):
+			disabled = !capabilities.Scheduling
 		}
 		if disabled {
 			apiresponse.AbortError(c, http.StatusNotFound, "capability_disabled", "capability disabled")
@@ -114,4 +117,9 @@ func isContractPath(path string) bool {
 		}
 	}
 	return false
+}
+
+func isSchedulingPath(path string) bool {
+	parts := strings.Split(strings.TrimPrefix(path, "/api/v1/units/"), "/")
+	return len(parts) >= 2 && parts[0] != "" && parts[1] == "scheduling"
 }

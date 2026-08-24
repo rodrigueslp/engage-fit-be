@@ -1,6 +1,6 @@
 # SPEC-006/A — Fundação de profissionais da agenda
 
-- Status: `ready`
+- Status: `validated`
 - Versão: `1.0`
 - Data: 2026-08-24
 - Depende de: `ARCH-001`, `SPEC-006`

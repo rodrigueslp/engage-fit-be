@@ -787,3 +787,57 @@ type LLMGenerationLogModel struct {
 	ErrorMessage  string
 	CreatedAt     time.Time
 }
+
+type SchedulingProfessionalModel struct {
+	ID               string `gorm:"primaryKey"`
+	OrganizationID   string `gorm:"index"`
+	DisplayName      string
+	DisplayNameKey   string
+	LinkedUserID     *string `gorm:"index"`
+	Status           string
+	Revision         int
+	AnonymizedAt     *time.Time
+	CreatedByUserID  string
+	UpdatedByUserID  string
+	ArchivedAt       *time.Time
+	ArchivedByUserID *string
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+}
+
+type SchedulingProfessionalUnitModel struct {
+	OrganizationID string
+	UnitID         string `gorm:"primaryKey"`
+	ProfessionalID string `gorm:"primaryKey"`
+	Active         bool
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+}
+
+type SchedulingCommandRequestModel struct {
+	ID                 string `gorm:"primaryKey"`
+	OrganizationID     string
+	UnitID             string
+	Command            string
+	IdempotencyKey     string
+	RequestFingerprint string
+	ProfessionalID     string
+	ResponseData       []byte `gorm:"type:jsonb"`
+	CreatedAt          time.Time
+}
+
+type SchedulingAuditEventModel struct {
+	ID             string `gorm:"primaryKey"`
+	OrganizationID string
+	UnitID         string
+	ActorUserID    string
+	Action         string
+	EntityType     string
+	EntityID       string
+	Revision       int
+	ChangedFields  []byte `gorm:"type:jsonb"`
+	BeforeData     []byte `gorm:"type:jsonb"`
+	AfterData      []byte `gorm:"type:jsonb"`
+	Reason         *string
+	CreatedAt      time.Time
+}

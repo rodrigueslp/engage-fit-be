@@ -31,6 +31,7 @@ import (
 	"boxengage/backend/internal/app/reports"
 	"boxengage/backend/internal/app/retention"
 	"boxengage/backend/internal/app/rewards"
+	schedulingapp "boxengage/backend/internal/app/scheduling"
 	"boxengage/backend/internal/app/students"
 	"boxengage/backend/internal/app/team"
 	"boxengage/backend/internal/app/whatsapp"
@@ -58,6 +59,7 @@ type RouterDependencies struct {
 	MembershipService         *memberships.Service
 	EnrollmentService         *memberships.EnrollmentService
 	ContractService           *contracts.Service
+	SchedulingService         *schedulingapp.Service
 
 	ListStudentsUseCase            students.ListStudentsUseCase
 	GetStudentUseCase              students.GetStudentUseCase
@@ -407,6 +409,20 @@ func NewRouter(deps RouterDependencies) *gin.Engine {
 		ownerContracts.POST("/units/:unit_id/contracts/:contract_id/issue", contractHandler.IssueInstance)
 		ownerContracts.POST("/units/:unit_id/contracts/:contract_id/discard", contractHandler.DiscardInstance)
 		ownerContracts.POST("/units/:unit_id/contracts/:contract_id/acceptance-sessions", contractHandler.CreateAcceptanceSession)
+	}
+
+	if deps.SchedulingService != nil {
+		schedulingHandler := handlers.NewSchedulingHandler(deps.SchedulingService)
+		protected.GET("/units/:unit_id/scheduling/professionals", schedulingHandler.List)
+		ownerScheduling := protected.Group("")
+		ownerScheduling.Use(middleware.Owner())
+		ownerScheduling.GET("/units/:unit_id/scheduling/professional-account-candidates", schedulingHandler.ListCandidates)
+		ownerScheduling.POST("/units/:unit_id/scheduling/professionals", schedulingHandler.Create)
+		ownerScheduling.PATCH("/units/:unit_id/scheduling/professionals/:professional_id", schedulingHandler.Update)
+		ownerScheduling.POST("/units/:unit_id/scheduling/professionals/:professional_id/archive", schedulingHandler.Archive)
+		ownerScheduling.POST("/units/:unit_id/scheduling/professionals/:professional_id/reactivate", schedulingHandler.Reactivate)
+		ownerScheduling.GET("/units/:unit_id/scheduling/professionals/:professional_id/privacy-export", schedulingHandler.PrivacyExport)
+		ownerScheduling.POST("/units/:unit_id/scheduling/professionals/:professional_id/anonymize", schedulingHandler.Anonymize)
 	}
 
 	dashboardHandler := handlers.NewDashboardHandler(deps.DashboardSummaryUseCase, deps.DashboardActiveCampaignsUseCase, deps.DashboardNearGoalUseCase, deps.DashboardAtRiskUseCase, deps.ListPendingRewardDeliveriesUseCase)

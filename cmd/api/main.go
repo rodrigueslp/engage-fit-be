@@ -45,6 +45,7 @@ import (
 	reportsapp "boxengage/backend/internal/app/reports"
 	"boxengage/backend/internal/app/retention"
 	"boxengage/backend/internal/app/rewards"
+	schedulingapp "boxengage/backend/internal/app/scheduling"
 	"boxengage/backend/internal/app/students"
 	"boxengage/backend/internal/app/team"
 	whatsappapp "boxengage/backend/internal/app/whatsapp"
@@ -218,6 +219,9 @@ func main() {
 		transactionManager,
 		contractsapp.WithSessionTTL(time.Duration(cfg.ContractAcceptanceSessionTTLMinutes)*time.Minute),
 	)
+	schedulingRepository := pgrepo.NewSchedulingGormRepository(db)
+	schedulingAccessAdapter := pgrepo.NewSchedulingAccessGormAdapter(db)
+	schedulingService := schedulingapp.NewService(schedulingRepository, schedulingAccessAdapter, schedulingAccessAdapter, transactionManager)
 	teamService := team.NewService(userRepository, teamRepository, passwordService)
 	var peopleService *people.Service
 	if cfg.FeaturePeopleFoundationEnabled {
@@ -351,6 +355,7 @@ func main() {
 		MembershipService:         membershipService,
 		EnrollmentService:         enrollmentService,
 		ContractService:           contractService,
+		SchedulingService:         schedulingService,
 
 		ListStudentsUseCase:            listStudentsUseCase,
 		GetStudentUseCase:              getStudentUseCase,
@@ -487,6 +492,7 @@ func main() {
 			Enrollments:                 cfg.FeatureEnrollmentsEnabled,
 			Contracts:                   cfg.FeatureContractsEnabled,
 			ContractAcceptanceSimulator: cfg.ContractAcceptanceSimulatorEnabled,
+			Scheduling:                  cfg.FeatureSchedulingEnabled,
 		},
 		BillingService: billingService,
 		AthleteService: athleteService,
