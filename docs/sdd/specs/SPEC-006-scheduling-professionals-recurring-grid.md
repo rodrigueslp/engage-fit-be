@@ -1,7 +1,7 @@
 # SPEC-006 — Agenda, profissionais e grade recorrente
 
-- Status: `draft`
-- Versão: `0.1`
+- Status: `reviewed`
+- Versão: `0.2`
 - Data: 2026-08-24
 - Depende de: `ARCH-001`, `SPEC-001/B-D`, `SPEC-003/A-B-C`
 - Bloqueia: `SPEC-003/D`, `SPEC-007`, `SPEC-008`, partes de `SPEC-009`,
@@ -13,16 +13,19 @@
 - Repositórios futuros envolvidos: `engage-fit-be` e `engage-fit-fe`
 - Migration: número não definido; será reservado pelo integrador
 
-Esta é uma spec-guia detalhada, ainda sem autorização de implementação. Cada
-slice da seção 18 precisa de spec executável própria, revisão de integração e
-estado `ready` antes de criar migration ou contrato público definitivo.
+Esta é uma spec-guia revisada e não autoriza implementar a iniciativa inteira.
+Cada slice da seção 18 precisa de spec executável própria e estado `ready`
+antes de criar migration ou contrato público definitivo. A
+[`SPEC-006/A`](SPEC-006-A-scheduling-professionals.md) é a única slice pronta
+para execução; B, C e D permanecem sem autorização.
 
 ## 1. Objetivo e resultado esperado
 
 O owner configura, pelo celular, os profissionais da unidade e uma grade
 recorrente de aulas ou atendimentos. Cada item da grade escolhe exatamente uma
-modalidade ou um serviço já existente, um espaço, um profissional responsável,
-horário, duração, capacidade e modo de atendimento `group` ou `individual`.
+modalidade ou um serviço já existente, um profissional responsável, horário,
+duração, capacidade, modo de atendimento `group` ou `individual` e, quando
+aplicável, um espaço.
 
 Ao publicar a grade, o sistema cria sessões concretas, com data e intervalo de
 tempo inequívocos. O owner vê e altera a agenda; o coach possui uma leitura
@@ -82,13 +85,16 @@ Isso impediria alterações auditáveis, criaria conflitos de tenancy e obrigari
   começa.
 - **Inferência EngageFit:** recorrência inicial é semanal e estruturada, sem
   aceitar RRULE livre. Exceções representam alterações e datas especiais.
-- **Inferência EngageFit:** publicar materializa uma janela futura limitada e
-  um materializador idempotente a estende diariamente.
+- **Inferência EngageFit:** espaço é opcional. Quando informado, é recurso
+  exclusivo sujeito a conflito; quando ausente, a sessão não disputa espaço.
+- **Inferência EngageFit:** publicar materializa 56 dias, incluindo o dia
+  local da publicação, e um materializador idempotente mantém diariamente a
+  mesma borda móvel.
 - **Inferência EngageFit:** arquivar ou renomear referência do catálogo não
   reescreve sessão já publicada; cada sessão mantém nomes de exibição em
   snapshot.
-- **Validação futura:** terminologia, horizonte, feriados, conflito e regras de
-  visibilidade ainda precisam ser validados com o Alados na seção 17.
+- **Validação futura:** o uso real deve medir terminologia, antecedência da
+  grade e demanda por padrões adicionais, sem bloquear a primeira slice.
 
 ### 2.3 Fontes
 
@@ -108,8 +114,8 @@ nova do EngageFit e não copia fluxos ou modelos de concorrentes.
   segura por owner/coach;
 - grade semanal recorrente, intervalo de vigência e preview de ocorrências;
 - exatamente um alvo por série/sessão: `modality` ou `service_offering`;
-- espaço, unidade, horário local, timezone, duração, capacidade e profissional
-  responsável explícitos;
+- unidade, horário local, timezone, duração, capacidade e profissional
+  responsável explícitos, com espaço opcional;
 - atendimento `group` ou `individual`;
 - rascunho, publicação, alteração a partir de uma data e cancelamento da série;
 - sessões concretas materializadas, sessão extra e exceção de uma ocorrência;
@@ -155,9 +161,10 @@ nova do EngageFit e não copia fluxos ou modelos de concorrentes.
 - **Conta vinculada:** referência opcional a um usuário operacional existente.
   Não é fonte de nome, permissão ou tenancy da sessão.
 - **Série (`ScheduleSeries`):** regra semanal que produz ocorrências.
-- **Grade:** conjunto das séries publicadas de uma unidade.
+- **Grade:** configuração recorrente de horários de uma unidade, formada por
+  séries em rascunho, publicadas ou canceladas.
 - **Sessão (`ScheduleSession`):** ocorrência concreta, com ID, data, começo,
-  fim, capacidade, alvo, espaço e profissional próprios.
+  fim, capacidade, alvo, espaço opcional e profissional próprios.
 - **Sessão extra:** sessão concreta criada sem série para uma data específica.
 - **Exceção:** mudança ou cancelamento manual de uma ocorrência gerada.
 - **Capacidade:** limite configurado de participantes; não significa vagas
@@ -169,9 +176,13 @@ nova do EngageFit e não copia fluxos ou modelos de concorrentes.
 - **Estado efetivo:** `upcoming`, `in_progress` ou `past`, calculado pelo
   relógio a partir de uma sessão `scheduled`.
 
-Na UI, usar `Agenda`, `Grade`, `Profissionais`, `Aula` para modalidade e
-`Atendimento` para serviço quando o contexto permitir. A API usa `series` e
-`sessions` para manter contrato neutro.
+Na UI, `Agenda` é a visão das ocorrências concretas, `Grade` é a configuração
+recorrente e `Profissionais` é o cadastro operacional. Uma sessão de modalidade
+é exibida como `Aula`; uma sessão de serviço, como `Atendimento`. `Sessão` é o
+termo neutro para uma ocorrência concreta em confirmações e histórico. `Turma`
+não é entidade nem termo primário da primeira versão: atendimento em grupo é
+apenas `delivery_mode=group`. A API usa `series` e `sessions` para manter o
+contrato neutro.
 
 ## 5. Ownership e modelo de domínio
 
@@ -241,9 +252,9 @@ publicada. Leitores futuros nunca recalculam uma sessão a partir da série.
 4. Nesta fase, `unit_id` da rota deve ser igual a `users.box_id`. A evolução
    multiunidade depende de `SPEC-001/C` e allowlist explícita.
 5. Profissional precisa estar ativo na mesma unidade da série/sessão.
-6. Modalidade/serviço e espaço precisam ser resolvidos como ativos e
-   habilitados na unidade ao criar rascunho, publicar, criar sessão extra ou
-   alterar um campo que os referencie.
+6. Modalidade/serviço e, quando informado, espaço precisam ser resolvidos como
+   ativos e habilitados na unidade ao criar rascunho, publicar, criar sessão
+   extra ou alterar um campo que os referencie.
 7. Uma mudança posterior no catálogo não apaga nem reescreve sessões
    publicadas. Novos comandos exibem alerta e exigem referências válidas.
 8. Não existem joins de persistência entre tabelas de `scheduling` e tabelas
@@ -253,7 +264,8 @@ publicada. Leitores futuros nunca recalculam uma sessão a partir da série.
 
 1. Cada série/sessão referencia exatamente um `target_kind` entre `modality`
    e `service_offering`, mais um único `target_id`.
-2. `space_id`, `professional_id` e `target_id` nunca são intercambiáveis.
+2. `space_id`, `professional_id` e `target_id` nunca são intercambiáveis;
+   `space_id` pode ser nulo, os demais são obrigatórios em sessão publicada.
 3. `delivery_mode` descreve a sessão; recorrência/cobrança de plano é outro
    conceito.
 4. `booking_required` pertence ao direito de `memberships`, não à sessão.
@@ -272,22 +284,23 @@ publicada. Leitores futuros nunca recalculam uma sessão a partir da série.
    interseção positiva é conflito.
 5. Um profissional não pode ter duas sessões `scheduled` sobrepostas na mesma
    organização, inclusive em unidades diferentes.
-6. Um espaço não pode ter duas sessões `scheduled` sobrepostas na mesma
-   unidade.
+6. Quando `space_id` estiver definido, o espaço não pode ter duas sessões
+   `scheduled` sobrepostas na mesma unidade. Sessão sem espaço não adquire lock,
+   não usa valor sentinela e não participa de conflito espacial.
 7. Sessões canceladas não participam de conflito.
 8. Não existe override de conflito nesta versão. A transação inteira falha com
    detalhes seguros dos recursos e ocorrências em conflito.
 9. Preview e publicação aplicam o mesmo algoritmo; a publicação revalida sob
    locks e não confia no preview anterior.
 10. Mutações adquirem advisory locks transacionais em ordem canônica para cada
-    profissional e espaço envolvidos e reconsultam sobreposição antes do
-    commit. Teste PostgreSQL concorrente é obrigatório.
+    profissional e, quando houver, espaço envolvidos e reconsultam
+    sobreposição antes do commit. Teste PostgreSQL concorrente é obrigatório.
 
 ### 6.4 Capacidade e modo de atendimento
 
 1. Toda série e sessão possui capacidade explícita de 1 a 10.000.
-2. O valor padrão do espaço apenas preenche o formulário; não é lido em tempo
-   real depois da publicação.
+2. Quando houver espaço, seu valor padrão apenas preenche o formulário; não é
+   lido em tempo real depois da publicação.
 3. `individual` exige capacidade exatamente 1.
 4. `group` aceita capacidade de 1 a 10.000.
 5. Reduzir capacidade futura não cancela nem mede reservas nesta spec. Quando
@@ -322,10 +335,12 @@ publicada. Leitores futuros nunca recalculam uma sessão a partir da série.
 4. Para ocorrência da série, a chave natural é
    `(series_id, occurrence_on)`, onde `occurrence_on` é a data original da
    regra, mesmo se a sessão for reagendada.
-5. O materializador cria somente ocorrências até o horizonte configurado e
-   nunca gera data anterior ao dia local da publicação.
-6. Execução diária estende o horizonte. Repetição, múltiplas réplicas e retry
-   não duplicam sessão por unique key, claim de run e lock por série.
+5. O materializador cria somente ocorrências do dia local da publicação até o
+   55º dia seguinte, totalizando uma janela inclusiva de 56 dias, e nunca gera
+   data anterior ao dia local da publicação.
+6. Execução diária estende a borda até `hoje local + 55 dias`. Repetição,
+   múltiplas réplicas e retry não duplicam sessão por unique key, claim de run
+   e lock por série.
 7. Sessão marcada como exceção manual ou cancelada nunca é sobrescrita pelo
    materializador.
 8. Alteração de série aplica somente a sessões futuras, não canceladas e sem
@@ -340,8 +355,8 @@ publicada. Leitores futuros nunca recalculam uma sessão a partir da série.
 ### 6.7 Exceções, alteração e cancelamento
 
 1. Owner pode criar sessão extra ou alterar uma sessão futura. A alteração
-   pode trocar horário, duração, alvo, espaço, profissional, capacidade e
-   modo, sempre revalidando todos os invariantes.
+   pode trocar horário, duração, alvo, adicionar/remover espaço, profissional,
+   capacidade e modo, sempre revalidando todos os invariantes.
 2. Uma sessão alterada mantém ID, `occurrence_on`, origem e histórico; recebe
    `manual_override=true` e incrementa revisão.
 3. Sessão iniciada ou passada é imutável por estas rotas.
@@ -374,7 +389,7 @@ para as ocorrências que precisam de reassociação.
 
 1. Owner abre `Agenda > Grade` e toca em `Novo horário recorrente`.
 2. Escolhe `Aula`/modalidade ou `Atendimento`/serviço e o item do catálogo.
-3. Escolhe espaço e profissional responsável.
+3. Escolhe o profissional responsável e, quando aplicável, um espaço.
 4. Define `Em grupo` ou `Individual`, capacidade e duração.
 5. Seleciona dias da semana, horário, início e fim opcional.
 6. A tela mostra as próximas ocorrências e conflitos usando a mesma regra do
@@ -386,8 +401,8 @@ para as ocorrências que precisam de reassociação.
 ### 7.3 Consultar agenda
 
 - mobile abre em `Hoje`, com troca curta de dia e opção `Semana`;
-- card mostra hora, duração, modalidade/serviço, `Grupo`/`Individual`, espaço,
-  capacidade total, profissional e estado;
+- card mostra hora, duração, modalidade/serviço, `Grupo`/`Individual`, espaço
+  quando houver, capacidade total, profissional e estado;
 - owner vê ações; coach recebe somente leitura;
 - filtro `Minha agenda` aparece apenas quando a conta do coach está ligada a
   um profissional;
@@ -430,7 +445,8 @@ sem revelar dados de outro tenant.
 - alvos de toque mínimos de 44 px;
 - campos de hora/data usam teclado e controles nativos adequados;
 - seleção de alvo distingue visualmente `Modalidade` e `Serviço`;
-- capacidade padrão aparece como sugestão editável, nunca valor escondido;
+- capacidade padrão aparece como sugestão editável quando um espaço é
+  escolhido, nunca como valor escondido;
 - revisão precede publicação e alterações em lote;
 - loading, vazio, conflito, erro, retry, sucesso e capability desligada possuem
   estados explícitos;
@@ -496,7 +512,7 @@ Campos mínimos:
 - `status`: `draft|published|cancelled`;
 - `target_kind`: `modality|service_offering`;
 - `target_id` e `target_name_snapshot`;
-- `space_id` e `space_name_snapshot`;
+- `space_id` e `space_name_snapshot` nullable e preenchidos em conjunto;
 - `professional_id` e `professional_name_snapshot`;
 - `delivery_mode`: `group|individual`;
 - `capacity`, `duration_minutes`;
@@ -527,7 +543,8 @@ Campos mínimos:
 - `series_id` nullable; `origin=series|extra`;
 - `occurrence_on` nullable e obrigatório quando `origin=series`;
 - `status=scheduled|cancelled`;
-- target, espaço, profissional, modo e snapshots equivalentes aos da série;
+- target, espaço opcional, profissional, modo e snapshots equivalentes aos da
+  série;
 - `capacity`, `starts_at`, `ends_at`, `local_date`, `local_start_time`,
   `timezone`;
 - `source_series_revision` nullable;
@@ -541,7 +558,8 @@ Constraints/índices:
 - target tipado e snapshots obrigatórios;
 - `ends_at > starts_at`, capacidade e `individual=1`;
 - índices `(unit_id, starts_at)`, `(professional_id, starts_at)` e
-  `(unit_id, space_id, starts_at)` filtrados/adequados a `scheduled`;
+  `(unit_id, space_id, starts_at)` filtrados/adequados a `scheduled`; o último
+  ignora `space_id IS NULL`;
 - FKs compostas internas impedem profissional/série de outro tenant;
 - nenhuma FK, join ou trigger aponta para tabela de catálogo, memberships,
   people ou contracts.
@@ -602,12 +620,17 @@ reservations/attendance nesta spec.
 
 ### 10.1 Horizonte
 
-Proposta inicial: materializar 56 dias futuros, configurável entre 28 e 180
-dias. O valor final depende da validação da seção 17; não é contrato pronto.
+O contrato inicial materializa uma janela inclusiva de 56 dias: do dia local
+da publicação até `+55 dias`. O valor não é configurável por unidade na
+primeira versão. O limite evita criar anos de sessões de uma série sem fim e
+mantém alterações em lote pequenas. A série continua sendo a regra futura; a
+sessão é a fonte de verdade dentro da janela publicada.
 
-O limite evita criar anos de sessões de uma série sem fim e mantém alterações
-em lote pequenas. A série continua sendo a regra futura; a sessão é a fonte de
-verdade dentro da janela publicada.
+Uma execução diária idempotente mantém essa borda móvel. Falhas por série são
+isoladas, entram em estado operacional `Precisa de atenção` e são repetidas em
+execuções posteriores sem sobrescrever cancelamentos ou overrides. Configurar
+outro horizonte, sob o limite técnico futuro de 28 a 180 dias, exige revisão
+de produto e operação; não é um parâmetro exposto nesta entrega.
 
 ### 10.2 Publicação síncrona
 
@@ -617,7 +640,7 @@ Em uma única transação:
 2. resolver referências por ports e congelar snapshots;
 3. expandir datas locais até o horizonte;
 4. converter para instantes com timezone e rejeitar horário ambíguo/inexistente;
-5. adquirir locks canônicos de profissionais/espaços;
+5. adquirir locks canônicos de profissionais e dos espaços informados;
 6. validar conflitos contra banco e dentro do lote;
 7. publicar série e inserir sessões por natural key;
 8. gravar auditoria, eventos e command request;
@@ -681,10 +704,10 @@ ResolveSchedulingReferences(
   organization_id,
   unit_id,
   target { kind: modality|service_offering, id },
-  space_id
+  space_id?
 ) -> {
   target_id, target_kind, target_name, target_status, target_enabled_in_unit,
-  space_id, space_name, space_status, default_capacity?
+  space_id?, space_name?, space_status?, default_capacity?
 }
 ```
 
@@ -732,7 +755,7 @@ ListPublishedSessions(organization_id, unit_id, from, to, filters)
 
 - `session_id`, `revision`, `organization_id`, `unit_id`;
 - `target_kind`, `target_id`, `target_name`;
-- `space_id`, `space_name`;
+- `space_id`, `space_name`, ambos opcionais e preenchidos em conjunto;
 - `professional_id`, `professional_name`;
 - `starts_at`, `ends_at`, `timezone`, dados locais;
 - `delivery_mode`, `capacity`, `status`, `origin`.
@@ -819,7 +842,7 @@ Payload de recorrência usa IDs, nunca nomes livres como referência:
 ```json
 {
   "target": { "kind": "modality", "id": "uuid" },
-  "space_id": "uuid",
+  "space_id": null,
   "professional_id": "uuid",
   "delivery_mode": "group",
   "capacity": 20,
@@ -863,7 +886,7 @@ financeiro.
 | 409 | `scheduling_downstream_impact` | consumer futuro bloqueia alteração |
 | 422 | `scheduling_input_invalid` | combinação de recorrência/capacidade/duração inválida |
 | 422 | `scheduling_target_unavailable` | modalidade/serviço inválido ou inativo |
-| 422 | `scheduling_space_unavailable` | espaço inválido ou inativo |
+| 422 | `scheduling_space_unavailable` | espaço informado é inválido ou inativo |
 | 422 | `scheduling_professional_unavailable` | profissional arquivado/não vinculado à unidade |
 | 422 | `invalid_local_time` | horário local inexistente ou ambíguo |
 | 422 | `scheduling_range_too_large` | preview/listagem/comando excede limite |
@@ -889,14 +912,20 @@ necessários para correção, sem SQL, constraint, PII ou dados de outro tenant.
 - o único dado pessoal novo obrigatório é `professional.display_name`;
 - não armazenar telefone, e-mail, CPF, endereço, salário, comissão, laudo,
   especialidade clínica ou observação médica;
-- snapshots de nome permitem agenda histórica, mas devem participar de export
-  e eventual anonimização do profissional;
-- anonimização futura exige primeiro não haver atribuição futura: o comando
-  desvincula conta e troca nome/snapshots históricos por valor neutro, sem
-  apagar horário/auditoria;
+- nome e vínculo de conta participam da exportação do profissional;
+- arquivamento não anonimiza. O nome operacional permanece enquanto necessário
+  à execução e auditoria da agenda, sem prazo automático inventado nesta spec;
+- anonimização explícita exige profissional arquivado, conta desvinculada e
+  ausência de atribuição futura. O comando troca o nome do cadastro e todos os
+  snapshots de sessões por `Profissional anonimizado`, preservando IDs,
+  horários, estados e auditoria sem o nome anterior;
+- auditoria e eventos públicos não armazenam nome do profissional; por isso a
+  anonimização não depende de apagar eventos imutáveis;
 - auditoria pública por sessão usa IDs e não repete nome;
-- retenção específica do nome histórico precisa de validação jurídica/produto
-  antes de `ready`; não inferir a política de `people` ou de contratos;
+- prazo de eliminação automática e eventual obrigação legal de conservar o
+  nome precisam de validação jurídica antes de automatizar retenção. Essa
+  validação não bloqueia a slice A porque exportação, arquivamento e
+  anonimização explícita possuem comportamento fechado;
 - não incluir agenda de profissional no privacy export de aluno apenas porque
   ele futuramente reservou uma sessão. Cada módulo exporta sua parte via port.
 
@@ -1006,7 +1035,8 @@ Adicionar `FEATURE_SCHEDULING_ENABLED`, exposta como `scheduling`:
 - owner cadastra profissional com apenas nome em `360x800`;
 - profissional pode existir sem conta e pode ser ligado a owner/coach elegível
   sem ganhar permissão;
-- owner cria série semanal usando modalidade ou serviço e espaço já existentes;
+- owner cria série semanal usando modalidade ou serviço, profissional e espaço
+  opcional já existentes;
 - atendimento individual força capacidade 1; grupo aceita capacidade
   explícita;
 - preview mostra próximas datas, timezone e conflitos;
@@ -1052,54 +1082,138 @@ Comandos futuros seguem o baseline dos repositórios e incluem PostgreSQL real,
 race detector no ambiente suportado, migrations em banco vazio/upgrade,
 TypeScript, build e Playwright focado/completo.
 
-## 17. Decisões abertas para validar com o Alados
+## 17. Decisões fechadas na revisão de produto e arquitetura
 
-As propostas abaixo mantêm a direção técnica, mas impedem a spec-guia de virar
-`ready` sem revisão:
+As decisões abaixo usam defaults conservadores. Nenhuma depende de mudança da
+`SPEC-004/A` ou altera contratos compartilhados de `memberships`, `catalog` ou
+`people`. As validações futuras medem aderência e podem originar nova versão;
+não bloqueiam a `SPEC-006/A`.
 
-| Decisão | Proposta inicial | Impacta |
-|---|---|---|
-| termo na operação | `Agenda`, `Grade`, `Aula` e `Atendimento` | UX de todas as slices |
-| profissional sem conta | permitido; somente nome | slice A |
-| vínculo de conta | uma conta por profissional/organização; owner ou coach | slice A |
-| visibilidade do coach | ler toda agenda da unidade + filtro `Minha agenda` | slices A/B |
-| espaço obrigatório | sim, inclusive atendimento individual | slice B |
-| responsável | exatamente um profissional | slice B |
-| individual | capacidade obrigatória 1 | slice B |
-| recorrência | semanal; dois horários exigem duas séries | slice B |
-| horizonte | 56 dias, configurável 28–180 | slices B/C e operação |
-| série sem fim | permitida com materialização limitada | slice B |
-| duração máxima | até 24h sem cruzar mais de um dia local | slice B |
-| conflito | bloqueio absoluto, sem override | slices B/C |
-| feriado | nenhuma regra automática; owner cria exceção/cancelamento | slice C |
-| cancelamento | final; reposição cria sessão extra | slice C |
-| alteração em lote | preserva overrides e muda só ocorrências futuras | slice C |
-| catálogo arquivado | sessões existentes continuam pelo snapshot; novos comandos bloqueiam | slices B/C |
-| exibição ao aluno | adiada para SPEC-010 após reservations | contrato público |
-| retenção do nome profissional | definir prazo/base antes de anonimização definitiva | slice A/privacidade |
+### 17.1 Terminologia exibida
 
-Perguntas concretas para a validação:
+- **Decisão:** `Agenda` é a visão de ocorrências; `Grade`, a configuração
+  recorrente; `Profissionais`, o cadastro. Ocorrência de modalidade é `Aula` e
+  de serviço é `Atendimento`. `Sessão` é o termo neutro de confirmação,
+  histórico e API. `Turma` não é entidade na primeira versão.
+- **Justificativa:** preserva a distinção já consolidada entre modalidade e
+  serviço e evita criar uma entidade coletiva sem regra própria.
+- **Impacto:** textos, navegação, DTOs e eventos ficam previsíveis; modo
+  `group` não cria um novo agregado.
+- **Validação futura:** observar com o Alados se `Grade` e `Atendimento` são os
+  termos mais rápidos no uso diário e se `Turma` precisa virar conceito real.
 
-1. Pilates individual representa horários disponíveis de capacidade 1 ou
-   atendimentos já combinados fora do sistema?
-2. Recovery precisa aparecer como modalidade, serviço ou ambos conforme a
-   oferta, sem o sistema inferir a escolha?
-3. Existe aula sem espaço físico cadastrado ou com dois espaços simultâneos?
-4. Um horário precisa de dois coaches/assistentes no primeiro recorte?
-5. O coach pode ver toda a grade ou apenas sessões pelas quais é responsável?
-6. O Alados publica grade com quantas semanas de antecedência?
-7. Há recorrência quinzenal, mensal ou mudança sazonal indispensável?
-8. Em feriados, o padrão deve manter, cancelar ou pedir revisão da ocorrência?
-9. O owner precisa reverter cancelamento ou criar uma reposição atende melhor
-   a auditoria operacional?
-10. Quais motivos de cancelamento devem ser estruturados além do texto curto?
+### 17.2 Permissões do coach
+
+- **Decisão:** coach possui somente leitura da agenda publicada e dos nomes de
+  profissionais da unidade. Pode usar `Minha agenda` quando sua conta estiver
+  vinculada, mas não cria, edita, publica, cancela ou arquiva nada.
+- **Justificativa:** segue a autorização atual e evita que vínculo operacional
+  com profissional amplie papel ou tenancy.
+- **Impacto:** toda mutação permanece exclusiva do owner no backend; esconder
+  ação no frontend não é controle de segurança.
+- **Validação futura:** medir se surge uma operação limitada e bem delimitada,
+  como registrar indisponibilidade, antes de criar nova permissão.
+
+### 17.3 Espaço opcional
+
+- **Decisão:** espaço é opcional por série e sessão. Quando informado, precisa
+  estar ativo na unidade e o conflito espacial é bloqueado; quando ausente,
+  não existe reserva implícita de local nem conflito de espaço. Um único
+  espaço, no máximo, pode ser informado.
+- **Justificativa:** suporta atendimentos remotos, externos ou sem sala fixa
+  sem inventar um espaço `Sem local`.
+- **Impacto:** `space_id` e snapshot são nullable e preenchidos em conjunto;
+  locks e índices espaciais ignoram ausência. Profissional continua
+  obrigatório em sessão publicada.
+- **Validação futura:** medir quantas sessões ficam sem espaço e se dois
+  espaços por sessão aparecem como necessidade real.
+
+### 17.4 Horizonte e manutenção
+
+- **Decisão:** publicação cria uma janela inclusiva de 56 dias, de hoje local
+  até `+55 dias`. Um materializador diário idempotente mantém essa borda móvel,
+  processa cada série em transação própria e repete falhas sem sobrescrever
+  exceções ou cancelamentos.
+- **Justificativa:** oito semanas dão antecedência operacional sem criar anos
+  de ocorrências nem tornar alterações em lote excessivas.
+- **Impacto:** o valor não é configuração por unidade na primeira versão;
+  métricas de lag, runs e séries bloqueadas são obrigatórias. Publicação não
+  pode depender de um materializador permanentemente desligado.
+- **Validação futura:** comparar o horizonte com a antecedência real de
+  reservas e ajustar, em nova revisão, dentro do limite técnico de 28–180 dias.
+
+### 17.5 Feriados e datas excepcionais
+
+- **Decisão:** não há calendário externo nem regra automática de feriado. A
+  ocorrência semanal nasce normalmente e o owner a cancela explicitamente;
+  alterações específicas entram como exceção quando a slice D existir.
+- **Justificativa:** feriados, recessos e operação especial variam por unidade
+  e automatizar cancelamento silencioso produziria agenda incorreta.
+- **Impacto:** a slice C precisa oferecer cancelamento futuro mínimo e
+  auditável; integração com calendários fica fora.
+- **Validação futura:** verificar se volume de feriados justifica importação ou
+  revisão em lote, mantendo confirmação humana.
+
+### 17.6 Recorrência inicial
+
+- **Decisão:** somente semanal, `interval_weeks=1`, com um horário local e um
+  ou mais dias da semana. Dois horários usam duas séries; quinzenal, mensal,
+  sazonal e RRULE ficam fora.
+- **Justificativa:** cobre a grade regular com um modelo previsível para
+  preview, conflito, timezone e edição mobile.
+- **Impacto:** payload e schema não reservam campos genéricos sem semântica;
+  padrões adicionais exigem versão de contrato e migration aditiva.
+- **Validação futura:** registrar pedidos reais por quinzenalidade, sazonalidade
+  ou ciclos diferentes antes de priorizar expansão.
+
+### 17.7 Conflitos
+
+- **Decisão:** sobreposição de profissional e, quando definido, espaço é
+  bloqueio absoluto. Não existe override na primeira versão. Intervalos são
+  semiabertos, então horários adjacentes são permitidos.
+- **Justificativa:** sem disponibilidade trabalhista, múltiplos responsáveis
+  ou workflow de aprovação, override criaria ambiguidade não auditável.
+- **Impacto:** preview e commit usam o mesmo algoritmo; commit revalida sob
+  locks canônicos e retorna `scheduling_conflict` sem criar lote parcial.
+- **Validação futura:** coletar conflitos legítimos que não possam ser
+  modelados com profissional/espaço corretos antes de desenhar override.
+
+### 17.8 Cancelamento mínimo e reposição
+
+- **Decisão:** owner cancela sessão futura ou série a partir de uma data, com
+  motivo curto, revisão esperada, ator e horário. Cancelamento é final na
+  primeira versão e nunca cria reposição automática; uma reposição é uma
+  sessão extra com novo ID e vínculo causal fica para `reservations`.
+- **Justificativa:** preserva histórico e mantém agenda fora de crédito,
+  reserva, notificação e direito do aluno.
+- **Impacto:** não existe `DELETE` nem `uncancel`; sessões canceladas deixam de
+  conflitar. Efeitos sobre reservas, consumo e comunicação pertencem às specs
+  `007`, `008` e `014`.
+- **Validação futura:** definir motivos estruturados, eventual reversão e
+  vínculo de reposição quando reservas forem especificadas.
+
+### 17.9 Retenção e anonimização do nome profissional
+
+- **Decisão:** nome é dado operacional minimizado. Arquivamento preserva o
+  nome; anonimização explícita exige conta desvinculada e nenhuma atribuição
+  futura, substitui cadastro e snapshots históricos por `Profissional
+  anonimizado` e preserva IDs/horários/auditoria sem o nome anterior. Não há
+  expurgo automático por prazo na primeira versão.
+- **Justificativa:** mantém agenda auditável sem conservar indefinidamente a
+  identificação quando houver pedido válido. Auditoria/eventos não repetem o
+  nome e logs nunca o registram.
+- **Impacto:** exportação e anonimização entram desde a slice A; slices futuras
+  devem implementar a propagação transacional aos snapshots. `people` não é
+  consultado nem recebe essa identidade por nome.
+- **Validação futura:** revisão jurídica define base e prazo de retenção
+  automática antes de habilitar qualquer job de eliminação.
 
 ## 18. Fatiamento recomendado
 
-As slices são sequenciais e verticais. Nenhuma está autorizada enquanto não
-existir seu documento executável `ready`.
+As slices são sequenciais e verticais. Somente a slice A possui documento
+executável `ready`; B, C e D continuam sem autorização.
 
-### `SPEC-006/A` — Fundação de profissionais
+### [`SPEC-006/A` — Fundação de profissionais](SPEC-006-A-scheduling-professionals.md)
 
 Entrega:
 
@@ -1109,14 +1223,16 @@ Entrega:
 - leitura mínima por coach e filtro futuro `mine` preparado;
 - nenhuma série ou sessão.
 
-Gate para `ready`: decisões de nome, conta, visibilidade e retenção aceitas;
-contrato de access revisado; nenhum campo clínico/comissão.
+Estado: `ready`. Decisões de nome, conta, visibilidade e anonimização foram
+fechadas; o contrato estreito de access está definido na slice; nenhum campo
+clínico ou de comissão entra no modelo.
 
 ### `SPEC-006/B` — Grade recorrente em rascunho e preview
 
 Entrega:
 
-- série semanal, dias, horário, duração, capacidade, alvo, espaço e responsável;
+- série semanal, dias, horário, duração, capacidade, alvo, espaço opcional e
+  responsável obrigatório;
 - resolução por port de catalog, rascunho e preview determinístico;
 - conflito contra agenda publicada existente;
 - UI `Grade`, revisão e estados mobile;
@@ -1204,7 +1320,7 @@ O agente executor deve:
 
 O agente executor não deve:
 
-- implementar diretamente a partir desta spec-guia em `draft`;
+- implementar diretamente a partir desta spec-guia `reviewed`;
 - escolher ou reservar número de migration;
 - consultar tabelas/repositories/models GORM de `catalog`, `memberships`,
   `people` ou `contracts`;
@@ -1221,14 +1337,11 @@ O agente executor não deve:
   destrutivos ou tocar produção;
 - fazer push, merge, deploy ou habilitar feature flag.
 
-## 21. Gates para promover a spec
+## 21. Gates de execução
 
-Antes de `reviewed`:
-
-- decisões da seção 17 discutidas com o Alados;
-- revisão de arquitetura dos ports e do ownership de eventos;
-- revisão de privacy para nome/snapshot do profissional;
-- confirmação de que `SPEC-004/A` não introduziu dependência relevante.
+A revisão de produto e arquitetura desta spec-guia foi concluída com defaults
+conservadores. A `SPEC-004/A` segue independente e nenhuma mudança ainda não
+aprovada nela foi usada como premissa.
 
 Antes de qualquer slice `ready`:
 
@@ -1239,5 +1352,7 @@ Antes de qualquer slice `ready`:
 - contrato público revisado pelos donos dos módulos consumidores;
 - prompt do executor restringindo explicitamente as demais slices.
 
-Esta versão permanece `draft` até revisão de integração; criar o arquivo não
-autoriza implementação, migration, push, deploy ou feature flag.
+O estado `reviewed` desta guia não autoriza implementar B, C ou D. Somente o
+documento próprio em `ready` autoriza uma slice; hoje isso se limita à
+`SPEC-006/A`. Nenhum documento autoriza push, deploy, migration de produção ou
+habilitação de feature flag.

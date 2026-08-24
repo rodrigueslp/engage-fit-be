@@ -42,7 +42,8 @@ pessoas, planos e matrículas compostas estão concluídas. `001-C`, `002/B-C` e
 | `SPEC-004/C` PAR-Q e formulários sensíveis | `002`, `003` | módulo `healthforms`, permissões, consentimento e retenção próprios |
 | `SPEC-004/D` Ciclo jurídico posterior | `004/A-B`, contrato interno de `005` | aditivos, renovação, pausa/trancamento e cancelamento jurídico |
 | `SPEC-005` Financeiro do aluno | `002`, `003`, contrato interno de `004/A` | cobrança, recorrência, Pix, boleto, cartão e conciliação |
-| [`SPEC-006` Agenda, profissionais e grade recorrente](specs/SPEC-006-scheduling-professionals-recurring-grid.md) — `draft` | `001/B-D`, contratos públicos de `003` | profissionais, grade recorrente, capacidade e sessões de aula/serviço |
+| [`SPEC-006` Agenda, profissionais e grade recorrente](specs/SPEC-006-scheduling-professionals-recurring-grid.md) — `reviewed` | `001/B-D`, contratos públicos de `003` | iniciativa revisada de profissionais, grade recorrente, capacidade e sessões de aula/serviço |
+| [`SPEC-006/A` Fundação de profissionais](specs/SPEC-006-A-scheduling-professionals.md) — `ready` | `ARCH-001`, `SPEC-006` | cadastro operacional, conta opcional, leitura do coach e privacidade |
 
 `SPEC-004/A` está `ready` para implementação local da fundação, com
 simulador sem rede e somente dados sintéticos. A revisão aprovou nome como
@@ -58,11 +59,12 @@ jurídicas e financeiras posteriores.
 Depois que os contratos compartilhados de `004/A`, `005` e `006` estiverem
 aceitos, agentes podem implementar slices com ownership separado.
 
-`SPEC-006` foi detalhada inicialmente em `draft` e propõe quatro slices
-sequenciais: profissionais (`006/A`), grade e preview (`006/B`), publicação,
-materialização e cancelamento mínimo (`006/C`) e exceções/alterações (`006/D`). Nenhuma dessas
-slices está autorizada até possuir spec executável própria em `ready` e revisão
-de integração dos contratos com `memberships`, `reservations`, `attendance` e
+`SPEC-006` foi revisada com quatro slices sequenciais: profissionais (`006/A`),
+grade e preview (`006/B`), publicação, materialização e cancelamento mínimo
+(`006/C`) e exceções/alterações (`006/D`). Somente `006/A` possui spec
+executável em `ready`; ela não depende de contratos, reservas ou presença.
+`006/B-D` continuam sem autorização até possuírem documento próprio e revisão
+dos contratos aplicáveis com `memberships`, `reservations`, `attendance` e
 `athlete`.
 
 `SPEC-004` é uma iniciativa de experiência, não autorização para misturar
