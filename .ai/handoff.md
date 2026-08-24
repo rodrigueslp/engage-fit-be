@@ -4,15 +4,56 @@ Manual canônico de arquitetura e negócio: `docs/system-design.md`.
 
 Guia operacional consolidado: `docs/application-readiness-guide.md`.
 
-Atualizado em: 2026-08-24 (SPEC-003/B homologada e commitada localmente; sem push/deploy)
+Atualizado em: 2026-08-24 (panorama SDD consolidado; SPEC-003/B homologada e commitada localmente; sem push/deploy)
 
 ## Checkpoint atual — SPEC-003/B homologada e commitada localmente (Adicionais versionados e composição comercial)
 
 Este checkpoint prevalece sobre todos os registros históricos abaixo.
 
 Commits locais:
-- Backend (`engage-fit-be`): `be69b27` (`feat(memberships): implement versioned addons and commercial composition (SPEC-003/B)`)
+- Backend (`engage-fit-be`): `297634e` (`feat(memberships): implement versioned addons and commercial composition (SPEC-003/B)`)
 - Frontend (`engage-fit-fe`): `4d2d9e1` (`feat(memberships): support plan addons and commercial enrollment composition (SPEC-003/B)`)
+
+### Panorama atual das especificações
+
+**Direção e arquitetura, revisadas:**
+
+- `REQ-001` consolida o primeiro núcleo operacional solicitado pelo Alados;
+- `ARCH-001` define o monólito modular, a separação entre organização/unidade,
+  pessoas, memberships, contracts, healthforms, memberbilling e scheduling.
+
+**Implementadas e validadas localmente:**
+
+- `SPEC-001/A-B-D`: fundação de organizações/unidades, modalidades, espaços e
+  serviços ofertáveis. A iniciativa `SPEC-001` continua `implementing` porque
+  a slice `001/C` (contexto multiunidade) permanece adiada;
+- `SPEC-002/A`: fundação de `Person`, endereço, vínculo por unidade e cadastro
+  manual compatível. A iniciativa `SPEC-002` continua `reviewed` porque as
+  slices de identidades externas e relacionamentos ainda não foram autorizadas;
+- `SPEC-003/A`: catálogo versionado de planos e direitos-base;
+- `SPEC-003/C`: matrícula operacional, vigência, encerramento e auditoria;
+- `SPEC-003/B`: adicionais versionados no plano e composição comercial
+  imutável na matrícula.
+
+**Planejadas, ainda sem spec executável:**
+
+- `SPEC-003/D`: decisão de acesso, contadores e transição do legado; depende
+  de definir agenda, reservas e a fonte de verdade do consumo;
+- `SPEC-004`: contratos, aceite e PAR-Q. Deve ser fatiada: contratos pertencem
+  a `contracts`; PAR-Q e demais dados sensíveis pertencem a `healthforms`;
+- `SPEC-005`: financeiro do aluno em `memberbilling`, separado do billing SaaS;
+- `SPEC-006`: agenda, profissionais, grade, capacidade e sessões;
+- `SPEC-007` a `SPEC-014`: reservas, presença, operação do dia, expansão do
+  app do aluno, migração, conectores, quiosque e comunicados, conforme o
+  catálogo SDD.
+
+**Ordem recomendada:** preparar somente a especificação `SPEC-004/A` para a
+fundação de contratos e emissão vinculada à matrícula. Ela deve preservar o
+snapshot de plano/adicionais e usar um port de aceite simulável, sem cobrança,
+assinatura externa, PAR-Q, pausa, cancelamento jurídico ou decisão de acesso.
+Depois de seus contratos internos estarem aceitos, o detalhamento de
+`SPEC-006` pode seguir em paralelo. Não iniciar `SPEC-003/D` antes de agenda e
+reservas resolverem a contagem/consumo.
 
 Entrega local:
 
@@ -54,6 +95,10 @@ Validação de engenharia executada e aprovada:
 - Produção permanece em `052`; sem push para `origin/main` e sem deploy de produção.
 
 Nota de ambiente: `go test -race` requer cgo e compilador gcc, ausente no container da CLI.
+
+Próxima ação: abrir um agente de especificação para `SPEC-004/A`, sem código
+de produto. Antes de qualquer publicação, continuar exigindo revisão explícita
+para push, deploy e migrations de produção.
 
 ## Checkpoint anterior — SPEC-003/C homologada localmente
 
@@ -2877,5 +2922,5 @@ WodScope. Antes de produção, implementar recuperação/verificação de conta.
 Mensagem sugerida:
 
 ```txt
-Leia integralmente `.ai/handoff.md`, começando pelo checkpoint atual do topo, e use `docs/system-design.md`, `docs/sdd/REQ-001-primeiro-passo-operacional.md`, `docs/sdd/ARCH-001-modular-foundation.md` e as SPECs como fontes canônicas. Estado local: SPEC-001/D, SPEC-002/A, SPEC-003/A, SPEC-003/C e SPEC-003/B estão integradas, commitadas e homologadas localmente; o banco local compartilhado está em `059`, mas produção continua em `052`. Não faça push dos `main`: Railway usa esses branches como source automático e o backend executa migrations no pre-deploy, portanto push implica deploy de produção. Preserve `.ai/acordo-fundadores-engagefit.md`, `docs/proposta-engagefit-guilherme.html` e qualquer outra alteração não commitada.
+Leia integralmente `.ai/handoff.md`, começando pelo checkpoint atual do topo, e use `docs/system-design.md`, `docs/sdd/REQ-001-primeiro-passo-operacional.md`, `docs/sdd/ARCH-001-modular-foundation.md` e as SPECs como fontes canônicas. Estado local: `SPEC-001/A-B-D`, `SPEC-002/A`, `SPEC-003/A-B-C` estão integradas, commitadas e homologadas localmente; o banco local compartilhado está em `059`, mas produção continua em `052`. A próxima atividade recomendada é somente detalhar `SPEC-004/A` (contratos), mantendo PAR-Q em `healthforms` e sem implementar código. `SPEC-001/C`, `SPEC-002/B-C`, `SPEC-003/D` e as specs `004+` ainda não estão autorizadas para implementação. Não faça push dos `main`: Railway usa esses branches como source automático e o backend executa migrations no pre-deploy, portanto push implica deploy de produção. Preserve `.ai/acordo-fundadores-engagefit.md`, `docs/proposta-engagefit-guilherme.html` e qualquer outra alteração não commitada.
 ```
