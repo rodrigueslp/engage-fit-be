@@ -22,37 +22,56 @@ type EnrollmentSubject struct {
 	IneligibleReason string
 }
 
+type EnrollmentAddon struct {
+	ID                 ID
+	OrganizationID     ID
+	EnrollmentID       ID
+	PlanVersionAddonID ID
+	Name               string
+	PriceDeltaCents    int
+	Summary            string
+	CreatedAt          time.Time
+}
+
 type EnrollmentTerms struct {
-	PlanID        ID
-	PlanVersionID ID
-	VersionNumber int
-	Name          string
-	Description   string
-	PriceCents    int
-	Currency      string
-	BillingCycle  MembershipBillingCycle
-	Summary       string
+	PlanID           ID
+	PlanVersionID    ID
+	VersionNumber    int
+	Name             string
+	Description      string
+	PriceCents       int
+	BasePriceCents   int
+	AddonsPriceCents int
+	TotalPriceCents  int
+	Currency         string
+	BillingCycle     MembershipBillingCycle
+	Summary          string
+	BaseSummary      string
 }
 
 type Enrollment struct {
-	ID              ID
-	OrganizationID  ID
-	PersonID        ID
-	HomeUnitID      ID
-	PlanVersionID   ID
-	LifecycleStatus EnrollmentLifecycleStatus
-	EffectiveStatus EnrollmentEffectiveStatus
-	StartsOn        time.Time
-	ValidUntil      *time.Time
-	EndedOn         *time.Time
-	EndedAt         *time.Time
-	EndedReason     string
-	Revision        int
-	CreatedByUserID ID
-	EndedByUserID   ID
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
-	Terms           EnrollmentTerms
+	ID               ID
+	OrganizationID   ID
+	PersonID         ID
+	HomeUnitID       ID
+	PlanVersionID    ID
+	LifecycleStatus  EnrollmentLifecycleStatus
+	EffectiveStatus  EnrollmentEffectiveStatus
+	StartsOn         time.Time
+	ValidUntil       *time.Time
+	EndedOn          *time.Time
+	EndedAt          *time.Time
+	EndedReason      string
+	Revision         int
+	BasePriceCents   int
+	AddonsPriceCents int
+	TotalPriceCents  int
+	Addons           []EnrollmentAddon
+	CreatedByUserID  ID
+	EndedByUserID    ID
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+	Terms            EnrollmentTerms
 }
 
 type EnrollmentHistory struct {

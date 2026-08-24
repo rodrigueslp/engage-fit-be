@@ -14,16 +14,16 @@ na mesma branch:
 
 - [`SPEC-003/A`](SPEC-003-A-versioned-membership-plan-catalog.md) — catálogo,
   direitos base e publicação versionada; estado `validated`;
-- `SPEC-003/B` — adicionais versionados e composição comercial; estado
-  `draft`;
+- [`SPEC-003/B`](SPEC-003-B-versioned-addons-composition.md) — adicionais
+  versionados e composição comercial (B1/B2); estado `validated`;
 - [`SPEC-003/C`](SPEC-003-C-person-plan-enrollment.md) — matrícula da pessoa,
-  vigência e encerramento operacional; estado `ready`;
+  vigência e encerramento operacional; estado `validated`;
 - `SPEC-003/D` — decisão de acesso, contadores e transição do legado; estado
   `draft`.
 
-A slice A está integrada e homologada. Somente a slice C está autorizada para
-a próxima implementação. Ela não cria contrato, cobrança, pausa, consumo,
-agenda, decisão de acesso nem adicional. As decisões abertas das slices B e D
+As slices A, C e B estão integradas e homologadas localmente (migrations `057`,
+`058` e `059`). O catálogo versionado, a matrícula operacional e a composição de
+adicionais estão concluídos. As decisões abertas da slice D e das specs futuras
 não podem ampliar silenciosamente essa entrega.
 
 ## 1. Resultado esperado

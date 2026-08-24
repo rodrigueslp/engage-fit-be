@@ -122,7 +122,7 @@ ou avisar sobre a publicação, mas não são sua fonte de verdade.
 | Cadastro | `SPEC-002/A` | fundação e cadastro manual implementados e validados |
 | Modalidades e espaços | `SPEC-001/A-B` | implementadas e validadas localmente |
 | Serviços ofertáveis | `SPEC-001/D` | implementada e validada; antecede planos completos |
-| Planos, pacotes e adicionais | `SPEC-003/A-D` | catálogo `003/A` validado; matrícula `003/C` pronta para execução; adicionais e acesso adiados |
+| Planos, pacotes e adicionais | `SPEC-003/A-D` | catálogo `003/A`, matrícula `003/C` e adicionais `003/B` validados; acesso `003/D` adiado |
 | Contrato, PAR-Q e assinatura | `SPEC-004` | planejada |
 | Financeiro do aluno | `SPEC-005` | planejada |
 | Agenda, profissionais e vagas | `SPEC-006` | planejada |

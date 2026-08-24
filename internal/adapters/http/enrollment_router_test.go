@@ -143,4 +143,17 @@ func TestEnrollmentHTTPContractsCapabilityRolesCSRFAndTenant(t *testing.T) {
 	if malformed.Code != http.StatusBadRequest || !strings.Contains(malformed.Body.String(), "invalid_request") {
 		t.Fatalf("malformed UUID: %d %s", malformed.Code, malformed.Body.String())
 	}
+
+	dupAddonBody := `{"plan_id":"` + string(planID) + `","plan_version_id":"` + string(versionID) + `","starts_on":"2026-08-19","addon_ids":["` + string(modalityID) + `","` + string(modalityID) + `"]}`
+	dupAddon := membershipBearerRequest(router, http.MethodPost, path, dupAddonBody, "enrollment.cccccccc-cccc-4ccc-8ccc-cccccccccccc")
+	if dupAddon.Code != http.StatusUnprocessableEntity || !strings.Contains(dupAddon.Body.String(), "membership_plan_addon_duplicate") {
+		t.Fatalf("duplicate addon: %d %s", dupAddon.Code, dupAddon.Body.String())
+	}
+
+	notFoundRouter := newRouter(domain.UserRoleOwner, true)
+	notFoundAddonBody := `{"plan_id":"` + string(planID) + `","plan_version_id":"` + string(versionID) + `","starts_on":"2026-08-19","addon_ids":["00000000-0000-4000-8000-000000000000"]}`
+	notFoundAddon := membershipBearerRequest(notFoundRouter, http.MethodPost, path, notFoundAddonBody, "enrollment.dddddddd-dddd-4ddd-8ddd-dddddddddddd")
+	if notFoundAddon.Code != http.StatusUnprocessableEntity || !strings.Contains(notFoundAddon.Body.String(), "membership_plan_addon_not_found") {
+		t.Fatalf("not found addon: %d %s", notFoundAddon.Code, notFoundAddon.Body.String())
+	}
 }

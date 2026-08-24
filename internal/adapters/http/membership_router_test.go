@@ -52,12 +52,16 @@ func (s *membershipRepositoryStub) CreateCommand(_ context.Context, request *dom
 	s.commands[string(request.OrganizationID)+":"+request.Command+":"+request.IdempotencyKey] = *request
 	return nil
 }
-func (s *membershipRepositoryStub) CreatePlan(_ context.Context, plan *domain.MembershipPlan, version *domain.MembershipPlanVersion, entitlements []domain.MembershipPlanEntitlement) error {
+func (s *membershipRepositoryStub) CreatePlan(_ context.Context, plan *domain.MembershipPlan, version *domain.MembershipPlanVersion, entitlements []domain.MembershipPlanEntitlement, addons []domain.MembershipPlanVersionAddon) error {
 	plan.ID = "plan-created"
 	version.ID = "version-created"
 	version.PlanID = plan.ID
 	version.OrganizationID = plan.OrganizationID
 	version.Entitlements = entitlements
+	version.Addons = addons
+	for aIdx := range version.Addons {
+		version.Addons[aIdx].Summary = domain.MembershipAddonSummary(version.Addons[aIdx])
+	}
 	version.Summary = domain.MembershipPlanSummary(*version)
 	copyVersion := *version
 	plan.Draft = &copyVersion
@@ -65,7 +69,7 @@ func (s *membershipRepositoryStub) CreatePlan(_ context.Context, plan *domain.Me
 	s.plans[plan.ID] = *plan
 	return nil
 }
-func (*membershipRepositoryStub) UpdateDraft(context.Context, domain.ID, domain.ID, domain.ID, int, domain.MembershipPlanVersion, []domain.MembershipPlanEntitlement) (*domain.MembershipPlan, error) {
+func (*membershipRepositoryStub) UpdateDraft(context.Context, domain.ID, domain.ID, domain.ID, int, domain.MembershipPlanVersion, []domain.MembershipPlanEntitlement, []domain.MembershipPlanVersionAddon) (*domain.MembershipPlan, error) {
 	return nil, portrepo.ErrMembershipDraftNotFound
 }
 func (*membershipRepositoryStub) PublishDraft(context.Context, domain.ID, domain.ID, domain.ID, int, time.Time) (*domain.MembershipPlan, error) {

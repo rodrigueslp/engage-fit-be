@@ -363,9 +363,12 @@ erDiagram
     BOXES ||--o{ MEMBERSHIP_PLANS : originates
     MEMBERSHIP_PLANS ||--|{ MEMBERSHIP_PLAN_VERSIONS : versions
     MEMBERSHIP_PLAN_VERSIONS ||--|{ MEMBERSHIP_PLAN_ENTITLEMENTS : grants
+    MEMBERSHIP_PLAN_VERSIONS ||--o{ MEMBERSHIP_PLAN_VERSION_ADDONS : offers
+    MEMBERSHIP_PLAN_VERSION_ADDONS ||--|{ MEMBERSHIP_PLAN_VERSION_ADDON_ENTITLEMENTS : grants
     PERSONS ||--o{ ENROLLMENTS : owns
     BOXES ||--o{ ENROLLMENTS : hosts
     MEMBERSHIP_PLAN_VERSIONS ||--o{ ENROLLMENTS : preserves
+    ENROLLMENTS ||--o{ ENROLLMENT_ADDONS : composes
     ENROLLMENTS ||--o{ ENROLLMENT_EVENTS : audits
 ```
 
@@ -386,8 +389,8 @@ erDiagram
 | Privacidade | `privacy_suppressions`, `privacy_audit_events` | impedir reimportação e auditar direitos do titular |
 | Catálogo | `modalities`, `unit_modalities`, `spaces`, `service_offerings`, `unit_service_offerings`, `catalog_audit_events` | modalidades e serviços da organização, ativações por unidade, espaços e auditoria |
 | Pessoas | `persons`, `person_addresses`, `person_unit_relationships`, `person_creation_requests`, `people_audit_events` | identidade humana, endereço, participação na unidade, idempotência e auditoria sem PII |
-| Planos comerciais | `membership_plans`, `membership_plan_versions`, `membership_plan_entitlements`, `membership_plan_command_requests`, `membership_plan_audit_events` | catálogo por organização/unidade de origem, versões imutáveis, direitos, idempotência e auditoria |
-| Matrículas | `enrollments`, `enrollment_command_requests`, `enrollment_events` | vínculo da pessoa à versão imutável, vigência, encerramento, idempotência e auditoria sem PII |
+| Planos comerciais | `membership_plans`, `membership_plan_versions`, `membership_plan_version_addons`, `membership_plan_version_addon_entitlements`, `membership_plan_entitlements`, `membership_plan_command_requests`, `membership_plan_audit_events` | catálogo por organização/unidade de origem, versões imutáveis, adicionais versionados, direitos, idempotência e auditoria |
+| Matrículas | `enrollments`, `enrollment_addons`, `enrollment_command_requests`, `enrollment_events` | vínculo da pessoa à versão imutável, composição de adicionais contratados, vigência, encerramento, idempotência e auditoria sem PII |
 | Schema | `schema_migrations` | versão, checksum e tempo de execução |
 
 ### 9.3 Invariantes relevantes do banco
@@ -417,13 +420,17 @@ erDiagram
   mas a migration inicial cria exatamente uma pessoa e um vínculo por student.
 - nome normalizado de plano é único na organização, inclusive quando arquivado;
 - cada plano tem no máximo um rascunho e uma versão publicada atual;
-- versão publicada ou retirada e seus direitos são imutáveis por triggers;
-- todo direito referencia exatamente uma modalidade ou serviço da mesma
-  organização, e publicação exige que o alvo esteja ativo na unidade de origem;
+- versão publicada ou retirada, seus direitos e seus adicionais são imutáveis por triggers (`protect_membership_plan_version_addons` e `protect_membership_plan_addon_entitlements`);
+- cada adicional versionado possui `price_delta_cents >= 0`, ao menos um direito de acesso (`entitlement`) e alvos únicos dentro do mesmo adicional;
+- todo direito (base ou de adicional) referencia exatamente uma modalidade ou serviço da mesma
+  organização, e publicação exige que todos os alvos estejam ativos na unidade de origem;
 - criar plano, publicar e criar nova versão mantêm replay idempotente por
   organização, comando e chave, recusando a reutilização com outro payload;
+- clonar uma versão publicada para novo rascunho gera novos UUIDs para adicionais e direitos, preservando o catálogo isolado de mutações retroativas;
 - uma pessoa tem no máximo uma matrícula `lifecycle_status=active` por unidade,
   reforçada por índice parcial e FKs compostas de organização;
+- matrícula seleciona adicionais opcionais pertencentes à versão exata do plano e calcula deterministicamente `total_price_cents = base_price_cents + soma(price_delta_cents)`;
+- snapshot imutável dos adicionais contratados é persistido em `enrollment_addons` (`addon_name`, `price_delta_cents`, `entitlement_summary`) e protegido por trigger contra mutação e exclusão (`protect_enrollment_addons`);
 - matrícula recorrente não possui `valid_until`; pagamento único calcula fim
   inclusivo em calendário e nunca altera a versão imutável vinculada;
 - encerramento preenche todos os campos administrativos, incrementa revisão e
@@ -456,31 +463,41 @@ WhatsApp não cria consentimento nem libera campanhas.
 
 O schema não usa soft delete. Fechar campanha altera `active`; excluir campanha remove dependências conforme as foreign keys.
 
-### 9.5 Catálogo versionado de planos
+### 9.5 Catálogo versionado de planos e adicionais
 
 `MembershipPlan` é o agrupador comercial arquivável. Seus termos ficam em
 `MembershipPlanVersion`: o rascunho aceita edição com revisão otimista, enquanto
-publicar torna a versão e seus direitos imutáveis. Alterar um plano publicado
-clona a versão vigente para o próximo rascunho; a publicação seguinte retira a
+publicar torna a versão, seus direitos base e seus adicionais imutáveis. Alterar
+um plano publicado clona a versão vigente para o próximo rascunho, gerando novos
+identificadores para adicionais e direitos; a publicação seguinte retira a
 anterior sem alterar seu snapshot.
 
-Os direitos apontam por ID para modalidades ou serviços ofertáveis através da
-porta pública estreita do módulo `catalog`. A persistência reforça tenant por
-FKs compostas; o caso de uso valida disponibilidade na unidade antes de criar,
-editar ou publicar. Desativar depois um item não reescreve versões: a leitura
-preserva nome e termos e acrescenta aviso operacional.
+Cada versão pode definir adicionais opcionais (`membership_plan_version_addons`)
+com acréscimo de valor (`price_delta_cents >= 0`), descrição e direitos
+específicos (`membership_plan_version_addon_entitlements`). Os direitos apontam
+por ID para modalidades ou serviços ofertáveis através da porta pública estreita
+do módulo `catalog`. A persistência reforça tenant por FKs compostas; o caso de
+uso valida disponibilidade na unidade antes de criar, editar ou publicar.
+Desativar depois um item não reescreve versões: a leitura preserva nome e termos
+e acrescenta aviso operacional.
 
 Criação, publicação e nova versão usam `Idempotency-Key`, fingerprint canônico,
 advisory lock e resposta persistida na mesma transação da mudança e da
 auditoria. O replay devolve o snapshot original mesmo se o plano já tiver uma
 versão posterior e volta a validar a unidade de origem. Métricas e logs usam
-somente ação, IDs, resultado e versão; a auditoria transacional preserva preço
-e direitos, sem registrar seu corpo nos logs.
+somente ação, IDs, resultado e versão; a auditoria transacional preserva preço,
+direitos e adicionais, sem registrar seu corpo nos logs.
 
-### 9.6 Matrícula operacional da pessoa
+### 9.6 Matrícula operacional e composição comercial
 
 `Enrollment` referencia `Person`, unidade principal e uma versão imutável do
-plano. `lifecycle_status` persiste apenas `active|ended`; a leitura projeta
+plano. O formulário de matrícula permite escolher adicionais opcionais
+disponíveis na versão publicada. A composição comercial calcula o preço total
+de forma determinística (`preço base + soma dos adicionais`) e grava um snapshot
+imutável em `enrollment_addons` (`addon_name`, `price_delta_cents`, `entitlement_summary`),
+protegido por trigger contra qualquer mutação ou exclusão posterior.
+
+`lifecycle_status` persiste apenas `active|ended`; a leitura projeta
 `scheduled`, `active`, `expired` ou `ended` usando o relógio local de
 `America/Sao_Paulo`. Uma matrícula de pagamento único vencida continua aberta
 até a próxima criação: nessa transação ela é encerrada com data final original,
@@ -488,12 +505,13 @@ evento `enrollment.expiration_reconciled` e só então a nova matrícula é cria
 
 O caso de uso resolve a pessoa por uma porta pública de `people`; o repositório
 de matrículas não consulta `students`, `persons` ou vínculos. O comando valida a
-versão ainda publicada e os alvos do catálogo ainda ativos, usa advisory lock
-por pessoa/unidade, índice parcial, revisão otimista, fingerprint e resposta
+versão ainda publicada, os alvos do catálogo ainda ativos e o pertencimento dos
+adicionais à versão exata, usa advisory lock por pessoa/unidade, índice parcial,
+revisão otimista, fingerprint (com ordenação de `addon_ids`) e resposta
 idempotente persistida. O export de privacidade compõe o leitor público de
-`memberships`, sem acoplar o repositório de privacidade às tabelas comerciais.
-Nenhuma operação muda `membership_started_at`, check-ins, contrato, cobrança,
-agenda, consumo ou autorização de acesso.
+`memberships` (incluindo snapshot de adicionais), sem acoplar o repositório de
+privacidade às tabelas comerciais. Nenhuma operação muda `membership_started_at`,
+check-ins, contrato, cobrança, agenda, consumo ou autorização de acesso.
 
 ## 10. Fluxo de importação
 
@@ -1331,6 +1349,28 @@ publicação, homologar owner, criação recorrente e one-time, conflito, expira
 encerramento e export de privacidade em dados não reais antes de habilitar. O
 rollback operacional desliga somente `enrollments`; registros já criados e o
 schema permanecem, sem alterar planos, pessoas, check-ins ou financeiro.
+
+### 17.7 Rollout de adicionais versionados e composição comercial
+
+A migration `059_create_membership_addons_and_composition.sql` é estritamente
+aditiva e cria `membership_plan_version_addons`,
+`membership_plan_version_addon_entitlements` e `enrollment_addons`, além de
+triggers de imutabilidade com `ERRCODE = 55000`. Não há seed, backfill ou
+alteração de planos ou matrículas prévios. Em upgrade desde `058`, estas
+contagens devem iniciar em zero:
+
+```sql
+SELECT COUNT(*) FROM membership_plan_version_addons;
+SELECT COUNT(*) FROM membership_plan_version_addon_entitlements;
+SELECT COUNT(*) FROM enrollment_addons;
+```
+
+A funcionalidade é suportada pelas capabilities já existentes `memberships` e
+`enrollments`. Após a migration e o deploy dos binários, o owner pode criar
+planos com adicionais opcionais em `#/plans` e compor matrículas com recálculo em
+tempo real e snapshot imutável em `#/students`. O rollback operacional, se
+necessário, consiste em retornar os binários; as tabelas e triggers aditivos
+permanecem sem corromper ou afetar versões de planos ou matrículas básicas.
 
 ## 18. Runtime, containers e shutdown
 

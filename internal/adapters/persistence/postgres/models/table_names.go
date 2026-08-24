@@ -18,11 +18,18 @@ func (CatalogAuditEventModel) TableName() string   { return "catalog_audit_event
 func (MembershipPlanModel) TableName() string            { return "membership_plans" }
 func (MembershipPlanVersionModel) TableName() string     { return "membership_plan_versions" }
 func (MembershipPlanEntitlementModel) TableName() string { return "membership_plan_entitlements" }
+func (MembershipPlanVersionAddonModel) TableName() string {
+	return "membership_plan_version_addons"
+}
+func (MembershipPlanVersionAddonEntitlementModel) TableName() string {
+	return "membership_plan_version_addon_entitlements"
+}
 func (MembershipPlanCommandRequestModel) TableName() string {
 	return "membership_plan_command_requests"
 }
 func (MembershipPlanAuditEventModel) TableName() string { return "membership_plan_audit_events" }
 func (EnrollmentModel) TableName() string               { return "enrollments" }
+func (EnrollmentAddonModel) TableName() string          { return "enrollment_addons" }
 func (EnrollmentCommandRequestModel) TableName() string { return "enrollment_command_requests" }
 func (EnrollmentEventModel) TableName() string          { return "enrollment_events" }
 

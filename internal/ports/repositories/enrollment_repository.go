@@ -15,6 +15,8 @@ var (
 	ErrEnrollmentRevisionConflict  = errors.New("enrollment revision conflict")
 	ErrEnrollmentAlreadyEnded      = errors.New("enrollment already ended")
 	ErrEnrollmentIdempotencyReused = errors.New("enrollment idempotency reused")
+	ErrEnrollmentAddonNotFound     = errors.New("enrollment addon not found")
+	ErrEnrollmentAddonDuplicate    = errors.New("enrollment addon duplicate")
 )
 
 type EnrollmentRepository interface {

@@ -109,3 +109,66 @@ func TestMembershipPlanSummaryIsDeterministic(t *testing.T) {
 		t.Fatalf("unexpected pack summary: %q", got)
 	}
 }
+
+func TestMembershipAddonValidationAndSummary(t *testing.T) {
+	name, ok := NormalizeMembershipAddonName("  Toalha   Extra  ")
+	if !ok || name != "Toalha Extra" {
+		t.Fatalf("unexpected addon name: %q %v", name, ok)
+	}
+
+	validAddon := MembershipPlanVersionAddon{
+		Name:            "Recovery Plus",
+		PriceDeltaCents: 5000,
+		Entitlements: []MembershipPlanAddonEntitlement{
+			{ServiceOfferingID: "s1", TargetName: "Recovery", AccessType: MembershipAccessOpen},
+		},
+	}
+	if !ValidMembershipAddon(validAddon) {
+		t.Fatal("expected valid addon")
+	}
+	if got := MembershipAddonSummary(validAddon); got != "Recovery · acesso livre" {
+		t.Fatalf("unexpected addon summary: %q", got)
+	}
+
+	freeAddon := validAddon
+	freeAddon.PriceDeltaCents = 0
+	if !ValidMembershipAddon(freeAddon) {
+		t.Fatal("expected 0 delta price addon to be valid")
+	}
+
+	negativePriceAddon := validAddon
+	negativePriceAddon.PriceDeltaCents = -100
+	if ValidMembershipAddon(negativePriceAddon) {
+		t.Fatal("negative price delta addon must be rejected")
+	}
+
+	emptyEntitlementsAddon := validAddon
+	emptyEntitlementsAddon.Entitlements = nil
+	if ValidMembershipAddon(emptyEntitlementsAddon) {
+		t.Fatal("addon with zero entitlements must be rejected")
+	}
+
+	version := MembershipPlanVersion{
+		Name:         "CrossFit Básico",
+		PriceCents:   30000,
+		Currency:     "BRL",
+		BillingCycle: MembershipBillingMonthly,
+		Entitlements: []MembershipPlanEntitlement{{ModalityID: "m1", AccessType: MembershipAccessOpen}},
+		Addons: []MembershipPlanVersionAddon{
+			validAddon,
+		},
+	}
+	if !ValidMembershipVersion(version) {
+		t.Fatal("version with valid addon must be valid")
+	}
+
+	duplicateAddonVersion := version
+	duplicateAddonVersion.Addons = append(duplicateAddonVersion.Addons, MembershipPlanVersionAddon{
+		Name:            "recovery plus",
+		PriceDeltaCents: 3000,
+		Entitlements:    []MembershipPlanAddonEntitlement{{ServiceOfferingID: "s2", AccessType: MembershipAccessOpen}},
+	})
+	if ValidMembershipVersion(duplicateAddonVersion) {
+		t.Fatal("version with duplicate addon name must be rejected")
+	}
+}

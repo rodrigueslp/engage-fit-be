@@ -25,6 +25,8 @@ var (
 	ErrAlreadyPublished  = repositories.ErrMembershipAlreadyPublished
 	ErrPlanArchived      = repositories.ErrMembershipPlanArchived
 	ErrIdempotencyReused = repositories.ErrMembershipIdempotencyReused
+	ErrAddonNotFound     = repositories.ErrMembershipAddonNotFound
+	ErrAddonDuplicate    = repositories.ErrMembershipAddonDuplicate
 	ErrInvalid           = errors.New("membership plan invalid")
 	ErrTargetInvalid     = errors.New("membership plan target invalid")
 	ErrInvalidKey        = errors.New("membership idempotency key invalid")
@@ -44,6 +46,24 @@ type EntitlementInput struct {
 	BookingRequired   bool                           `json:"booking_required"`
 }
 
+type AddonEntitlementInput struct {
+	ModalityID        string                         `json:"modality_id"`
+	ServiceOfferingID string                         `json:"service_offering_id"`
+	AccessType        domain.MembershipAccessType    `json:"access_type"`
+	Quantity          *int                           `json:"quantity"`
+	PeriodUnit        *domain.MembershipPeriodUnit   `json:"period_unit"`
+	DailyLimit        *int                           `json:"daily_limit"`
+	DeliveryMode      *domain.MembershipDeliveryMode `json:"delivery_mode"`
+	BookingRequired   bool                           `json:"booking_required"`
+}
+
+type AddonInput struct {
+	Name            string                  `json:"name"`
+	Description     string                  `json:"description"`
+	PriceDeltaCents int                     `json:"price_delta_cents"`
+	Entitlements    []AddonEntitlementInput `json:"entitlements"`
+}
+
 type PlanInput struct {
 	Name             string                         `json:"name"`
 	Description      string                         `json:"description"`
@@ -52,6 +72,7 @@ type PlanInput struct {
 	ValidityCount    *int                           `json:"validity_count"`
 	ValidityUnit     *domain.MembershipValidityUnit `json:"validity_unit"`
 	Entitlements     []EntitlementInput             `json:"entitlements"`
+	Addons           []AddonInput                   `json:"addons"`
 	ExpectedRevision int                            `json:"expected_revision,omitempty"`
 }
 
@@ -126,7 +147,7 @@ func (s *Service) Create(ctx context.Context, unitID, actorID domain.ID, idempot
 			return err
 		}
 		plan := domain.MembershipPlan{OrganizationID: organizationID, HomeUnitID: unitID, Name: version.Name, NameKey: nameKey, Status: domain.MembershipPlanActive, CreatedAt: now, UpdatedAt: now}
-		if err := s.repository.CreatePlan(txctx, &plan, &version, version.Entitlements); err != nil {
+		if err := s.repository.CreatePlan(txctx, &plan, &version, version.Entitlements, version.Addons); err != nil {
 			return err
 		}
 		if err := s.audit(txctx, organizationID, unitID, actorID, "membership_plan.draft_created", plan.ID, version.ID, nil, versionAudit(version), now); err != nil {
@@ -174,7 +195,7 @@ func (s *Service) UpdateDraft(ctx context.Context, unitID, actorID, planID domai
 			return err
 		}
 		version.ID, version.PlanID, version.OrganizationID = before.Draft.ID, planID, organizationID
-		result, err = s.repository.UpdateDraft(txctx, organizationID, unitID, planID, input.ExpectedRevision, version, version.Entitlements)
+		result, err = s.repository.UpdateDraft(txctx, organizationID, unitID, planID, input.ExpectedRevision, version, version.Entitlements, version.Addons)
 		if err != nil {
 			return err
 		}
@@ -366,6 +387,15 @@ func (s *Service) resolveReferences(ctx context.Context, organizationID, unitID 
 			services = append(services, item.ServiceOfferingID)
 		}
 	}
+	for _, addon := range version.Addons {
+		for _, item := range addon.Entitlements {
+			if item.ModalityID != "" {
+				modalities = append(modalities, item.ModalityID)
+			} else {
+				services = append(services, item.ServiceOfferingID)
+			}
+		}
+	}
 	references, err := s.catalog.ResolvePlanReferences(ctx, organizationID, unitID, modalities, services)
 	if err != nil {
 		return err
@@ -386,6 +416,22 @@ func (s *Service) resolveReferences(ctx context.Context, organizationID, unitID 
 		}
 		item.TargetName, item.TargetType = reference.Name, reference.Type
 	}
+	for aIdx := range version.Addons {
+		addon := &version.Addons[aIdx]
+		for eIdx := range addon.Entitlements {
+			item := &addon.Entitlements[eIdx]
+			key := "modality:" + string(item.ModalityID)
+			if item.ServiceOfferingID != "" {
+				key = "service_offering:" + string(item.ServiceOfferingID)
+			}
+			reference, exists := byKey[key]
+			if !exists || reference.Status != domain.CatalogStatusActive || !reference.ActiveInUnit {
+				return ErrTargetInvalid
+			}
+			item.TargetName, item.TargetType = reference.Name, reference.Type
+		}
+		addon.Summary = domain.MembershipAddonSummary(*addon)
+	}
 	version.Summary = domain.MembershipPlanSummary(*version)
 	return nil
 }
@@ -399,9 +445,72 @@ func normalizedVersion(input PlanInput, now time.Time) (domain.MembershipPlanVer
 	if !ok {
 		return domain.MembershipPlanVersion{}, "", ErrInvalid
 	}
-	version := domain.MembershipPlanVersion{VersionNumber: 1, Revision: 1, Status: domain.MembershipVersionDraft, Name: name, Description: description, PriceCents: input.PriceCents, Currency: "BRL", BillingCycle: input.BillingCycle, ValidityCount: input.ValidityCount, ValidityUnit: input.ValidityUnit, CreatedAt: now, UpdatedAt: now, Entitlements: make([]domain.MembershipPlanEntitlement, 0, len(input.Entitlements))}
+	version := domain.MembershipPlanVersion{
+		VersionNumber: 1,
+		Revision:      1,
+		Status:        domain.MembershipVersionDraft,
+		Name:          name,
+		Description:   description,
+		PriceCents:    input.PriceCents,
+		Currency:      "BRL",
+		BillingCycle:  input.BillingCycle,
+		ValidityCount: input.ValidityCount,
+		ValidityUnit:  input.ValidityUnit,
+		CreatedAt:     now,
+		UpdatedAt:     now,
+		Entitlements:  make([]domain.MembershipPlanEntitlement, 0, len(input.Entitlements)),
+		Addons:        make([]domain.MembershipPlanVersionAddon, 0, len(input.Addons)),
+	}
 	for position, item := range input.Entitlements {
-		version.Entitlements = append(version.Entitlements, domain.MembershipPlanEntitlement{ModalityID: domain.ID(item.ModalityID), ServiceOfferingID: domain.ID(item.ServiceOfferingID), AccessType: item.AccessType, Quantity: item.Quantity, PeriodUnit: item.PeriodUnit, DailyLimit: item.DailyLimit, DeliveryMode: item.DeliveryMode, BookingRequired: item.BookingRequired, Position: position, CreatedAt: now, UpdatedAt: now})
+		version.Entitlements = append(version.Entitlements, domain.MembershipPlanEntitlement{
+			ModalityID:        domain.ID(item.ModalityID),
+			ServiceOfferingID: domain.ID(item.ServiceOfferingID),
+			AccessType:        item.AccessType,
+			Quantity:          item.Quantity,
+			PeriodUnit:        item.PeriodUnit,
+			DailyLimit:        item.DailyLimit,
+			DeliveryMode:      item.DeliveryMode,
+			BookingRequired:   item.BookingRequired,
+			Position:          position,
+			CreatedAt:         now,
+			UpdatedAt:         now,
+		})
+	}
+	for aPos, addonInput := range input.Addons {
+		addonName, aOk := domain.NormalizeMembershipAddonName(addonInput.Name)
+		if !aOk {
+			return domain.MembershipPlanVersion{}, "", ErrInvalid
+		}
+		addonDesc, dOk := domain.NormalizeMembershipDescription(addonInput.Description)
+		if !dOk {
+			return domain.MembershipPlanVersion{}, "", ErrInvalid
+		}
+		addon := domain.MembershipPlanVersionAddon{
+			Name:            addonName,
+			Description:     addonDesc,
+			PriceDeltaCents: addonInput.PriceDeltaCents,
+			Position:        aPos,
+			CreatedAt:       now,
+			UpdatedAt:       now,
+			Entitlements:    make([]domain.MembershipPlanAddonEntitlement, 0, len(addonInput.Entitlements)),
+			Warnings:        []string{},
+		}
+		for ePos, eItem := range addonInput.Entitlements {
+			addon.Entitlements = append(addon.Entitlements, domain.MembershipPlanAddonEntitlement{
+				ModalityID:        domain.ID(eItem.ModalityID),
+				ServiceOfferingID: domain.ID(eItem.ServiceOfferingID),
+				AccessType:        eItem.AccessType,
+				Quantity:          eItem.Quantity,
+				PeriodUnit:        eItem.PeriodUnit,
+				DailyLimit:        eItem.DailyLimit,
+				DeliveryMode:      eItem.DeliveryMode,
+				BookingRequired:   eItem.BookingRequired,
+				Position:          ePos,
+				CreatedAt:         now,
+				UpdatedAt:         now,
+			})
+		}
+		version.Addons = append(version.Addons, addon)
 	}
 	if !domain.ValidMembershipVersion(version) {
 		return domain.MembershipPlanVersion{}, "", ErrInvalid
@@ -417,6 +526,15 @@ func inputFingerprint(version domain.MembershipPlanVersion) (string, error) {
 	for index := range canonical.Entitlements {
 		canonical.Entitlements[index].CreatedAt = time.Time{}
 		canonical.Entitlements[index].UpdatedAt = time.Time{}
+	}
+	for aIdx := range canonical.Addons {
+		canonical.Addons[aIdx].ID, canonical.Addons[aIdx].OrganizationID, canonical.Addons[aIdx].PlanVersionID = "", "", ""
+		canonical.Addons[aIdx].CreatedAt, canonical.Addons[aIdx].UpdatedAt = time.Time{}, time.Time{}
+		canonical.Addons[aIdx].Summary, canonical.Addons[aIdx].Warnings = "", nil
+		for eIdx := range canonical.Addons[aIdx].Entitlements {
+			canonical.Addons[aIdx].Entitlements[eIdx].ID, canonical.Addons[aIdx].Entitlements[eIdx].OrganizationID, canonical.Addons[aIdx].Entitlements[eIdx].AddonID = "", "", ""
+			canonical.Addons[aIdx].Entitlements[eIdx].CreatedAt, canonical.Addons[aIdx].Entitlements[eIdx].UpdatedAt = time.Time{}, time.Time{}
+		}
 	}
 	payload, err := json.Marshal(canonical)
 	if err != nil {
@@ -485,7 +603,7 @@ func membershipResult(err error) string {
 	if err == nil {
 		return "success"
 	}
-	if errors.Is(err, ErrNameConflict) || errors.Is(err, ErrDraftExists) || errors.Is(err, ErrRevisionConflict) || errors.Is(err, ErrIdempotencyReused) || errors.Is(err, ErrAlreadyPublished) || errors.Is(err, ErrPlanArchived) {
+	if errors.Is(err, ErrNameConflict) || errors.Is(err, ErrDraftExists) || errors.Is(err, ErrRevisionConflict) || errors.Is(err, ErrIdempotencyReused) || errors.Is(err, ErrAlreadyPublished) || errors.Is(err, ErrPlanArchived) || errors.Is(err, ErrAddonNotFound) || errors.Is(err, ErrAddonDuplicate) {
 		return "conflict"
 	}
 	if errors.Is(err, ErrInvalid) || errors.Is(err, ErrInvalidKey) || errors.Is(err, ErrTargetInvalid) {
@@ -512,7 +630,15 @@ func versionAudit(value domain.MembershipPlanVersion) map[string]any {
 	for _, item := range value.Entitlements {
 		targets = append(targets, map[string]any{"modality_id": item.ModalityID, "service_offering_id": item.ServiceOfferingID, "access_type": item.AccessType, "quantity": item.Quantity, "period_unit": item.PeriodUnit, "daily_limit": item.DailyLimit, "delivery_mode": item.DeliveryMode, "booking_required": item.BookingRequired, "position": item.Position})
 	}
-	return map[string]any{"version_number": value.VersionNumber, "revision": value.Revision, "status": value.Status, "name": value.Name, "description": value.Description, "price_cents": value.PriceCents, "currency": value.Currency, "billing_cycle": value.BillingCycle, "validity_count": value.ValidityCount, "validity_unit": value.ValidityUnit, "entitlements": targets}
+	addons := make([]map[string]any, 0, len(value.Addons))
+	for _, addon := range value.Addons {
+		addonEntitlements := make([]map[string]any, 0, len(addon.Entitlements))
+		for _, item := range addon.Entitlements {
+			addonEntitlements = append(addonEntitlements, map[string]any{"modality_id": item.ModalityID, "service_offering_id": item.ServiceOfferingID, "access_type": item.AccessType, "quantity": item.Quantity, "period_unit": item.PeriodUnit, "daily_limit": item.DailyLimit, "delivery_mode": item.DeliveryMode, "booking_required": item.BookingRequired, "position": item.Position})
+		}
+		addons = append(addons, map[string]any{"name": addon.Name, "description": addon.Description, "price_delta_cents": addon.PriceDeltaCents, "position": addon.Position, "entitlements": addonEntitlements})
+	}
+	return map[string]any{"version_number": value.VersionNumber, "revision": value.Revision, "status": value.Status, "name": value.Name, "description": value.Description, "price_cents": value.PriceCents, "currency": value.Currency, "billing_cycle": value.BillingCycle, "validity_count": value.ValidityCount, "validity_unit": value.ValidityUnit, "entitlements": targets, "addons": addons}
 }
 
 func (s *Service) audit(ctx context.Context, organizationID, unitID, actorID domain.ID, action string, planID, versionID domain.ID, before, after map[string]any, createdAt time.Time) error {

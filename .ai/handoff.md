@@ -4,9 +4,58 @@ Manual canônico de arquitetura e negócio: `docs/system-design.md`.
 
 Guia operacional consolidado: `docs/application-readiness-guide.md`.
 
-Atualizado em: 2026-08-21 (SPEC-003/C homologada manualmente; sem push/deploy)
+Atualizado em: 2026-08-24 (SPEC-003/B homologada e commitada localmente; sem push/deploy)
 
-## Checkpoint atual — SPEC-003/C homologada localmente
+## Checkpoint atual — SPEC-003/B homologada e commitada localmente (Adicionais versionados e composição comercial)
+
+Este checkpoint prevalece sobre todos os registros históricos abaixo.
+
+Commits locais:
+- Backend (`engage-fit-be`): `be69b27` (`feat(memberships): implement versioned addons and commercial composition (SPEC-003/B)`)
+- Frontend (`engage-fit-fe`): `4d2d9e1` (`feat(memberships): support plan addons and commercial enrollment composition (SPEC-003/B)`)
+
+Entrega local:
+
+- `SPEC-003/B` (fatias B1 e B2) implementada e validada nos repositórios locais:
+  - Backend: `engage-fit-be` com migration `059_create_membership_addons_and_composition.sql`;
+  - Frontend: `engage-fit-fe` com autoria de adicionais em planos e seleção com recálculo em matrículas;
+- Migration `059_create_membership_addons_and_composition.sql`:
+  - Tabelas `membership_plan_version_addons` e `membership_plan_version_addon_entitlements` para adicionais versionados no catálogo;
+  - Tabela `enrollment_addons` para snapshot imutável dos adicionais selecionados na matrícula;
+  - Triggers com `ERRCODE = 55000` protegendo adicionais de versões publicadas e adicionais de matrículas contra mutações/remoções;
+- B1 (Catálogo de adicionais na versão do plano):
+  - Modelos, mapeamentos, validações de domínio (preço delta >= 0, entitlements obrigatórios e válidos, unicidade de nome do adicional por versão);
+  - Clonagem profunda em novas versões (`/versions`) gerando novos UUIDs para adicionais e direitos;
+  - Endpoints de criação, rascunho, publicação e clonagem atualizados com adicionais;
+  - UI em `#/plans` no mobile (360x800) com gerenciamento completo de adicionais (nome, preço delta formatado, descrição, direitos de acesso com limites de frequência e modalidade/serviço);
+- B2 (Composição comercial na matrícula):
+  - Validação de adicionais pertencentes à versão exata do plano e ausência de duplicidade;
+  - Validação de alvos ativos no catálogo (`modalities`/`service_offerings`);
+  - Cálculo determinístico do preço total (`preço base + soma dos adicionais`);
+  - Snapshot imutável (`addon_name`, `price_delta_cents`, `entitlement_summary`) persistido em `enrollment_addons`;
+  - Idempotência com hash de `addon_ids` ordenados; auditoria transacional e export de privacidade com snapshot dos adicionais;
+  - UI em `EnrollmentPanel.tsx` no mobile (360x800) com seleção dinâmica de adicionais opcionais, recálculo de preço em tempo real (`base + adicionais = total`), revisão detalhada de composição e visualização no card de matrícula;
+  - Aviso a parceiros externos (Wellhub / TotalPass) estritamente preservado.
+
+Validação de engenharia executada e aprovada:
+
+- `gofmt` aplicado em todos os arquivos Go modificados;
+- `go test -count=1 ./...` passou em 100%;
+- `go vet ./...` 100% limpo (0 erros);
+- Migrations 001..059 aplicadas em banco PostgreSQL vazio;
+- Segunda execução do migrator confirmando zero migrations pendentes;
+- Testes de integração PostgreSQL com ciclo de vida completo de planos, adicionais, matrículas compostas, clonagem e triggers imutáveis aprovados;
+- TypeScript e build Vite aprovados com zero erros;
+- Playwright E2E: suíte completa com 32 testes passando (incluindo testes dedicados em 360x800 para planos com adicionais e matrículas compostas);
+- `git diff --check` aprovado nos dois repositórios (zero alertas de whitespace);
+- Homologação manual no navegador/mobile concluída e confirmada pelo usuário ("Validado");
+- Documentação atualizada: `docs/system-design.md`, `docs/sdd/README.md`, `docs/sdd/spec-catalog.md`, `docs/sdd/REQ-001-primeiro-passo-operacional.md`, `docs/sdd/specs/SPEC-003-plans-enrollments-entitlements.md`, `docs/sdd/specs/SPEC-003-B-versioned-addons-composition.md` (marcada como `validated locally`);
+- Arquivos de terceiros do usuário (`.ai/acordo-fundadores-engagefit.md` e `docs/proposta-engagefit-guilherme.html`) rigorosamente preservados;
+- Produção permanece em `052`; sem push para `origin/main` e sem deploy de produção.
+
+Nota de ambiente: `go test -race` requer cgo e compilador gcc, ausente no container da CLI.
+
+## Checkpoint anterior — SPEC-003/C homologada localmente
 
 Este checkpoint prevalece sobre todos os registros históricos abaixo.
 
@@ -2828,5 +2877,5 @@ WodScope. Antes de produção, implementar recuperação/verificação de conta.
 Mensagem sugerida:
 
 ```txt
-Leia integralmente `.ai/handoff.md`, começando pelo checkpoint atual do topo, e use `docs/system-design.md`, `docs/sdd/REQ-001-primeiro-passo-operacional.md`, `docs/sdd/ARCH-001-modular-foundation.md` e as SPECs como fontes canônicas. Estado local: SPEC-001/D, SPEC-002/A e SPEC-003/A estão integradas e homologadas; o banco local compartilhado está em `057`, mas produção continua em `052`. SPEC-003/C está `ready` e possui workspace em `/home/luiz-paulo/workspace/engage-fit-worktrees/spec-003-c/`, com prompt próprio; SPEC-003/B e SPEC-003/D não estão autorizadas. Não faça push dos `main`: Railway usa esses branches como source automático e o backend executa migrations no pre-deploy, portanto push implica deploy de produção. Preserve `.ai/acordo-fundadores-engagefit.md`, `docs/proposta-engagefit-guilherme.html` e qualquer outra alteração não commitada.
+Leia integralmente `.ai/handoff.md`, começando pelo checkpoint atual do topo, e use `docs/system-design.md`, `docs/sdd/REQ-001-primeiro-passo-operacional.md`, `docs/sdd/ARCH-001-modular-foundation.md` e as SPECs como fontes canônicas. Estado local: SPEC-001/D, SPEC-002/A, SPEC-003/A, SPEC-003/C e SPEC-003/B estão integradas, commitadas e homologadas localmente; o banco local compartilhado está em `059`, mas produção continua em `052`. Não faça push dos `main`: Railway usa esses branches como source automático e o backend executa migrations no pre-deploy, portanto push implica deploy de produção. Preserve `.ai/acordo-fundadores-engagefit.md`, `docs/proposta-engagefit-guilherme.html` e qualquer outra alteração não commitada.
 ```

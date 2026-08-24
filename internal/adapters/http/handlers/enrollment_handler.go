@@ -117,7 +117,48 @@ func enrollmentContext(c *gin.Context) (domain.ID, domain.ID, bool) {
 }
 
 func enrollmentResponse(item domain.Enrollment) dto.EnrollmentResponse {
-	response := dto.EnrollmentResponse{ID: string(item.ID), PersonID: string(item.PersonID), LifecycleStatus: string(item.LifecycleStatus), EffectiveStatus: string(item.EffectiveStatus), StartsOn: item.StartsOn.Format("2006-01-02"), EndedReason: item.EndedReason, Revision: item.Revision, Terms: dto.EnrollmentTermsResponse{PlanID: string(item.Terms.PlanID), PlanVersionID: string(item.Terms.PlanVersionID), VersionNumber: item.Terms.VersionNumber, Name: item.Terms.Name, Description: item.Terms.Description, PriceCents: item.Terms.PriceCents, Currency: item.Terms.Currency, BillingCycle: string(item.Terms.BillingCycle), Summary: item.Terms.Summary}, CreatedAt: item.CreatedAt.Format(time.RFC3339), UpdatedAt: item.UpdatedAt.Format(time.RFC3339)}
+	addons := make([]dto.EnrollmentAddonResponse, 0, len(item.Addons))
+	for _, a := range item.Addons {
+		addons = append(addons, dto.EnrollmentAddonResponse{
+			ID:                 string(a.ID),
+			PlanVersionAddonID: string(a.PlanVersionAddonID),
+			Name:               a.Name,
+			PriceDeltaCents:    a.PriceDeltaCents,
+			Summary:            a.Summary,
+			CreatedAt:          a.CreatedAt.Format(time.RFC3339),
+		})
+	}
+	terms := dto.EnrollmentTermsResponse{
+		PlanID:           string(item.Terms.PlanID),
+		PlanVersionID:    string(item.Terms.PlanVersionID),
+		VersionNumber:    item.Terms.VersionNumber,
+		Name:             item.Terms.Name,
+		Description:      item.Terms.Description,
+		PriceCents:       item.Terms.PriceCents,
+		BasePriceCents:   item.Terms.BasePriceCents,
+		AddonsPriceCents: item.Terms.AddonsPriceCents,
+		TotalPriceCents:  item.Terms.TotalPriceCents,
+		Currency:         item.Terms.Currency,
+		BillingCycle:     string(item.Terms.BillingCycle),
+		Summary:          item.Terms.Summary,
+		BaseSummary:      item.Terms.BaseSummary,
+	}
+	response := dto.EnrollmentResponse{
+		ID:               string(item.ID),
+		PersonID:         string(item.PersonID),
+		LifecycleStatus:  string(item.LifecycleStatus),
+		EffectiveStatus:  string(item.EffectiveStatus),
+		StartsOn:         item.StartsOn.Format("2006-01-02"),
+		EndedReason:      item.EndedReason,
+		Revision:         item.Revision,
+		BasePriceCents:   item.BasePriceCents,
+		AddonsPriceCents: item.AddonsPriceCents,
+		TotalPriceCents:  item.TotalPriceCents,
+		Addons:           addons,
+		Terms:            terms,
+		CreatedAt:        item.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:        item.UpdatedAt.Format(time.RFC3339),
+	}
 	if item.ValidUntil != nil {
 		value := item.ValidUntil.Format("2006-01-02")
 		response.ValidUntil = &value
@@ -151,6 +192,10 @@ func respondEnrollmentError(c *gin.Context, err error) {
 		respondPublicError(c, http.StatusConflict, "idempotency_key_reused", "chave de idempotência reutilizada")
 	case errors.Is(err, memberships.ErrEnrollmentAlreadyEnded):
 		respondPublicError(c, http.StatusConflict, "enrollment_already_ended", "a matrícula já foi encerrada")
+	case errors.Is(err, memberships.ErrEnrollmentAddonNotFound):
+		respondPublicError(c, http.StatusUnprocessableEntity, "membership_plan_addon_not_found", "adicional não encontrado no plano selecionado")
+	case errors.Is(err, memberships.ErrEnrollmentAddonDuplicate):
+		respondPublicError(c, http.StatusUnprocessableEntity, "membership_plan_addon_duplicate", "adicional duplicado na seleção")
 	case errors.Is(err, memberships.ErrEnrollmentSubjectIneligible):
 		respondPublicError(c, http.StatusUnprocessableEntity, "enrollment_subject_ineligible", "a pessoa não está elegível para matrícula")
 	case errors.Is(err, memberships.ErrPlanUnavailable):

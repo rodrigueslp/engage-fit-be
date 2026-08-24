@@ -143,6 +143,35 @@ type MembershipPlanEntitlementModel struct {
 	UpdatedAt         time.Time
 }
 
+type MembershipPlanVersionAddonModel struct {
+	ID              string `gorm:"primaryKey"`
+	OrganizationID  string `gorm:"index"`
+	PlanVersionID   string `gorm:"index"`
+	Name            string
+	Description     string
+	PriceDeltaCents int
+	Position        int
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+}
+
+type MembershipPlanVersionAddonEntitlementModel struct {
+	ID                string `gorm:"primaryKey"`
+	OrganizationID    string `gorm:"index"`
+	AddonID           string `gorm:"index"`
+	ModalityID        *string
+	ServiceOfferingID *string
+	AccessType        string
+	Quantity          *int
+	PeriodUnit        *string
+	DailyLimit        *int
+	DeliveryMode      *string
+	BookingRequired   bool
+	Position          int
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+}
+
 type MembershipPlanCommandRequestModel struct {
 	ID                 string `gorm:"primaryKey"`
 	OrganizationID     string `gorm:"index"`
@@ -210,6 +239,17 @@ type EnrollmentEventModel struct {
 	AfterData      []byte `gorm:"type:jsonb"`
 	Reason         *string
 	CreatedAt      time.Time
+}
+
+type EnrollmentAddonModel struct {
+	ID                 string `gorm:"primaryKey"`
+	OrganizationID     string `gorm:"index"`
+	EnrollmentID       string `gorm:"index"`
+	PlanVersionAddonID string `gorm:"index"`
+	AddonName          string
+	PriceDeltaCents    int
+	EntitlementSummary string
+	CreatedAt          time.Time
 }
 
 type BillingPlanModel struct {

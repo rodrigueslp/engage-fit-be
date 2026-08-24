@@ -76,6 +76,7 @@ type MembershipPlanVersion struct {
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 	Entitlements   []MembershipPlanEntitlement
+	Addons         []MembershipPlanVersionAddon
 	Summary        string
 	Warnings       []string
 }
@@ -84,6 +85,40 @@ type MembershipPlanEntitlement struct {
 	ID                ID
 	OrganizationID    ID
 	PlanVersionID     ID
+	ModalityID        ID
+	ServiceOfferingID ID
+	TargetName        string
+	TargetType        string
+	AccessType        MembershipAccessType
+	Quantity          *int
+	PeriodUnit        *MembershipPeriodUnit
+	DailyLimit        *int
+	DeliveryMode      *MembershipDeliveryMode
+	BookingRequired   bool
+	Position          int
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+}
+
+type MembershipPlanVersionAddon struct {
+	ID              ID
+	OrganizationID  ID
+	PlanVersionID   ID
+	Name            string
+	Description     string
+	PriceDeltaCents int
+	Position        int
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+	Entitlements    []MembershipPlanAddonEntitlement
+	Summary         string
+	Warnings        []string
+}
+
+type MembershipPlanAddonEntitlement struct {
+	ID                ID
+	OrganizationID    ID
+	AddonID           ID
 	ModalityID        ID
 	ServiceOfferingID ID
 	TargetName        string
@@ -145,6 +180,14 @@ func NormalizeMembershipDescription(value string) (string, bool) {
 	return value, utf8.RuneCountInString(value) <= 500
 }
 
+func NormalizeMembershipAddonName(value string) (string, bool) {
+	name := strings.Join(strings.Fields(value), " ")
+	if name == "" || utf8.RuneCountInString(name) > 100 {
+		return "", false
+	}
+	return name, true
+}
+
 func ValidMembershipVersion(version MembershipPlanVersion) bool {
 	if _, _, ok := NormalizeMembershipPlanName(version.Name); !ok || version.PriceCents <= 0 || version.Currency != "BRL" {
 		return false
@@ -178,6 +221,17 @@ func ValidMembershipVersion(version MembershipPlanVersion) bool {
 		}
 		seen[key] = struct{}{}
 	}
+	seenAddons := map[string]struct{}{}
+	for _, addon := range version.Addons {
+		if !ValidMembershipAddon(addon) {
+			return false
+		}
+		nameKey := strings.ToLower(addon.Name)
+		if _, exists := seenAddons[nameKey]; exists {
+			return false
+		}
+		seenAddons[nameKey] = struct{}{}
+	}
 	return true
 }
 
@@ -200,6 +254,83 @@ func ValidMembershipEntitlement(value MembershipPlanEntitlement) bool {
 		return validQuantity(value.Quantity) && value.PeriodUnit == nil
 	default:
 		return false
+	}
+}
+
+func ValidMembershipAddon(value MembershipPlanVersionAddon) bool {
+	if _, ok := NormalizeMembershipAddonName(value.Name); !ok {
+		return false
+	}
+	if _, ok := NormalizeMembershipDescription(value.Description); !ok {
+		return false
+	}
+	if value.PriceDeltaCents < 0 || value.Position < 0 || len(value.Entitlements) == 0 {
+		return false
+	}
+	seen := map[string]struct{}{}
+	for _, entitlement := range value.Entitlements {
+		if !ValidMembershipAddonEntitlement(entitlement) {
+			return false
+		}
+		key := string(entitlement.ModalityID) + ":" + string(entitlement.ServiceOfferingID)
+		if _, exists := seen[key]; exists {
+			return false
+		}
+		seen[key] = struct{}{}
+	}
+	return true
+}
+
+func ValidMembershipAddonEntitlement(value MembershipPlanAddonEntitlement) bool {
+	if (value.ModalityID == "") == (value.ServiceOfferingID == "") || value.Position < 0 {
+		return false
+	}
+	if value.DailyLimit != nil && (*value.DailyLimit < 1 || *value.DailyLimit > 10000) {
+		return false
+	}
+	if value.DeliveryMode != nil && *value.DeliveryMode != MembershipDeliveryGroup && *value.DeliveryMode != MembershipDeliveryIndividual {
+		return false
+	}
+	switch value.AccessType {
+	case MembershipAccessOpen:
+		return value.Quantity == nil && value.PeriodUnit == nil
+	case MembershipAccessPerPeriod:
+		return validQuantity(value.Quantity) && value.PeriodUnit != nil && (*value.PeriodUnit == MembershipPeriodDay || *value.PeriodUnit == MembershipPeriodWeek || *value.PeriodUnit == MembershipPeriodMonth)
+	case MembershipAccessClassPack:
+		return validQuantity(value.Quantity) && value.PeriodUnit == nil
+	default:
+		return false
+	}
+}
+
+func MembershipAddonSummary(addon MembershipPlanVersionAddon) string {
+	targets := make([]string, 0, len(addon.Entitlements))
+	rules := make([]string, 0, len(addon.Entitlements))
+	for _, entitlement := range addon.Entitlements {
+		if entitlement.TargetName != "" {
+			targets = append(targets, entitlement.TargetName)
+		}
+		rules = append(rules, addonEntitlementSummary(entitlement))
+	}
+	targetText := strings.Join(targets, ", ")
+	ruleText := strings.Join(uniqueStrings(rules), ", ")
+	if targetText == "" {
+		return ruleText
+	}
+	if ruleText == "" {
+		return targetText
+	}
+	return strings.Join([]string{targetText, ruleText}, " · ")
+}
+
+func addonEntitlementSummary(value MembershipPlanAddonEntitlement) string {
+	switch value.AccessType {
+	case MembershipAccessPerPeriod:
+		return fmt.Sprintf("%d sessões por %s", pointerInt(value.Quantity), periodLabel(value.PeriodUnit))
+	case MembershipAccessClassPack:
+		return fmt.Sprintf("pacote de %d aulas", pointerInt(value.Quantity))
+	default:
+		return "acesso livre"
 	}
 }
 

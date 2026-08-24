@@ -83,7 +83,7 @@ func (r MembershipGormRepository) CreateCommand(ctx context.Context, request *do
 	return nil
 }
 
-func (r MembershipGormRepository) CreatePlan(ctx context.Context, plan *domain.MembershipPlan, version *domain.MembershipPlanVersion, entitlements []domain.MembershipPlanEntitlement) error {
+func (r MembershipGormRepository) CreatePlan(ctx context.Context, plan *domain.MembershipPlan, version *domain.MembershipPlanVersion, entitlements []domain.MembershipPlanEntitlement, addons []domain.MembershipPlanVersionAddon) error {
 	if err := ensureID(&plan.ID); err != nil {
 		return err
 	}
@@ -101,10 +101,13 @@ func (r MembershipGormRepository) CreatePlan(ctx context.Context, plan *domain.M
 	if err := db.Create(&versionRow).Error; err != nil {
 		return membershipWriteError(err)
 	}
-	return createMembershipEntitlements(db, plan.OrganizationID, version.ID, entitlements)
+	if err := createMembershipEntitlements(db, plan.OrganizationID, version.ID, entitlements); err != nil {
+		return err
+	}
+	return createMembershipAddons(db, plan.OrganizationID, version.ID, addons)
 }
 
-func (r MembershipGormRepository) UpdateDraft(ctx context.Context, organizationID, unitID, planID domain.ID, expectedRevision int, version domain.MembershipPlanVersion, entitlements []domain.MembershipPlanEntitlement) (*domain.MembershipPlan, error) {
+func (r MembershipGormRepository) UpdateDraft(ctx context.Context, organizationID, unitID, planID domain.ID, expectedRevision int, version domain.MembershipPlanVersion, entitlements []domain.MembershipPlanEntitlement, addons []domain.MembershipPlanVersionAddon) (*domain.MembershipPlan, error) {
 	db := databaseForContext(r.db, ctx)
 	planRow, err := lockMembershipPlan(db, organizationID, unitID, planID)
 	if err != nil {
@@ -128,6 +131,21 @@ func (r MembershipGormRepository) UpdateDraft(ctx context.Context, organizationI
 		return nil, err
 	}
 	if err := createMembershipEntitlements(db, organizationID, domainID(draft.ID), entitlements); err != nil {
+		return nil, err
+	}
+	var existingAddons []models.MembershipPlanVersionAddonModel
+	if err := db.Where("plan_version_id = ? AND organization_id = ?", draft.ID, stringID(organizationID)).Find(&existingAddons).Error; err != nil {
+		return nil, err
+	}
+	for _, a := range existingAddons {
+		if err := db.Where("addon_id = ? AND organization_id = ?", a.ID, stringID(organizationID)).Delete(&models.MembershipPlanVersionAddonEntitlementModel{}).Error; err != nil {
+			return nil, err
+		}
+	}
+	if err := db.Where("plan_version_id = ? AND organization_id = ?", draft.ID, stringID(organizationID)).Delete(&models.MembershipPlanVersionAddonModel{}).Error; err != nil {
+		return nil, err
+	}
+	if err := createMembershipAddons(db, organizationID, domainID(draft.ID), addons); err != nil {
 		return nil, err
 	}
 	if draft.VersionNumber == 1 {
@@ -226,6 +244,41 @@ func (r MembershipGormRepository) CreateNewVersion(ctx context.Context, organiza
 			return nil, err
 		}
 	}
+	var previousAddons []models.MembershipPlanVersionAddonModel
+	if err := db.Where("plan_version_id = ? AND organization_id = ?", published.ID, stringID(organizationID)).Order("position ASC").Find(&previousAddons).Error; err != nil {
+		return nil, err
+	}
+	for _, item := range previousAddons {
+		oldAddonID := item.ID
+		newAddonID, idErr := newID()
+		if idErr != nil {
+			return nil, idErr
+		}
+		item.ID = stringID(newAddonID)
+		item.PlanVersionID = clone.ID
+		item.CreatedAt = createdAt
+		item.UpdatedAt = createdAt
+		if err := db.Create(&item).Error; err != nil {
+			return nil, err
+		}
+		var previousAddonEntitlements []models.MembershipPlanVersionAddonEntitlementModel
+		if err := db.Where("addon_id = ? AND organization_id = ?", oldAddonID, stringID(organizationID)).Order("position ASC").Find(&previousAddonEntitlements).Error; err != nil {
+			return nil, err
+		}
+		for _, e := range previousAddonEntitlements {
+			entID, eErr := newID()
+			if eErr != nil {
+				return nil, eErr
+			}
+			e.ID = stringID(entID)
+			e.AddonID = item.ID
+			e.CreatedAt = createdAt
+			e.UpdatedAt = createdAt
+			if err := db.Create(&e).Error; err != nil {
+				return nil, err
+			}
+		}
+	}
 	return r.GetPlan(ctx, organizationID, unitID, planID)
 }
 
@@ -318,6 +371,46 @@ func loadMembershipVersion(db *gorm.DB, row models.MembershipPlanVersionModel, h
 		}
 		version.Entitlements = append(version.Entitlements, entitlement)
 	}
+	var addonModels []models.MembershipPlanVersionAddonModel
+	if err := db.Where("plan_version_id = ? AND organization_id = ?", row.ID, row.OrganizationID).Order("position ASC").Find(&addonModels).Error; err != nil {
+		return version, err
+	}
+	for _, addonRow := range addonModels {
+		addon := membershipAddonToDomain(addonRow)
+		var addonEntitlements []models.MembershipPlanVersionAddonEntitlementModel
+		if err := db.Where("addon_id = ? AND organization_id = ?", addonRow.ID, row.OrganizationID).Order("position ASC").Find(&addonEntitlements).Error; err != nil {
+			return version, err
+		}
+		for _, item := range addonEntitlements {
+			entitlement := membershipAddonEntitlementToDomain(item)
+			if item.ModalityID != nil {
+				var modality struct {
+					ID, Name, Status string
+					ActiveInUnit     bool `gorm:"column:active_in_unit"`
+				}
+				if err := db.Table("modalities m").Select("m.id, m.name, m.status, COALESCE(um.active, false) AS active_in_unit").Joins("LEFT JOIN unit_modalities um ON um.modality_id = m.id AND um.organization_id = m.organization_id AND um.unit_id = ?", homeUnitID).Where("m.id = ? AND m.organization_id = ?", *item.ModalityID, row.OrganizationID).Take(&modality).Error; err == nil {
+					entitlement.TargetName, entitlement.TargetType = modality.Name, "modality"
+					if modality.Status != string(domain.CatalogStatusActive) || !modality.ActiveInUnit {
+						addon.Warnings = append(addon.Warnings, modality.Name+" está indisponível na unidade")
+					}
+				}
+			} else if item.ServiceOfferingID != nil {
+				var service struct {
+					ID, Name, Status string
+					ActiveInUnit     bool `gorm:"column:active_in_unit"`
+				}
+				if err := db.Table("service_offerings so").Select("so.id, so.name, so.status, COALESCE(uso.active, false) AS active_in_unit").Joins("LEFT JOIN unit_service_offerings uso ON uso.service_offering_id = so.id AND uso.organization_id = so.organization_id AND uso.unit_id = ?", homeUnitID).Where("so.id = ? AND so.organization_id = ?", *item.ServiceOfferingID, row.OrganizationID).Take(&service).Error; err == nil {
+					entitlement.TargetName, entitlement.TargetType = service.Name, "service_offering"
+					if service.Status != string(domain.CatalogStatusActive) || !service.ActiveInUnit {
+						addon.Warnings = append(addon.Warnings, service.Name+" está indisponível na unidade")
+					}
+				}
+			}
+			addon.Entitlements = append(addon.Entitlements, entitlement)
+		}
+		addon.Summary = domain.MembershipAddonSummary(addon)
+		version.Addons = append(version.Addons, addon)
+	}
 	version.Summary = domain.MembershipPlanSummary(version)
 	return version, nil
 }
@@ -349,6 +442,34 @@ func createMembershipEntitlements(db *gorm.DB, organizationID, versionID domain.
 	return nil
 }
 
+func createMembershipAddons(db *gorm.DB, organizationID, versionID domain.ID, addons []domain.MembershipPlanVersionAddon) error {
+	for index := range addons {
+		addon := &addons[index]
+		if err := ensureID(&addon.ID); err != nil {
+			return err
+		}
+		addon.OrganizationID = organizationID
+		addon.PlanVersionID = versionID
+		addonRow := membershipAddonToModel(*addon)
+		if err := db.Create(&addonRow).Error; err != nil {
+			return membershipWriteError(err)
+		}
+		for eIdx := range addon.Entitlements {
+			item := &addon.Entitlements[eIdx]
+			if err := ensureID(&item.ID); err != nil {
+				return err
+			}
+			item.OrganizationID = organizationID
+			item.AddonID = addon.ID
+			itemRow := membershipAddonEntitlementToModel(*item)
+			if err := db.Create(&itemRow).Error; err != nil {
+				return membershipWriteError(err)
+			}
+		}
+	}
+	return nil
+}
+
 func membershipPlanToModel(value domain.MembershipPlan) models.MembershipPlanModel {
 	return models.MembershipPlanModel{ID: stringID(value.ID), OrganizationID: stringID(value.OrganizationID), HomeUnitID: stringID(value.HomeUnitID), Name: value.Name, NameKey: value.NameKey, Status: string(value.Status), CreatedAt: value.CreatedAt, UpdatedAt: value.UpdatedAt}
 }
@@ -367,7 +488,7 @@ func membershipVersionToDomain(value models.MembershipPlanVersionModel) domain.M
 		converted := domain.MembershipValidityUnit(*value.ValidityUnit)
 		validity = &converted
 	}
-	return domain.MembershipPlanVersion{ID: domainID(value.ID), OrganizationID: domainID(value.OrganizationID), PlanID: domainID(value.PlanID), VersionNumber: value.VersionNumber, Revision: value.Revision, Status: domain.MembershipPlanVersionStatus(value.Status), Name: value.Name, Description: value.Description, PriceCents: value.PriceCents, Currency: value.Currency, BillingCycle: domain.MembershipBillingCycle(value.BillingCycle), ValidityCount: value.ValidityCount, ValidityUnit: validity, PublishedAt: value.PublishedAt, CreatedAt: value.CreatedAt, UpdatedAt: value.UpdatedAt, Entitlements: []domain.MembershipPlanEntitlement{}, Warnings: []string{}}
+	return domain.MembershipPlanVersion{ID: domainID(value.ID), OrganizationID: domainID(value.OrganizationID), PlanID: domainID(value.PlanID), VersionNumber: value.VersionNumber, Revision: value.Revision, Status: domain.MembershipPlanVersionStatus(value.Status), Name: value.Name, Description: value.Description, PriceCents: value.PriceCents, Currency: value.Currency, BillingCycle: domain.MembershipBillingCycle(value.BillingCycle), ValidityCount: value.ValidityCount, ValidityUnit: validity, PublishedAt: value.PublishedAt, CreatedAt: value.CreatedAt, UpdatedAt: value.UpdatedAt, Entitlements: []domain.MembershipPlanEntitlement{}, Addons: []domain.MembershipPlanVersionAddon{}, Warnings: []string{}}
 }
 
 func membershipEntitlementToModel(value domain.MembershipPlanEntitlement) models.MembershipPlanEntitlementModel {
@@ -388,6 +509,84 @@ func membershipEntitlementToDomain(value models.MembershipPlanEntitlementModel) 
 	return domain.MembershipPlanEntitlement{ID: domainID(value.ID), OrganizationID: domainID(value.OrganizationID), PlanVersionID: domainID(value.PlanVersionID), ModalityID: optionalDomainID(value.ModalityID), ServiceOfferingID: optionalDomainID(value.ServiceOfferingID), AccessType: domain.MembershipAccessType(value.AccessType), Quantity: value.Quantity, PeriodUnit: period, DailyLimit: value.DailyLimit, DeliveryMode: delivery, BookingRequired: value.BookingRequired, Position: value.Position, CreatedAt: value.CreatedAt, UpdatedAt: value.UpdatedAt}
 }
 
+func membershipAddonToModel(value domain.MembershipPlanVersionAddon) models.MembershipPlanVersionAddonModel {
+	return models.MembershipPlanVersionAddonModel{
+		ID:              stringID(value.ID),
+		OrganizationID:  stringID(value.OrganizationID),
+		PlanVersionID:   stringID(value.PlanVersionID),
+		Name:            value.Name,
+		Description:     value.Description,
+		PriceDeltaCents: value.PriceDeltaCents,
+		Position:        value.Position,
+		CreatedAt:       value.CreatedAt,
+		UpdatedAt:       value.UpdatedAt,
+	}
+}
+
+func membershipAddonToDomain(value models.MembershipPlanVersionAddonModel) domain.MembershipPlanVersionAddon {
+	return domain.MembershipPlanVersionAddon{
+		ID:              domainID(value.ID),
+		OrganizationID:  domainID(value.OrganizationID),
+		PlanVersionID:   domainID(value.PlanVersionID),
+		Name:            value.Name,
+		Description:     value.Description,
+		PriceDeltaCents: value.PriceDeltaCents,
+		Position:        value.Position,
+		CreatedAt:       value.CreatedAt,
+		UpdatedAt:       value.UpdatedAt,
+		Entitlements:    []domain.MembershipPlanAddonEntitlement{},
+		Warnings:        []string{},
+	}
+}
+
+func membershipAddonEntitlementToModel(value domain.MembershipPlanAddonEntitlement) models.MembershipPlanVersionAddonEntitlementModel {
+	return models.MembershipPlanVersionAddonEntitlementModel{
+		ID:                stringID(value.ID),
+		OrganizationID:    stringID(value.OrganizationID),
+		AddonID:           stringID(value.AddonID),
+		ModalityID:        optionalIDString(value.ModalityID),
+		ServiceOfferingID: optionalIDString(value.ServiceOfferingID),
+		AccessType:        string(value.AccessType),
+		Quantity:          value.Quantity,
+		PeriodUnit:        membershipPeriodValue(value.PeriodUnit),
+		DailyLimit:        value.DailyLimit,
+		DeliveryMode:      membershipDeliveryValue(value.DeliveryMode),
+		BookingRequired:   value.BookingRequired,
+		Position:          value.Position,
+		CreatedAt:         value.CreatedAt,
+		UpdatedAt:         value.UpdatedAt,
+	}
+}
+
+func membershipAddonEntitlementToDomain(value models.MembershipPlanVersionAddonEntitlementModel) domain.MembershipPlanAddonEntitlement {
+	var period *domain.MembershipPeriodUnit
+	if value.PeriodUnit != nil {
+		converted := domain.MembershipPeriodUnit(*value.PeriodUnit)
+		period = &converted
+	}
+	var delivery *domain.MembershipDeliveryMode
+	if value.DeliveryMode != nil {
+		converted := domain.MembershipDeliveryMode(*value.DeliveryMode)
+		delivery = &converted
+	}
+	return domain.MembershipPlanAddonEntitlement{
+		ID:                domainID(value.ID),
+		OrganizationID:    domainID(value.OrganizationID),
+		AddonID:           domainID(value.AddonID),
+		ModalityID:        optionalDomainID(value.ModalityID),
+		ServiceOfferingID: optionalDomainID(value.ServiceOfferingID),
+		AccessType:        domain.MembershipAccessType(value.AccessType),
+		Quantity:          value.Quantity,
+		PeriodUnit:        period,
+		DailyLimit:        value.DailyLimit,
+		DeliveryMode:      delivery,
+		BookingRequired:   value.BookingRequired,
+		Position:          value.Position,
+		CreatedAt:         value.CreatedAt,
+		UpdatedAt:         value.UpdatedAt,
+	}
+}
+
 func membershipWriteError(err error) error {
 	var pgErr *pgconn.PgError
 	if !errors.As(err, &pgErr) {
@@ -401,6 +600,10 @@ func membershipWriteError(err error) error {
 			return portrepo.ErrMembershipDraftExists
 		case "membership_plan_command_requests_scope_key":
 			return portrepo.ErrMembershipIdempotencyReused
+		case "membership_plan_version_addons_version_name_key":
+			return portrepo.ErrMembershipAddonDuplicate
+		case "membership_addon_entitlements_target_unique":
+			return portrepo.ErrMembershipAddonDuplicate
 		}
 	}
 	return err

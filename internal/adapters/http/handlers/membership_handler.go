@@ -174,7 +174,24 @@ func membershipPlanResponse(item domain.MembershipPlan, history bool) dto.Member
 }
 
 func membershipVersionResponse(item domain.MembershipPlanVersion) dto.MembershipPlanVersionResponse {
-	response := dto.MembershipPlanVersionResponse{ID: string(item.ID), VersionNumber: item.VersionNumber, Revision: item.Revision, Status: string(item.Status), Name: item.Name, Description: item.Description, PriceCents: item.PriceCents, Currency: item.Currency, BillingCycle: string(item.BillingCycle), ValidityCount: item.ValidityCount, Entitlements: make([]dto.MembershipPlanEntitlementResponse, 0, len(item.Entitlements)), Summary: item.Summary, Warnings: item.Warnings, CreatedAt: item.CreatedAt.Format(time.RFC3339), UpdatedAt: item.UpdatedAt.Format(time.RFC3339)}
+	response := dto.MembershipPlanVersionResponse{
+		ID:            string(item.ID),
+		VersionNumber: item.VersionNumber,
+		Revision:      item.Revision,
+		Status:        string(item.Status),
+		Name:          item.Name,
+		Description:   item.Description,
+		PriceCents:    item.PriceCents,
+		Currency:      item.Currency,
+		BillingCycle:  string(item.BillingCycle),
+		ValidityCount: item.ValidityCount,
+		Entitlements:  make([]dto.MembershipPlanEntitlementResponse, 0, len(item.Entitlements)),
+		Addons:        make([]dto.MembershipPlanAddonResponse, 0, len(item.Addons)),
+		Summary:       item.Summary,
+		Warnings:      item.Warnings,
+		CreatedAt:     item.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:     item.UpdatedAt.Format(time.RFC3339),
+	}
 	if item.ValidityUnit != nil {
 		value := string(*item.ValidityUnit)
 		response.ValidityUnit = &value
@@ -203,6 +220,48 @@ func membershipVersionResponse(item domain.MembershipPlanVersion) dto.Membership
 		}
 		response.Entitlements = append(response.Entitlements, converted)
 	}
+	for _, addon := range item.Addons {
+		addonResp := dto.MembershipPlanAddonResponse{
+			ID:              string(addon.ID),
+			Name:            addon.Name,
+			Description:     addon.Description,
+			PriceDeltaCents: addon.PriceDeltaCents,
+			Position:        addon.Position,
+			Entitlements:    make([]dto.MembershipPlanAddonEntitlementResponse, 0, len(addon.Entitlements)),
+			Summary:         addon.Summary,
+			Warnings:        addon.Warnings,
+		}
+		for _, e := range addon.Entitlements {
+			eResp := dto.MembershipPlanAddonEntitlementResponse{
+				ID:              string(e.ID),
+				TargetName:      e.TargetName,
+				TargetType:      e.TargetType,
+				AccessType:      string(e.AccessType),
+				Quantity:        e.Quantity,
+				DailyLimit:      e.DailyLimit,
+				BookingRequired: e.BookingRequired,
+				Position:        e.Position,
+			}
+			if e.ModalityID != "" {
+				value := string(e.ModalityID)
+				eResp.ModalityID = &value
+			}
+			if e.ServiceOfferingID != "" {
+				value := string(e.ServiceOfferingID)
+				eResp.ServiceOfferingID = &value
+			}
+			if e.PeriodUnit != nil {
+				value := string(*e.PeriodUnit)
+				eResp.PeriodUnit = &value
+			}
+			if e.DeliveryMode != nil {
+				value := string(*e.DeliveryMode)
+				eResp.DeliveryMode = &value
+			}
+			addonResp.Entitlements = append(addonResp.Entitlements, eResp)
+		}
+		response.Addons = append(response.Addons, addonResp)
+	}
 	return response
 }
 
@@ -216,6 +275,10 @@ func respondMembershipError(c *gin.Context, err error) {
 		respondPublicError(c, http.StatusUnprocessableEntity, "membership_plan_invalid", "dados do plano inválidos")
 	case errors.Is(err, memberships.ErrTargetInvalid):
 		respondPublicError(c, http.StatusUnprocessableEntity, "membership_plan_target_invalid", "modalidade ou serviço indisponível nesta unidade")
+	case errors.Is(err, memberships.ErrAddonNotFound):
+		respondPublicError(c, http.StatusUnprocessableEntity, "membership_plan_addon_not_found", "adicional não encontrado")
+	case errors.Is(err, memberships.ErrAddonDuplicate):
+		respondPublicError(c, http.StatusUnprocessableEntity, "membership_plan_addon_duplicate", "adicional duplicado")
 	case errors.Is(err, memberships.ErrDraftNotFound):
 		respondPublicError(c, http.StatusConflict, "membership_plan_draft_not_found", "rascunho não encontrado")
 	case errors.Is(err, memberships.ErrDraftExists):

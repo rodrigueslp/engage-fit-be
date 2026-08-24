@@ -16,6 +16,7 @@ import (
 	"boxengage/backend/internal/observability"
 	"boxengage/backend/internal/ports/repositories"
 	"github.com/google/uuid"
+	"sort"
 )
 
 var (
@@ -27,6 +28,8 @@ var (
 	ErrEnrollmentRevisionConflict  = repositories.ErrEnrollmentRevisionConflict
 	ErrEnrollmentAlreadyEnded      = repositories.ErrEnrollmentAlreadyEnded
 	ErrEnrollmentIdempotencyReused = repositories.ErrEnrollmentIdempotencyReused
+	ErrEnrollmentAddonNotFound     = repositories.ErrEnrollmentAddonNotFound
+	ErrEnrollmentAddonDuplicate    = repositories.ErrEnrollmentAddonDuplicate
 	ErrPlanUnavailable             = errors.New("plan unavailable")
 	ErrPlanTargetsInactive         = errors.New("plan targets inactive")
 	ErrInvalidStartDate            = errors.New("invalid enrollment start date")
@@ -35,9 +38,10 @@ var (
 )
 
 type CreateEnrollmentInput struct {
-	PlanID        string `json:"plan_id"`
-	PlanVersionID string `json:"plan_version_id"`
-	StartsOn      string `json:"starts_on"`
+	PlanID        string   `json:"plan_id"`
+	PlanVersionID string   `json:"plan_version_id"`
+	StartsOn      string   `json:"starts_on"`
+	AddonIDs      []string `json:"addon_ids"`
 }
 
 type EndEnrollmentInput struct {
@@ -131,13 +135,28 @@ func (s *EnrollmentService) Create(ctx context.Context, unitID, studentID, actor
 	if err != nil {
 		return nil, false, ErrEnrollmentSubjectNotFound
 	}
+	normalizedAddonIDs := make([]string, 0, len(input.AddonIDs))
+	seenAddonIDs := map[string]struct{}{}
+	for _, rawID := range input.AddonIDs {
+		if !validEnrollmentID(domain.ID(rawID)) {
+			return nil, false, ErrInvalidEnrollmentRequest
+		}
+		if _, exists := seenAddonIDs[rawID]; exists {
+			return nil, false, ErrEnrollmentAddonDuplicate
+		}
+		seenAddonIDs[rawID] = struct{}{}
+		normalizedAddonIDs = append(normalizedAddonIDs, rawID)
+	}
+	sort.Strings(normalizedAddonIDs)
+
 	fingerprint := enrollmentFingerprint(struct {
 		UnitID        domain.ID `json:"unit_id"`
 		StudentID     domain.ID `json:"student_id"`
 		PlanID        domain.ID `json:"plan_id"`
 		PlanVersionID domain.ID `json:"plan_version_id"`
 		StartsOn      string    `json:"starts_on"`
-	}{unitID, studentID, planID, versionID, startsOn.Format("2006-01-02")})
+		AddonIDs      []string  `json:"addon_ids"`
+	}{unitID, studentID, planID, versionID, startsOn.Format("2006-01-02"), normalizedAddonIDs})
 	commandTime := s.now().UTC()
 	var result *domain.Enrollment
 	var replayed bool
@@ -196,8 +215,52 @@ func (s *EnrollmentService) Create(ctx context.Context, unitID, studentID, actor
 		if err := s.validateTargets(txctx, organizationID, unitID, *version); err != nil {
 			return err
 		}
+		addonsByID := map[domain.ID]domain.MembershipPlanVersionAddon{}
+		for _, a := range version.Addons {
+			addonsByID[a.ID] = a
+		}
+		enrollmentAddons := make([]domain.EnrollmentAddon, 0, len(input.AddonIDs))
+		addonsPriceCents := 0
+		for _, rawID := range input.AddonIDs {
+			addonID := domain.ID(rawID)
+			versionAddon, exists := addonsByID[addonID]
+			if !exists {
+				return ErrEnrollmentAddonNotFound
+			}
+			if err := s.validateAddonTargets(txctx, organizationID, unitID, versionAddon); err != nil {
+				return err
+			}
+			enrollmentAddon := domain.EnrollmentAddon{
+				PlanVersionAddonID: versionAddon.ID,
+				Name:               versionAddon.Name,
+				PriceDeltaCents:    versionAddon.PriceDeltaCents,
+				Summary:            versionAddon.Summary,
+				CreatedAt:          commandTime,
+			}
+			enrollmentAddons = append(enrollmentAddons, enrollmentAddon)
+			addonsPriceCents += versionAddon.PriceDeltaCents
+		}
+		basePriceCents := version.PriceCents
+		totalPriceCents := basePriceCents + addonsPriceCents
 		validUntil := calculateValidUntil(startsOn, *version)
-		enrollment := &domain.Enrollment{OrganizationID: organizationID, PersonID: subject.PersonID, HomeUnitID: unitID, PlanVersionID: version.ID, LifecycleStatus: domain.EnrollmentLifecycleActive, StartsOn: startsOn, ValidUntil: validUntil, Revision: 1, CreatedByUserID: actorID, CreatedAt: commandTime, UpdatedAt: commandTime, Terms: termsForVersion(planID, *version)}
+		enrollment := &domain.Enrollment{
+			OrganizationID:   organizationID,
+			PersonID:         subject.PersonID,
+			HomeUnitID:       unitID,
+			PlanVersionID:    version.ID,
+			LifecycleStatus:  domain.EnrollmentLifecycleActive,
+			StartsOn:         startsOn,
+			ValidUntil:       validUntil,
+			Revision:         1,
+			BasePriceCents:   basePriceCents,
+			AddonsPriceCents: addonsPriceCents,
+			TotalPriceCents:  totalPriceCents,
+			Addons:           enrollmentAddons,
+			CreatedByUserID:  actorID,
+			CreatedAt:        commandTime,
+			UpdatedAt:        commandTime,
+			Terms:            termsForVersion(planID, *version, basePriceCents, addonsPriceCents, totalPriceCents),
+		}
 		if err := s.repository.CreateEnrollment(txctx, enrollment); err != nil {
 			return err
 		}
@@ -446,8 +509,51 @@ func addCalendarClamped(value time.Time, years, months int) time.Time {
 	return time.Date(targetMonth.Year(), targetMonth.Month(), day, 0, 0, 0, 0, value.Location())
 }
 
-func termsForVersion(planID domain.ID, version domain.MembershipPlanVersion) domain.EnrollmentTerms {
-	return domain.EnrollmentTerms{PlanID: planID, PlanVersionID: version.ID, VersionNumber: version.VersionNumber, Name: version.Name, Description: version.Description, PriceCents: version.PriceCents, Currency: version.Currency, BillingCycle: version.BillingCycle, Summary: version.Summary}
+func (s *EnrollmentService) validateAddonTargets(ctx context.Context, organizationID, unitID domain.ID, addon domain.MembershipPlanVersionAddon) error {
+	modalities, services := []domain.ID{}, []domain.ID{}
+	for _, item := range addon.Entitlements {
+		if item.ModalityID != "" {
+			modalities = append(modalities, item.ModalityID)
+		} else if item.ServiceOfferingID != "" {
+			services = append(services, item.ServiceOfferingID)
+		}
+	}
+	references, err := s.catalog.ResolvePlanReferences(ctx, organizationID, unitID, modalities, services)
+	if err != nil {
+		return err
+	}
+	available := map[string]bool{}
+	for _, reference := range references {
+		available[reference.Type+":"+string(reference.ID)] = reference.Status == domain.CatalogStatusActive && reference.ActiveInUnit
+	}
+	for _, item := range addon.Entitlements {
+		key := "modality:" + string(item.ModalityID)
+		if item.ServiceOfferingID != "" {
+			key = "service_offering:" + string(item.ServiceOfferingID)
+		}
+		if !available[key] {
+			return ErrPlanTargetsInactive
+		}
+	}
+	return nil
+}
+
+func termsForVersion(planID domain.ID, version domain.MembershipPlanVersion, basePriceCents, addonsPriceCents, totalPriceCents int) domain.EnrollmentTerms {
+	return domain.EnrollmentTerms{
+		PlanID:           planID,
+		PlanVersionID:    version.ID,
+		VersionNumber:    version.VersionNumber,
+		Name:             version.Name,
+		Description:      version.Description,
+		PriceCents:       totalPriceCents,
+		BasePriceCents:   basePriceCents,
+		AddonsPriceCents: addonsPriceCents,
+		TotalPriceCents:  totalPriceCents,
+		Currency:         version.Currency,
+		BillingCycle:     version.BillingCycle,
+		Summary:          version.Summary,
+		BaseSummary:      version.Summary,
+	}
 }
 
 func enrollmentFingerprint(value any) string {
@@ -488,7 +594,27 @@ func enrollmentCommandResult(request *domain.EnrollmentCommandRequest) (*domain.
 }
 
 func enrollmentAudit(value domain.Enrollment) map[string]any {
-	return map[string]any{"lifecycle_status": value.LifecycleStatus, "starts_on": value.StartsOn.Format("2006-01-02"), "valid_until": formatOptionalDate(value.ValidUntil), "ended_on": formatOptionalDate(value.EndedOn), "revision": value.Revision, "plan_version_id": value.PlanVersionID}
+	addons := make([]map[string]any, 0, len(value.Addons))
+	for _, a := range value.Addons {
+		addons = append(addons, map[string]any{
+			"plan_version_addon_id": a.PlanVersionAddonID,
+			"addon_name":            a.Name,
+			"price_delta_cents":     a.PriceDeltaCents,
+			"entitlement_summary":   a.Summary,
+		})
+	}
+	return map[string]any{
+		"lifecycle_status":   value.LifecycleStatus,
+		"starts_on":          value.StartsOn.Format("2006-01-02"),
+		"valid_until":        formatOptionalDate(value.ValidUntil),
+		"ended_on":           formatOptionalDate(value.EndedOn),
+		"revision":           value.Revision,
+		"plan_version_id":    value.PlanVersionID,
+		"base_price_cents":   value.BasePriceCents,
+		"addons_price_cents": value.AddonsPriceCents,
+		"total_price_cents":  value.TotalPriceCents,
+		"addons":             addons,
+	}
 }
 
 func formatOptionalDate(value *time.Time) any {
@@ -502,7 +628,7 @@ func enrollmentResult(err error) string {
 	if err == nil {
 		return "success"
 	}
-	if errors.Is(err, ErrActiveEnrollmentExists) || errors.Is(err, ErrPlanVersionChanged) || errors.Is(err, ErrEnrollmentRevisionConflict) || errors.Is(err, ErrEnrollmentIdempotencyReused) || errors.Is(err, ErrEnrollmentAlreadyEnded) {
+	if errors.Is(err, ErrActiveEnrollmentExists) || errors.Is(err, ErrPlanVersionChanged) || errors.Is(err, ErrEnrollmentRevisionConflict) || errors.Is(err, ErrEnrollmentIdempotencyReused) || errors.Is(err, ErrEnrollmentAlreadyEnded) || errors.Is(err, ErrEnrollmentAddonDuplicate) || errors.Is(err, ErrEnrollmentAddonNotFound) {
 		return "conflict"
 	}
 	if errors.Is(err, ErrInvalidEnrollmentRequest) || errors.Is(err, ErrInvalidStartDate) || errors.Is(err, ErrInvalidEnd) || errors.Is(err, ErrPlanUnavailable) || errors.Is(err, ErrPlanTargetsInactive) || errors.Is(err, ErrEnrollmentSubjectIneligible) {
@@ -530,6 +656,10 @@ func enrollmentConflictReason(err error) string {
 		return "idempotency_key_reused"
 	case errors.Is(err, ErrEnrollmentAlreadyEnded):
 		return "enrollment_already_ended"
+	case errors.Is(err, ErrEnrollmentAddonNotFound):
+		return "membership_plan_addon_not_found"
+	case errors.Is(err, ErrEnrollmentAddonDuplicate):
+		return "membership_plan_addon_duplicate"
 	default:
 		return ""
 	}

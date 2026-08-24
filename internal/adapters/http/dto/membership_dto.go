@@ -27,6 +27,7 @@ type MembershipPlanVersionResponse struct {
 	ValidityUnit  *string                             `json:"validity_unit"`
 	PublishedAt   *string                             `json:"published_at"`
 	Entitlements  []MembershipPlanEntitlementResponse `json:"entitlements"`
+	Addons        []MembershipPlanAddonResponse       `json:"addons"`
 	Summary       string                              `json:"summary"`
 	Warnings      []string                            `json:"warnings"`
 	CreatedAt     string                              `json:"created_at"`
@@ -34,6 +35,32 @@ type MembershipPlanVersionResponse struct {
 }
 
 type MembershipPlanEntitlementResponse struct {
+	ID                string  `json:"id"`
+	ModalityID        *string `json:"modality_id"`
+	ServiceOfferingID *string `json:"service_offering_id"`
+	TargetName        string  `json:"target_name"`
+	TargetType        string  `json:"target_type"`
+	AccessType        string  `json:"access_type"`
+	Quantity          *int    `json:"quantity"`
+	PeriodUnit        *string `json:"period_unit"`
+	DailyLimit        *int    `json:"daily_limit"`
+	DeliveryMode      *string `json:"delivery_mode"`
+	BookingRequired   bool    `json:"booking_required"`
+	Position          int     `json:"position"`
+}
+
+type MembershipPlanAddonResponse struct {
+	ID              string                                   `json:"id"`
+	Name            string                                   `json:"name"`
+	Description     string                                   `json:"description"`
+	PriceDeltaCents int                                      `json:"price_delta_cents"`
+	Position        int                                      `json:"position"`
+	Entitlements    []MembershipPlanAddonEntitlementResponse `json:"entitlements"`
+	Summary         string                                   `json:"summary"`
+	Warnings        []string                                 `json:"warnings"`
+}
+
+type MembershipPlanAddonEntitlementResponse struct {
 	ID                string  `json:"id"`
 	ModalityID        *string `json:"modality_id"`
 	ServiceOfferingID *string `json:"service_offering_id"`

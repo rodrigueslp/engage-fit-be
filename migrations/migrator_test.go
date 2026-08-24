@@ -132,3 +132,19 @@ func TestEmbeddedMigrationsIncludePersonPlanEnrollments(t *testing.T) {
 	}
 	t.Fatal("person plan enrollment migration not found")
 }
+
+func TestEmbeddedMigrationsIncludeMembershipAddonsAndComposition(t *testing.T) {
+	loaded, err := Load(Files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, migration := range loaded {
+		if migration.Version == 59 {
+			if migration.Name != "create_membership_addons_and_composition" || !strings.Contains(migration.SQL, "CREATE TABLE membership_plan_version_addons") || !strings.Contains(migration.SQL, "CREATE TABLE enrollment_addons") || !strings.Contains(migration.SQL, "prevent_published_plan_addon_mutation") || !strings.Contains(migration.SQL, "prevent_enrollment_addon_mutation") {
+				t.Fatalf("unexpected addons migration: %+v", migration)
+			}
+			return
+		}
+	}
+	t.Fatal("membership addons and composition migration not found")
+}

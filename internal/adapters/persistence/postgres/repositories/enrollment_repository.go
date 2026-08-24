@@ -128,9 +128,22 @@ func (r EnrollmentGormRepository) CreateEnrollment(ctx context.Context, enrollme
 	if err := ensureID(&enrollment.ID); err != nil {
 		return err
 	}
+	db := databaseForContext(r.db, ctx)
 	row := enrollmentToModel(*enrollment)
-	if err := databaseForContext(r.db, ctx).Create(&row).Error; err != nil {
+	if err := db.Create(&row).Error; err != nil {
 		return enrollmentWriteError(err)
+	}
+	for index := range enrollment.Addons {
+		addon := &enrollment.Addons[index]
+		if err := ensureID(&addon.ID); err != nil {
+			return err
+		}
+		addon.OrganizationID = enrollment.OrganizationID
+		addon.EnrollmentID = enrollment.ID
+		addonRow := enrollmentAddonToModel(*addon)
+		if err := db.Create(&addonRow).Error; err != nil {
+			return enrollmentWriteError(err)
+		}
 	}
 	return nil
 }
@@ -223,7 +236,36 @@ func loadEnrollment(db *gorm.DB, row models.EnrollmentModel) (domain.Enrollment,
 	if err != nil {
 		return item, err
 	}
-	item.Terms = domain.EnrollmentTerms{PlanID: domainID(plan.ID), PlanVersionID: domainID(version.ID), VersionNumber: version.VersionNumber, Name: version.Name, Description: version.Description, PriceCents: version.PriceCents, Currency: version.Currency, BillingCycle: domain.MembershipBillingCycle(version.BillingCycle), Summary: loadedVersion.Summary}
+	var addonRows []models.EnrollmentAddonModel
+	if err := db.Where("enrollment_id = ? AND organization_id = ?", row.ID, row.OrganizationID).Order("created_at ASC").Find(&addonRows).Error; err != nil {
+		return item, err
+	}
+	addons := make([]domain.EnrollmentAddon, 0, len(addonRows))
+	addonsPriceCents := 0
+	for _, aRow := range addonRows {
+		addon := enrollmentAddonToDomain(aRow)
+		addons = append(addons, addon)
+		addonsPriceCents += addon.PriceDeltaCents
+	}
+	item.Addons = addons
+	item.BasePriceCents = version.PriceCents
+	item.AddonsPriceCents = addonsPriceCents
+	item.TotalPriceCents = item.BasePriceCents + item.AddonsPriceCents
+	item.Terms = domain.EnrollmentTerms{
+		PlanID:           domainID(plan.ID),
+		PlanVersionID:    domainID(version.ID),
+		VersionNumber:    version.VersionNumber,
+		Name:             version.Name,
+		Description:      version.Description,
+		PriceCents:       item.TotalPriceCents,
+		BasePriceCents:   item.BasePriceCents,
+		AddonsPriceCents: item.AddonsPriceCents,
+		TotalPriceCents:  item.TotalPriceCents,
+		Currency:         version.Currency,
+		BillingCycle:     domain.MembershipBillingCycle(version.BillingCycle),
+		Summary:          loadedVersion.Summary,
+		BaseSummary:      loadedVersion.Summary,
+	}
 	return item, nil
 }
 
@@ -233,6 +275,32 @@ func enrollmentToModel(value domain.Enrollment) models.EnrollmentModel {
 
 func enrollmentToDomain(value models.EnrollmentModel) domain.Enrollment {
 	return domain.Enrollment{ID: domainID(value.ID), OrganizationID: domainID(value.OrganizationID), PersonID: domainID(value.PersonID), HomeUnitID: domainID(value.HomeUnitID), PlanVersionID: domainID(value.PlanVersionID), LifecycleStatus: domain.EnrollmentLifecycleStatus(value.LifecycleStatus), StartsOn: dateOnly(value.StartsOn), ValidUntil: datePointer(value.ValidUntil), EndedOn: datePointer(value.EndedOn), EndedAt: value.EndedAt, EndedReason: optionalString(value.EndedReason), Revision: value.Revision, CreatedByUserID: domainID(value.CreatedByUserID), EndedByUserID: optionalDomainID(value.EndedByUserID), CreatedAt: value.CreatedAt, UpdatedAt: value.UpdatedAt}
+}
+
+func enrollmentAddonToModel(value domain.EnrollmentAddon) models.EnrollmentAddonModel {
+	return models.EnrollmentAddonModel{
+		ID:                 stringID(value.ID),
+		OrganizationID:     stringID(value.OrganizationID),
+		EnrollmentID:       stringID(value.EnrollmentID),
+		PlanVersionAddonID: stringID(value.PlanVersionAddonID),
+		AddonName:          value.Name,
+		PriceDeltaCents:    value.PriceDeltaCents,
+		EntitlementSummary: value.Summary,
+		CreatedAt:          value.CreatedAt,
+	}
+}
+
+func enrollmentAddonToDomain(value models.EnrollmentAddonModel) domain.EnrollmentAddon {
+	return domain.EnrollmentAddon{
+		ID:                 domainID(value.ID),
+		OrganizationID:     domainID(value.OrganizationID),
+		EnrollmentID:       domainID(value.EnrollmentID),
+		PlanVersionAddonID: domainID(value.PlanVersionAddonID),
+		Name:               value.AddonName,
+		PriceDeltaCents:    value.PriceDeltaCents,
+		Summary:            value.EntitlementSummary,
+		CreatedAt:          value.CreatedAt,
+	}
 }
 
 func enrollmentEventToDomain(row models.EnrollmentEventModel) domain.EnrollmentEvent {
@@ -256,6 +324,8 @@ func enrollmentWriteError(err error) error {
 			return portrepo.ErrActiveEnrollmentExists
 		case "enrollment_command_requests_scope_key":
 			return portrepo.ErrEnrollmentIdempotencyReused
+		case "enrollment_addons_enrollment_addon_key":
+			return portrepo.ErrEnrollmentAddonDuplicate
 		}
 	}
 	return err
