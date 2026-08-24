@@ -4,15 +4,15 @@ Manual canônico de arquitetura e negócio: `docs/system-design.md`.
 
 Guia operacional consolidado: `docs/application-readiness-guide.md`.
 
-Atualizado em: 2026-08-24 (SPEC-004/A preparada em draft; somente documentação, sem implementação/push/deploy)
+Atualizado em: 2026-08-24 (SPEC-004/A revisada e pronta; somente documentação, sem implementação/push/deploy)
 
-## Checkpoint atual — SPEC-004/A preparada para revisão
+## Checkpoint atual — SPEC-004/A revisada e pronta para implementação local
 
 Este checkpoint prevalece sobre todos os registros históricos abaixo.
 
-Foi preparada a especificação
+Foi revisada integralmente a especificação
 `docs/sdd/specs/SPEC-004-A-contract-foundation-enrollment-issuance.md`, versão
-`0.1`, estado `draft`, para a fundação do módulo `contracts`. Ela detalha:
+`1.0`, agora em `ready`, para a fundação do módulo `contracts`. Ela detalha:
 
 - template, versão publicada imutável e instância vinculada à matrícula;
 - snapshot comercial canônico da versão do plano e dos adicionais contratados;
@@ -27,9 +27,23 @@ Foi preparada a especificação
 - UX mobile do owner, rollout por flags desligadas, critérios e matriz de
   testes.
 
-O documento continua em `draft` e não autoriza código, migration, endpoints ou
-flags. As decisões bloqueadoras da seção 20 precisam ser revistas antes de
-alterar o status para `ready`.
+As quatro decisões que bloqueavam a fundação local foram aprovadas sem
+divergência arquitetural:
+
+1. `{{member_name}}` é suficiente no schema 1; CPF, endereço, e-mail e
+   telefone permanecem fora;
+2. título de 1 a 160 caracteres, corpo Markdown de 1 a 50.000 e declaração
+   de 10 a 1.000 foram aceitos, sem HTML bruto, scripts, iframes, imagens
+   remotas ou URLs executáveis;
+3. o owner escreve o conteúdo, mas o EngageFit não fornece, valida nem declara
+   template juridicamente adequado;
+4. existe no máximo uma instância não descartada de `membership_terms` por
+   matrícula nesta fundação.
+
+O estado `ready` autoriza somente uma implementação futura local da slice A,
+com simulador sem rede e dados sintéticos. Produção e `SPEC-004/B` continuam
+bloqueadas por qualificação das partes, provedor/método de assinatura,
+evidências, retenção, legal hold e resposta a pedidos de eliminação.
 
 O fatiamento proposto para a iniciativa é:
 
@@ -40,8 +54,9 @@ O fatiamento proposto para a iniciativa é:
   coordenado com `memberbilling`.
 
 Também foi criado o prompt independente
-`docs/sdd/prompts/SPEC-004-A-implementation.md`. Ele instrui o futuro executor
-a parar sem alterar arquivos caso a spec ainda esteja em `draft`.
+`docs/sdd/prompts/SPEC-004-A-implementation.md`, agora aplicável à versão
+`ready` e ainda condicionado à confirmação desse estado no início da
+execução.
 
 Catálogo, README e rastreabilidade de `REQ-001` foram atualizados. O
 `docs/system-design.md` não foi alterado porque continua descrevendo somente o
@@ -49,7 +64,7 @@ sistema implementado.
 
 Estado preservado:
 
-- base backend considerada nesta preparação: `297634e`;
+- branch documental rebaseada sobre o backend `main` em `22ab15f`;
 - frontend integrado informado: `4d2d9e1`;
 - produção continua na migration `052`;
 - nenhum código, migration, endpoint, banco, feature flag, push, deploy ou
@@ -59,10 +74,10 @@ Estado preservado:
   `docs/proposta-engagefit-guilherme.html` permanecem fora do escopo e devem
   continuar preservados.
 
-Próxima ação: revisar as quatro decisões bloqueadoras da seção 20 da
-`SPEC-004/A`. Somente depois de produto, arquitetura e privacidade aceitarem o
-contrato e mudarem seu estado para `ready` o prompt de implementação pode ser
-usado em worktrees dedicados.
+Próxima ação: usar o prompt documental para preparar worktrees dedicados e
+implementar somente a `SPEC-004/A`. Manter PAR-Q no futuro módulo
+`healthforms`; não iniciar `SPEC-004/B-D`, cobrança, agenda ou acesso por
+implicação.
 
 ## Checkpoint anterior — SPEC-003/B homologada e commitada localmente (Adicionais versionados e composição comercial)
 
@@ -2980,5 +2995,5 @@ WodScope. Antes de produção, implementar recuperação/verificação de conta.
 Mensagem sugerida:
 
 ```txt
-Leia integralmente `.ai/handoff.md`, começando pelo checkpoint atual do topo, e use `docs/system-design.md`, `docs/sdd/REQ-001-primeiro-passo-operacional.md`, `docs/sdd/ARCH-001-modular-foundation.md` e as SPECs como fontes canônicas. Estado local: `SPEC-001/A-B-D`, `SPEC-002/A` e `SPEC-003/A-B-C` estão integradas, commitadas e homologadas localmente. A `SPEC-004/A` foi preparada somente como documentação e permanece em `draft`; revise suas decisões abertas antes de qualquer implementação. O banco local compartilhado está em `059`, mas produção continua em `052`. Não faça push dos `main`: Railway usa esses branches como source automático e o backend executa migrations no pre-deploy, portanto push implica deploy de produção. Preserve `.ai/acordo-fundadores-engagefit.md`, `docs/proposta-engagefit-guilherme.html` e qualquer outra alteração não commitada.
+Leia integralmente `.ai/handoff.md`, começando pelo checkpoint atual do topo, e use `docs/system-design.md`, `docs/sdd/REQ-001-primeiro-passo-operacional.md`, `docs/sdd/ARCH-001-modular-foundation.md` e as SPECs como fontes canônicas. Estado local: `SPEC-001/A-B-D`, `SPEC-002/A` e `SPEC-003/A-B-C` estão integradas, commitadas e homologadas localmente. A `SPEC-004/A` foi revisada e está `ready` somente para implementação local da fundação, com simulador sem rede e dados sintéticos; use `docs/sdd/prompts/SPEC-004-A-implementation.md`. PAR-Q permanece no futuro módulo `healthforms`, e produção/`SPEC-004/B-D` não estão autorizadas. O banco local compartilhado está em `059`, mas produção continua em `052`. Não faça push dos `main`: Railway usa esses branches como source automático e o backend executa migrations no pre-deploy, portanto push implica deploy de produção. Preserve `.ai/acordo-fundadores-engagefit.md`, `docs/proposta-engagefit-guilherme.html` e qualquer outra alteração não commitada.
 ```

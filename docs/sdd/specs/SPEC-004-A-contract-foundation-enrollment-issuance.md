@@ -1,7 +1,7 @@
 # SPEC-004/A — Fundação de contratos e emissão vinculada à matrícula
 
-- Status: `draft`
-- Versão: `0.1`
+- Status: `ready`
+- Versão: `1.0`
 - Data: 2026-08-24
 - Depende de: `ARCH-001`, `SPEC-002/A`, `SPEC-003/A-B-C`
 - Bloqueia: aceite eletrônico produtivo (`SPEC-004/B`) e o contrato interno
@@ -18,12 +18,13 @@ Esta é a primeira slice da iniciativa `SPEC-004`. Ela fecha somente a
 fundação de documentos contratuais, a emissão vinculada a uma matrícula já
 existente e um aceite exercitável por port com simulador local.
 
-O estado inicial é `draft`: este documento ainda precisa de revisão de produto,
-arquitetura e privacidade antes de chegar a `ready`. Enquanto permanecer em
-`draft`, não autoriza código, migration, endpoint, integração, deploy ou
-habilitação de feature flag. Depois de aceito, ele será o único contrato
-executável da slice A; a spec-guia `SPEC-003` e os documentos de direção não
-podem ampliar seu escopo silenciosamente.
+Produto, arquitetura e privacidade revisaram esta spec e aprovaram as quatro
+decisões da seção 20. O documento está em `ready` e é o único contrato
+executável da slice A. Essa autorização continua limitada à fundação local
+descrita aqui: não autoriza integração produtiva, dados reais, deploy,
+habilitação de feature flag ou qualquer escopo da `SPEC-004/B-D`. A
+spec-guia `SPEC-003` e os documentos de direção não podem ampliar seu escopo
+silenciosamente.
 
 ## 1. Resultado esperado
 
@@ -863,19 +864,42 @@ fluxos existentes.
 Baseline adicional: `go test ./...`, `go vet ./...` e race detector em Linux
 com PostgreSQL real.
 
-## 20. Decisões abertas antes de `ready`
+## 20. Decisões da revisão para `ready`
 
-### Bloqueiam a implementação da slice A
+Produto, arquitetura e privacidade aprovaram em 2026-08-24:
 
-1. Revisar se `member_name` é suficiente para a homologação local ou se o
-   schema 1 deve usar um identificador visual adicional não sensível.
-2. Aprovar os limites de tamanho, Markdown e a allowlist de placeholders.
-3. Aprovar que o owner pode criar conteúdo, mas nenhum template jurídico será
-   semeado ou considerado validado pelo produto.
-4. Confirmar que uma matrícula terá no máximo uma instância não descartada do
-   tipo `membership_terms` nesta fundação.
+1. `{{member_name}}` é suficiente no `placeholder_schema_version=1` para a
+   homologação local. CPF, endereço, e-mail e telefone ficam fora da slice e
+   não podem ser obtidos por atalho no módulo `people`.
+2. Título aceita de 1 a 160 caracteres, corpo Markdown de 1 a 50.000 e
+   declaração de aceite de 10 a 1.000. HTML bruto, scripts, iframes, imagens
+   remotas e URLs executáveis são proibidos; renderer, sanitização e hash
+   continuam versionados e determinísticos.
+3. O owner pode criar o conteúdo contratual. O EngageFit não fornece,
+   semeia, valida ou declara qualquer template juridicamente adequado. Essa
+   limitação precisa permanecer explícita na experiência e na documentação.
+4. Cada matrícula possui no máximo uma instância não descartada de
+   `membership_terms` nesta fundação, garantida no PostgreSQL e na aplicação.
 
-### Não bloqueiam a fundação local, mas bloqueiam produção/`SPEC-004/B`
+Essas decisões fecham a fundação local sem ampliar PII, efeitos externos ou
+semântica jurídica. Não foi identificada divergência com `ARCH-001`,
+`SPEC-002/A` ou `SPEC-003/A-B-C`.
+
+A revisão das fronteiras confirmou:
+
+- `contracts` é dono de templates, versões, instâncias, sessões, aceites e
+  eventos, sem consulta direta às tabelas colaboradoras;
+- `memberships` expõe por port o snapshot exato e imutável da matrícula, sem
+  permitir que contrato altere vigência, estado ou composição;
+- `people` expõe por port somente nome de exibição e elegibilidade no schema
+  1, sem CPF ou dados de contato;
+- `privacy` consome leitura pública de `contracts`; retenção produtiva e
+  resposta a eliminação continuam bloqueadas para a `SPEC-004/B`, enquanto o
+  simulador usa dados sintéticos com purge curto;
+- `healthforms` continua dono exclusivo de PAR-Q e dados de saúde; esta slice
+  não cria tabela, DTO, permissão ou retenção compartilhada com contratos.
+
+### Continuam abertas e bloqueiam produção/`SPEC-004/B`
 
 5. Campos de qualificação legal das partes e sua fonte de verdade.
 6. Provedor/método de assinatura, autenticação do signatário, evidências,
@@ -911,12 +935,14 @@ depende das decisões jurídicas de B e dos contratos financeiros de
 
 ## 22. Definition of Done da preparação documental
 
-- spec criada em `draft`, sem afirmar implementação;
+- spec revisada e promovida a `ready`, sem afirmar implementação;
+- quatro decisões da fundação local registradas sem divergência
+  arquitetural;
 - catálogo, README e rastreabilidade de `REQ-001` atualizados;
 - fronteiras com `memberships`, `people`, `healthforms`, `memberbilling`,
   agenda e acesso explícitas;
 - modelo, contratos, estados, erros, privacidade, rollout, critérios e testes
   descritos;
-- prompt do futuro agente separado e condicionado a `ready`;
+- prompt de implementação separado e aplicável à versão `ready`;
 - nenhuma alteração em `docs/system-design.md`, código, migration, endpoint,
   banco, flag ou ambiente externo.

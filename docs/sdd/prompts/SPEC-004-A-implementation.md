@@ -1,15 +1,13 @@
-# Prompt do futuro agente implementador — SPEC-004/A
+# Prompt do agente implementador — SPEC-004/A
 
 Você é o agente executor da
 `SPEC-004/A — Fundação de contratos e emissão vinculada à matrícula` do
 EngageFit.
 
-Este prompt não autoriza implementação enquanto
-`docs/sdd/specs/SPEC-004-A-contract-foundation-enrollment-issuance.md`
-permanecer em `draft`. No início da execução, confirme que a spec foi revisada,
-teve as decisões bloqueadoras fechadas e está explicitamente em `ready`. Se
-ainda estiver em `draft`, não crie código, migration ou endpoint: registre o
-bloqueio e devolva a tarefa ao responsável pela spec.
+A `SPEC-004/A` foi revisada e está em `ready` para a fundação local descrita
+neste prompt. No início da execução, confirme que o documento canônico ainda
+está em `ready`; se tiver voltado a `draft` ou sido substituído, não crie
+código, migration ou endpoint e devolva a tarefa ao responsável pela spec.
 
 ## Contexto obrigatório
 
@@ -56,6 +54,8 @@ Implemente uma slice vertical backend/frontend que permita ao owner:
   `memberships` definida na spec.
 - Consuma a pessoa exclusivamente pela porta pública de `people` definida na
   spec.
+- Use somente `member_name` como dado da pessoa no schema 1. Não busque nem
+  persista CPF, endereço, e-mail ou telefone nesta slice.
 - O repositório de contracts não pode consultar `enrollments`,
   `enrollment_addons`, `membership_*`, `persons`, `students`, `billing_*`,
   check-ins, agenda ou reservas. FKs compostas documentadas são permitidas;
@@ -100,6 +100,12 @@ Implemente uma slice vertical backend/frontend que permita ao owner:
   overflow horizontal.
 - Renderize Markdown com allowlist segura e sem HTML, script, iframe ou recurso
   remoto.
+- Aplique os limites aprovados: título de 1 a 160 caracteres, corpo Markdown
+  de 1 a 50.000 e declaração de aceite de 10 a 1.000. Bloqueie também URLs
+  executáveis.
+- Permita que o owner escreva o conteúdo, sem seed jurídico e sem apresentar
+  qualquer modelo como fornecido, validado ou juridicamente adequado pelo
+  EngageFit.
 - Mostre antes da emissão: `Esta etapa não gera cobrança, não altera a
   matrícula e não libera acesso.`
 - Não chame o resultado local de assinatura digital/eletrônica válida.

@@ -37,20 +37,23 @@ pessoas, planos e matrículas compostas estão concluídas. `001-C`, `002/B-C` e
 
 | Spec planejada | Depende principalmente de | Resultado |
 |---|---|---|
-| `SPEC-004/A` Fundação de contratos e emissão (`draft`) | `002/A`, `003/A-B-C` | template/versionamento, snapshot da matrícula, emissão e aceite por simulador local |
+| `SPEC-004/A` Fundação de contratos e emissão (`ready`) | `002/A`, `003/A-B-C` | template/versionamento, snapshot da matrícula, emissão e aceite por simulador local |
 | `SPEC-004/B` Aceite eletrônico produtivo | contrato interno de `004/A` | qualificação das partes, provedor real, webhook/reconciliação e cópia |
 | `SPEC-004/C` PAR-Q e formulários sensíveis | `002`, `003` | módulo `healthforms`, permissões, consentimento e retenção próprios |
 | `SPEC-004/D` Ciclo jurídico posterior | `004/A-B`, contrato interno de `005` | aditivos, renovação, pausa/trancamento e cancelamento jurídico |
 | `SPEC-005` Financeiro do aluno | `002`, `003`, contrato interno de `004/A` | cobrança, recorrência, Pix, boleto, cartão e conciliação |
 | `SPEC-006` Agenda, profissionais e grade recorrente | `001/B-D`, contrato de direitos de `003` | horários, capacidade, profissional e sessões de aula/serviço |
 
-`SPEC-004/A` possui spec executável em preparação, mas permanece `draft` e não
-autoriza implementação. Depois de suas decisões bloqueadoras e portas estarem
-aceitas, `004/B` pode ser detalhada. `004/C` pode ser especificada em paralelo
-sobre `people` e `memberships`, porque pertence ao módulo independente
-`healthforms`; a experiência pode ser coordenada, mas os dados não são
-compartilhados. `004/D` depende das decisões jurídicas e financeiras
-posteriores.
+`SPEC-004/A` está `ready` para implementação local da fundação, com
+simulador sem rede e somente dados sintéticos. A revisão aprovou nome como
+única PII da parte no schema 1, os limites de conteúdo seguro, autoria pelo
+owner sem chancela jurídica do EngageFit e uma instância não descartada de
+`membership_terms` por matrícula. Produção e `004/B` continuam bloqueadas
+pelas decisões jurídicas, de qualificação, assinatura e retenção. `004/C`
+pode ser especificada em paralelo sobre `people` e `memberships`, porque
+pertence ao módulo independente `healthforms`; a experiência pode ser
+coordenada, mas os dados não são compartilhados. `004/D` depende das decisões
+jurídicas e financeiras posteriores.
 
 Depois que os contratos compartilhados de `004/A`, `005` e `006` estiverem
 aceitos, agentes podem implementar slices com ownership separado.

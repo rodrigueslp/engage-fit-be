@@ -117,13 +117,13 @@ ou avisar sobre a publicação, mas não são sua fonte de verdade.
 
 ## 4. Rastreabilidade para o SDD
 
-| Requisito | Destino | Estado em 2026-08-18 |
+| Requisito | Destino | Estado em 2026-08-24 |
 |---|---|---|
 | Cadastro | `SPEC-002/A` | fundação e cadastro manual implementados e validados |
 | Modalidades e espaços | `SPEC-001/A-B` | implementadas e validadas localmente |
 | Serviços ofertáveis | `SPEC-001/D` | implementada e validada; antecede planos completos |
 | Planos, pacotes e adicionais | `SPEC-003/A-D` | catálogo `003/A`, matrícula `003/C` e adicionais `003/B` validados; acesso `003/D` adiado |
-| Fundação de contrato e emissão | `SPEC-004/A` | spec em `draft`; implementação não autorizada |
+| Fundação de contrato e emissão | `SPEC-004/A` | spec `ready` para implementação local, sem uso produtivo |
 | Aceite eletrônico produtivo | `SPEC-004/B` | planejada; depende de provedor e revisão jurídica |
 | PAR-Q e formulários sensíveis | `SPEC-004/C` (`healthforms`) | planejada e separada de contratos |
 | Financeiro do aluno | `SPEC-005` | planejada |
@@ -156,5 +156,5 @@ O fatiamento da `SPEC-004` preserva a separação desta entrada: a slice A trata
 template, versão, instância, snapshot da matrícula e simulador local; a B
 tratará aceite eletrônico produtivo; a C pertencerá a `healthforms`; e a D
 ficará reservada ao ciclo jurídico posterior, coordenado com o financeiro do
-aluno. A existência da spec A em `draft` não autoriza nenhuma dessas
-implementações.
+aluno. O estado `ready` da slice A autoriza somente sua fundação local; não
+autoriza aceite eletrônico produtivo, PAR-Q nem ciclo jurídico posterior.

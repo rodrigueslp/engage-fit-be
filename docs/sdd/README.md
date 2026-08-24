@@ -75,9 +75,9 @@ Uma spec em `draft` não autoriza migrations ou contratos públicos definitivos.
    integrada e homologada localmente.
 6. `SPEC-003/B` — adicionais versionados e composição comercial (B1/B2) —
    integrada e homologada localmente.
-7. `SPEC-004/A` — fundação de contratos e emissão vinculada à matrícula — em
-   `draft`, sem autorização de implementação. A revisão desta slice antecede
-   qualquer aceite eletrônico produtivo.
+7. `SPEC-004/A` — fundação de contratos e emissão vinculada à matrícula —
+   revisada e `ready` para implementação local, sem aceite eletrônico
+   produtivo, PAR-Q ou dados reais.
 8. Financeiro do aluno e agenda podem ser detalhados em paralelo quando seus
    contratos internos e as fundações aplicáveis estiverem aceitos.
 
@@ -131,4 +131,4 @@ permitirem.
 - [SPEC-003/B — Adicionais e composição comercial](specs/SPEC-003-B-versioned-addons-composition.md)
 - [SPEC-003/C — Matrícula em plano publicado](specs/SPEC-003-C-person-plan-enrollment.md)
 - [SPEC-004/A — Fundação de contratos e emissão](specs/SPEC-004-A-contract-foundation-enrollment-issuance.md)
-- [Prompt futuro de implementação da SPEC-004/A](prompts/SPEC-004-A-implementation.md)
+- [Prompt de implementação da SPEC-004/A](prompts/SPEC-004-A-implementation.md)
