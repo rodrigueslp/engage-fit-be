@@ -81,6 +81,10 @@ func NewService(peopleRepository repositories.PeopleRepository, boxRepository re
 	return &Service{people: peopleRepository, boxes: boxRepository, cipher: cipher, hmacKey: key, now: func() time.Time { return time.Now().UTC() }}, nil
 }
 
+func (s *Service) ResolveContractParty(ctx context.Context, organizationID, personID domain.ID) (*domain.ContractPartyResolution, error) {
+	return s.people.ResolveContractParty(ctx, organizationID, personID)
+}
+
 func (s *Service) DuplicateCheck(ctx context.Context, authenticatedUnitID, requestedUnitID domain.ID, input DuplicateCheckInput) (*domain.PersonDuplicateCheck, error) {
 	organizationID, err := s.organizationForUnit(ctx, authenticatedUnitID, requestedUnitID)
 	if err != nil {

@@ -374,6 +374,50 @@ func (s *EnrollmentService) ListPrivacy(ctx context.Context, unitID, personID do
 	return items, nil
 }
 
+func (s *EnrollmentService) ResolveContractEnrollmentSnapshot(ctx context.Context, organizationID, unitID, enrollmentID domain.ID, asOf time.Time) (*domain.ContractEnrollmentSnapshot, error) {
+	if !validEnrollmentID(organizationID) || !validEnrollmentID(unitID) || !validEnrollmentID(enrollmentID) {
+		return nil, ErrEnrollmentNotFound
+	}
+	enrollment, err := s.repository.GetByID(ctx, organizationID, unitID, enrollmentID)
+	if err != nil {
+		return nil, err
+	}
+	if enrollment == nil {
+		return nil, ErrEnrollmentNotFound
+	}
+
+	effectiveStatus := domain.EnrollmentStatus(*enrollment, asOf)
+
+	addons := make([]domain.ContractEnrollmentAddonSnapshot, 0, len(enrollment.Addons))
+	for _, a := range enrollment.Addons {
+		addons = append(addons, domain.ContractEnrollmentAddonSnapshot{
+			PlanVersionAddonID: a.PlanVersionAddonID,
+			Name:               a.Name,
+			PriceDeltaCents:    a.PriceDeltaCents,
+			Summary:            a.Summary,
+		})
+	}
+
+	return &domain.ContractEnrollmentSnapshot{
+		PersonID:           enrollment.PersonID,
+		EnrollmentRevision: enrollment.Revision,
+		EffectiveStatus:    effectiveStatus,
+		PlanID:             enrollment.Terms.PlanID,
+		PlanVersionID:      enrollment.Terms.PlanVersionID,
+		PlanVersionNumber:  enrollment.Terms.VersionNumber,
+		PlanName:           enrollment.Terms.Name,
+		BillingCycle:       enrollment.Terms.BillingCycle,
+		Currency:           enrollment.Terms.Currency,
+		BasePriceCents:     enrollment.BasePriceCents,
+		AddonsPriceCents:   enrollment.AddonsPriceCents,
+		TotalPriceCents:    enrollment.TotalPriceCents,
+		StartsOn:           enrollment.StartsOn,
+		ValidUntil:         enrollment.ValidUntil,
+		BaseSummary:        enrollment.Terms.BaseSummary,
+		Addons:             addons,
+	}, nil
+}
+
 func (s *EnrollmentService) organizationForUnit(ctx context.Context, unitID domain.ID) (domain.ID, error) {
 	if !validEnrollmentID(unitID) {
 		return "", ErrEnrollmentNotFound

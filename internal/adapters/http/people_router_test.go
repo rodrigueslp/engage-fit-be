@@ -30,6 +30,9 @@ func (s *peopleRepositoryHTTPStub) Create(_ context.Context, command domain.Crea
 func (*peopleRepositoryHTTPStub) CountStudentsWithoutPerson(context.Context) (int64, error) {
 	return 0, nil
 }
+func (*peopleRepositoryHTTPStub) ResolveContractParty(context.Context, domain.ID, domain.ID) (*domain.ContractPartyResolution, error) {
+	return nil, nil
+}
 
 func TestPeopleHTTPContractAuthorizationTenancyAndSafeResponse(t *testing.T) {
 	unitID := domain.ID("11111111-1111-4111-8111-111111111111")

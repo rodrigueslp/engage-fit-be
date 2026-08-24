@@ -57,6 +57,32 @@ func (r PeopleGormRepository) ResolveEnrollmentSubject(ctx context.Context, orga
 	return subject, nil
 }
 
+func (r PeopleGormRepository) ResolveContractParty(ctx context.Context, organizationID, personID domain.ID) (*domain.ContractPartyResolution, error) {
+	var row struct {
+		ID            string
+		Name          string
+		ProfileStatus string
+		AnonymizedAt  *string
+	}
+	err := databaseForContext(r.db, ctx).Table("persons").
+		Select("id, name, profile_status, anonymized_at::text AS anonymized_at").
+		Where("id = ? AND organization_id = ?", stringID(personID), stringID(organizationID)).
+		Take(&row).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	eligible := row.ProfileStatus == string(domain.PersonProfileActive) && row.AnonymizedAt == nil
+	return &domain.ContractPartyResolution{
+		PersonID:      domainID(row.ID),
+		DisplayName:   row.Name,
+		ProfileStatus: domain.PersonProfileStatus(row.ProfileStatus),
+		Eligible:      eligible,
+	}, nil
+}
+
 func (r PeopleGormRepository) DuplicateCheck(ctx context.Context, organizationID, unitID domain.ID, cpfLookupHash, phoneE164 string) (*domain.PersonDuplicateCheck, error) {
 	db := databaseForContext(r.db, ctx)
 	result := &domain.PersonDuplicateCheck{PhoneMatches: []domain.PersonDuplicateMatch{}}

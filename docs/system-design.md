@@ -434,7 +434,11 @@ erDiagram
 - matrícula recorrente não possui `valid_until`; pagamento único calcula fim
   inclusivo em calendário e nunca altera a versão imutável vinculada;
 - encerramento preenche todos os campos administrativos, incrementa revisão e
-  mantém command request e evento na mesma transação.
+  mantém command request e evento na mesma transação;
+- modelo de contrato possui nome único na organização, rascunho mutável e versões publicadas imutáveis congeladas por trigger (`protect_contract_template_version_content`);
+- instância de contrato vinculada à matrícula preserva snapshot comercial imutável (`base_price_cents`, `addons_price_cents`, `total_price_cents`, adicionais e direitos) protegido por trigger contra mutação (`protect_contract_instance_snapshot`);
+- índice único parcial impede múltiplas instâncias ativas (`draft`, `pending_acceptance`, `accepted`) para a mesma matrícula (`uniq_active_contract_per_enrollment`);
+- port de aceite opera em modo simulador local determinístico com retenção curta e proibição estrita de execução em ambiente de produção.
 
 ### 9.4 Fundação de pessoas e compatibilidade
 
@@ -1783,6 +1787,7 @@ Você domina o núcleo quando consegue explicar:
 | Catálogo de estrutura e serviços | `internal/app/catalog`, `catalog_repository.go`, `catalog_handler.go` |
 | Catálogo versionado de planos | `internal/app/memberships`, `membership_repository.go`, `membership_handler.go`, `engage-fit-fe/src/pages/plans/PlansPage.tsx` |
 | Matrículas | `internal/app/memberships/enrollment_service.go`, `enrollment_repository.go`, `enrollment_handler.go`, `engage-fit-fe/src/features/enrollments/EnrollmentPanel.tsx` |
+| Contratos e termos de adesão | `internal/app/contracts`, `contract_repository.go`, `contract_handler.go`, `engage-fit-fe/src/features/contracts` |
 | Pessoas/cadastro manual | `internal/app/people`, `people_repository.go`, `people_handler.go` |
 | Importação | `internal/app/imports/import_checkins_usecase.go` |
 | Campanhas/progresso | `internal/app/campaigns/campaign_usecases.go` |

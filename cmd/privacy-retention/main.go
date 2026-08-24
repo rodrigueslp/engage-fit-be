@@ -50,9 +50,10 @@ func main() {
 		mode = "apply"
 	}
 	fmt.Printf("privacy retention mode=%s\n", mode)
+	now := time.Now().UTC()
 	err = db.WithContext(context.Background()).Transaction(func(tx *gorm.DB) error {
 		for _, rule := range rules {
-			cutoff := time.Now().UTC().AddDate(0, 0, -rule.days)
+			cutoff := now.AddDate(0, 0, -rule.days)
 			var count int64
 			if err := tx.Table(rule.table).Where(rule.column+" < ?", cutoff).Count(&count).Error; err != nil {
 				return err
@@ -62,6 +63,43 @@ func main() {
 				if err := tx.Exec("DELETE FROM "+rule.table+" WHERE "+rule.column+" < ?", cutoff).Error; err != nil {
 					return err
 				}
+			}
+		}
+
+		// Contract simulator retention rules
+		var expiredSimulatorContracts []string
+		if err := tx.Table("contract_instances").
+			Where("retention_class = 'local_simulator' AND retention_due_at <= ?", now).
+			Pluck("id", &expiredSimulatorContracts).Error; err != nil {
+			return err
+		}
+		fmt.Printf("expired simulator contract instances: %d eligible\n", len(expiredSimulatorContracts))
+		if *apply && len(expiredSimulatorContracts) > 0 {
+			if err := tx.Exec("DELETE FROM contract_acceptances WHERE contract_instance_id IN ?", expiredSimulatorContracts).Error; err != nil {
+				return err
+			}
+			if err := tx.Exec("DELETE FROM contract_acceptance_sessions WHERE contract_instance_id IN ?", expiredSimulatorContracts).Error; err != nil {
+				return err
+			}
+			if err := tx.Exec("DELETE FROM contract_events WHERE contract_instance_id IN ?", expiredSimulatorContracts).Error; err != nil {
+				return err
+			}
+			if err := tx.Exec("DELETE FROM contract_instances WHERE id IN ?", expiredSimulatorContracts).Error; err != nil {
+				return err
+			}
+		}
+
+		var expiredSessionsCount int64
+		cutoff24h := now.Add(-24 * time.Hour)
+		if err := tx.Table("contract_acceptance_sessions").
+			Where("(status = 'expired' OR (status = 'active' AND expires_at < ?)) AND created_at < ?", now, cutoff24h).
+			Count(&expiredSessionsCount).Error; err != nil {
+			return err
+		}
+		fmt.Printf("expired simulator acceptance sessions (>24h): %d eligible\n", expiredSessionsCount)
+		if *apply && expiredSessionsCount > 0 {
+			if err := tx.Exec("DELETE FROM contract_acceptance_sessions WHERE (status = 'expired' OR (status = 'active' AND expires_at < ?)) AND created_at < ?", now, cutoff24h).Error; err != nil {
+				return err
 			}
 		}
 		if !*apply {
