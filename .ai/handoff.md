@@ -4,7 +4,7 @@ Manual canônico de arquitetura e negócio: `docs/system-design.md`.
 
 Guia operacional consolidado: `docs/application-readiness-guide.md`.
 
-Atualizado em: 2026-08-24 (SPEC-006/A implementada e validada no backend e frontend)
+Atualizado em: 2026-08-27 (integrações de SPEC-004/A e SPEC-006/A validadas localmente; sem push/deploy)
 
 ## Checkpoint atual — SPEC-006/A implementada e validada (Fundação de Profissionais da Agenda)
 
@@ -33,6 +33,33 @@ A fatia vertical completa da **SPEC-006/A — Fundação de profissionais da age
    - Testes de integração Postgres (`scheduling_repository_integration_test.go`) e HTTP (`scheduling_router_test.go`) passando 100%.
    - Testes E2E Playwright (`tests/schedule.spec.ts`) e suite completa passando 100%.
    - `gofmt` e `git diff --check` limpos em ambos os repositórios.
+
+### Estado integrado em 2026-08-27
+
+- Backend `main`: `272c26e`; contém contratos (`efe3c1f` e `3f087f1`) e
+  profissionais da agenda (`b151724`), além da documentação das duas specs;
+- Frontend `main`: `b808ea4`; contém contratos (`d05097f` e `8371e17`) e a
+  tela de profissionais da agenda;
+- validação cruzada posterior à integração passou: `go test -count=1 ./...`,
+  `go vet ./...`, TypeScript, build Vite e Playwright completo (`40` passaram;
+  `2` fluxos reais opt-in ficaram ignorados);
+- o build Vite mantém apenas o aviso conhecido de bundle acima de 500 kB;
+- `.env` local passou a declarar todas as flags `FEATURE_*` e configurações de
+  aceite contratual; `.env.example` foi atualizado no commit `272c26e`. Por
+  segurança, contratos, simulador, people, memberships e enrollments ficam
+  desligados até que suas dependências locais sejam configuradas; scheduling
+  permanece habilitado localmente;
+- migrations `060_create_contract_foundation.sql` e
+  `061_create_scheduling_professionals.sql` estão somente no código/local;
+  produção continua em `052`. O race detector e os cenários de migration vazia/
+  upgrade não foram repetidos nesta revisão de integração;
+- `SPEC-006/A` está `validated`. `SPEC-004/A` está implementada e integrada,
+  mas seu documento ainda permanece `ready`: só promovê-la para `validated`
+  após fechar formalmente suas evidências de validação e homologação local.
+
+Próxima ação recomendada: fechar a validação documental e a homologação de
+`SPEC-004/A`, sem habilitar o simulador em produção. Depois, detalhar a próxima
+slice de agenda (`SPEC-006/B`) antes de qualquer implementação de grade/sessão.
 
 ---
 
@@ -3046,5 +3073,5 @@ WodScope. Antes de produção, implementar recuperação/verificação de conta.
 Mensagem sugerida:
 
 ```txt
-Leia integralmente `.ai/handoff.md`, começando pelo checkpoint atual do topo, e use `docs/system-design.md`, `docs/sdd/REQ-001-primeiro-passo-operacional.md`, `docs/sdd/ARCH-001-modular-foundation.md` e as SPECs como fontes canônicas. Estado local: `SPEC-001/A-B-D`, `SPEC-002/A` e `SPEC-003/A-B-C` estão integradas, commitadas e homologadas localmente. A `SPEC-004/A` foi revisada e está `ready` somente para implementação local da fundação, com simulador sem rede e dados sintéticos; use `docs/sdd/prompts/SPEC-004-A-implementation.md`. PAR-Q permanece no futuro módulo `healthforms`, e produção/`SPEC-004/B-D` não estão autorizadas. O banco local compartilhado está em `059`, mas produção continua em `052`. Não faça push dos `main`: Railway usa esses branches como source automático e o backend executa migrations no pre-deploy, portanto push implica deploy de produção. Preserve `.ai/acordo-fundadores-engagefit.md`, `docs/proposta-engagefit-guilherme.html` e qualquer outra alteração não commitada.
+Leia integralmente `.ai/handoff.md`, começando pelo checkpoint atual do topo, e use `docs/system-design.md`, `docs/sdd/REQ-001-primeiro-passo-operacional.md`, `docs/sdd/ARCH-001-modular-foundation.md` e as SPECs como fontes canônicas. Estado local integrado: `SPEC-001/A-B-D`, `SPEC-002/A`, `SPEC-003/A-B-C`, `SPEC-004/A` (implementada, ainda `ready` documentalmente) e `SPEC-006/A` (implementada e `validated`). O backend está em `272c26e`; o frontend em `b808ea4`. Migrations `060` e `061` permanecem locais; produção continua em `052`. Antes de iniciar nova implementação, fechar formalmente a validação/homologação de `SPEC-004/A`; a próxima frente de agenda requer detalhar `SPEC-006/B`. PAR-Q continua em `healthforms`, e `SPEC-004/B-D`, `SPEC-005`, `SPEC-006/B-D`, `SPEC-003/D` e `SPEC-007+` não estão autorizadas para implementação. Não faça push dos `main`: Railway usa esses branches como source automático e o backend executa migrations no pre-deploy, portanto push implica deploy de produção. Preserve `.ai/acordo-fundadores-engagefit.md`, `docs/proposta-engagefit-guilherme.html` e qualquer outra alteração não commitada.
 ```
