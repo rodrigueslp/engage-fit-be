@@ -27,6 +27,10 @@ type CurrentUserResponse struct {
 	Role  string `json:"role"`
 }
 
+type SwitchUnitContextRequest struct {
+	UnitID string `json:"unit_id" binding:"required"`
+}
+
 type CreateOwnerRequest struct {
 	BoxName    string `json:"box_name"`
 	OwnerName  string `json:"owner_name"`

@@ -13,9 +13,13 @@ import (
 var ErrInvalidPrivacyRequest = errors.New("invalid privacy request")
 
 type ExportStudentDataUseCase struct {
-	privacy     repositories.PrivacyRepository
-	enrollments repositories.EnrollmentPrivacyReader
-	contracts   repositories.ContractPrivacyReader
+	privacy       repositories.PrivacyRepository
+	enrollments   repositories.EnrollmentPrivacyReader
+	contracts     repositories.ContractPrivacyReader
+	reservations  repositories.ReservationPrivacyReader
+	memberBilling repositories.MemberBillingPrivacyReader
+	healthForms   repositories.HealthFormRepository
+	commerce      repositories.CommercePrivacyReader
 }
 
 func NewExportStudentDataUseCase(privacy repositories.PrivacyRepository, enrollmentReaders ...repositories.EnrollmentPrivacyReader) ExportStudentDataUseCase {
@@ -28,6 +32,22 @@ func NewExportStudentDataUseCase(privacy repositories.PrivacyRepository, enrollm
 
 func (uc *ExportStudentDataUseCase) WithContracts(contracts repositories.ContractPrivacyReader) {
 	uc.contracts = contracts
+}
+
+func (uc *ExportStudentDataUseCase) WithReservations(reader repositories.ReservationPrivacyReader) {
+	uc.reservations = reader
+}
+
+func (uc *ExportStudentDataUseCase) WithMemberBilling(reader repositories.MemberBillingPrivacyReader) {
+	uc.memberBilling = reader
+}
+
+func (uc *ExportStudentDataUseCase) WithHealthForms(reader repositories.HealthFormRepository) {
+	uc.healthForms = reader
+}
+
+func (uc *ExportStudentDataUseCase) WithCommerce(reader repositories.CommercePrivacyReader) {
+	uc.commerce = reader
 }
 
 func (uc ExportStudentDataUseCase) Execute(ctx context.Context, boxID, studentID, actorUserID domain.ID) (*domain.StudentPrivacyExport, error) {
@@ -43,6 +63,30 @@ func (uc ExportStudentDataUseCase) Execute(ctx context.Context, boxID, studentID
 	}
 	if uc.contracts != nil && result.Person != nil {
 		result.Contracts, err = uc.contracts.ListPrivacy(ctx, boxID, result.Person.ID)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if uc.reservations != nil && result.Person != nil {
+		result.Reservations, err = uc.reservations.ListReservationPrivacy(ctx, boxID, result.Person.ID)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if uc.memberBilling != nil && result.Person != nil {
+		result.MemberBilling, err = uc.memberBilling.ListPrivacy(ctx, boxID, result.Person.ID)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if uc.healthForms != nil && result.Person != nil {
+		result.HealthForms, err = uc.healthForms.ListPrivacy(ctx, boxID, result.Person.ID)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if uc.commerce != nil && result.Person != nil {
+		result.CommerceSales, err = uc.commerce.ListPrivacy(ctx, boxID, result.Person.ID)
 		if err != nil {
 			return nil, err
 		}

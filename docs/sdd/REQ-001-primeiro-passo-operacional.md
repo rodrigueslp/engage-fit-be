@@ -1,8 +1,8 @@
 # REQ-001 — Primeiro passo operacional para substituir o Tecnofit
 
 - Status: `reviewed`
-- Versão: `1.1`
-- Data: 2026-08-24
+- Versão: `1.2`
+- Data: 2026-08-27
 - Origem: esboço de produto entregue pelo sócio no documento
   `Primeiro_Passo.pdf`
 - Natureza: entrada de produto; não autoriza implementação isoladamente
@@ -119,20 +119,20 @@ ou avisar sobre a publicação, mas não são sua fonte de verdade.
 
 | Requisito | Destino | Estado em 2026-08-24 |
 |---|---|---|
-| Cadastro | `SPEC-002/A` | fundação e cadastro manual implementados e validados |
+| Cadastro | `SPEC-002/A-B-C` | cadastro, perfil unificado, identidades e consolidação segura implementados e validados localmente |
 | Modalidades e espaços | `SPEC-001/A-B` | implementadas e validadas localmente |
 | Serviços ofertáveis | `SPEC-001/D` | implementada e validada; antecede planos completos |
-| Planos, pacotes e adicionais | `SPEC-003/A-D` | catálogo `003/A`, matrícula `003/C` e adicionais `003/B` validados; acesso `003/D` adiado |
-| Fundação de contrato e emissão | `SPEC-004/A` | spec `ready` para implementação local, sem uso produtivo |
-| Aceite eletrônico produtivo | `SPEC-004/B` | planejada; depende de provedor e revisão jurídica |
-| PAR-Q e formulários sensíveis | `SPEC-004/C` (`healthforms`) | planejada e separada de contratos |
+| Planos, pacotes e adicionais | `SPEC-003/A-D` | catálogo, matrícula, adicionais e decisão de acesso validados localmente |
+| Fundação de contrato e emissão | `SPEC-004/A` | implementada e `validated` localmente, sem uso produtivo |
+| Aceite eletrônico produtivo | `SPEC-004/B` | orquestração e reconciliação validadas localmente; provider real desabilitado |
+| PAR-Q e formulários sensíveis | `SPEC-004/C` (`healthforms`) | validada localmente, cifrada e separada de contratos |
 | Financeiro do aluno | `SPEC-005` | planejada |
-| Agenda, profissionais e vagas | `SPEC-006` | guia `reviewed`; somente `SPEC-006/A` está `ready` para a fundação local de profissionais, sem grade, sessões ou vagas |
-| Reservas | `SPEC-007` | planejada |
-| Check-in e decisão de acesso | `SPEC-008` | planejada; existe fluxo legado compatível |
+| Agenda e profissionais | `SPEC-006` | iniciativa validada localmente: profissionais, grade, preview, sessões publicadas, materialização e exceções |
+| Reservas e vagas | `SPEC-007` | reserva elegível, ocupação, fila FIFO, cancelamento, falta e reposição validados localmente |
+| Check-in e decisão de acesso | `SPEC-008` | decisão mensalista/corporativa, presença e auditoria validadas localmente |
 | Retenção | módulo atual + `SPEC-009` | base implementada; integração futura |
-| Quiosque | `SPEC-013` | novo escopo planejado |
-| Comunicados e notificações | `SPEC-014` | novo escopo planejado |
+| Quiosque | `SPEC-013` | catálogo e venda manual validados localmente, sem ERP avançado |
+| Comunicados e notificações | `SPEC-014` | publicação in-app segmentada, prioridade, agendamento e histórico validados localmente |
 
 ## 5. Validações futuras com o Alados
 

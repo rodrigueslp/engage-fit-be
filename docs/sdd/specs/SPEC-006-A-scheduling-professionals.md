@@ -9,8 +9,10 @@
 - Repositórios futuros envolvidos: `engage-fit-be` e `engage-fit-fe`
 - Migration: número não reservado; o integrador define no merge
 
-Esta é a única slice executável da `SPEC-006`. Ela não autoriza grade, série,
-sessão, materialização, conflito, reserva, presença ou decisão de acesso.
+Esta é a slice implementada e `validated` da `SPEC-006`. Ela não autoriza
+grade, série, sessão, materialização, conflito, reserva, presença ou decisão de
+acesso. A `SPEC-006/B` possui documento próprio em `draft`, sem autorização de
+implementação.
 
 ## 1. Resultado esperado
 

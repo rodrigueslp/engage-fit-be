@@ -8,6 +8,8 @@ func (BoxModel) TableName() string {
 	return "boxes"
 }
 
+func (OrganizationAuditEventModel) TableName() string { return "organization_audit_events" }
+
 func (ModalityModel) TableName() string            { return "modalities" }
 func (UnitModalityModel) TableName() string        { return "unit_modalities" }
 func (ServiceOfferingModel) TableName() string     { return "service_offerings" }
@@ -52,6 +54,9 @@ func (PersonAddressModel) TableName() string          { return "person_addresses
 func (PersonUnitRelationshipModel) TableName() string { return "person_unit_relationships" }
 func (PersonCreationRequestModel) TableName() string  { return "person_creation_requests" }
 func (PeopleAuditEventModel) TableName() string       { return "people_audit_events" }
+func (PersonExternalIdentityModel) TableName() string { return "person_external_identities" }
+func (PersonAthleteAccountModel) TableName() string   { return "person_athlete_accounts" }
+func (PersonIdentityReviewModel) TableName() string   { return "person_identity_reviews" }
 
 func (ImportHistoryModel) TableName() string {
 	return "import_histories"
@@ -157,3 +162,7 @@ func (SchedulingProfessionalModel) TableName() string     { return "scheduling_p
 func (SchedulingProfessionalUnitModel) TableName() string { return "scheduling_professional_units" }
 func (SchedulingCommandRequestModel) TableName() string   { return "scheduling_command_requests" }
 func (SchedulingAuditEventModel) TableName() string       { return "scheduling_audit_events" }
+func (SchedulingSeriesModel) TableName() string           { return "scheduling_series" }
+func (SchedulingSeriesWeekdayModel) TableName() string    { return "scheduling_series_weekdays" }
+func (SchedulingSessionModel) TableName() string          { return "scheduling_sessions" }
+func (SchedulingSessionEventModel) TableName() string     { return "scheduling_session_events" }

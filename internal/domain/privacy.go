@@ -21,6 +21,16 @@ type ContactConsentEvent struct {
 	CreatedAt      time.Time
 }
 
+type AnnouncementPrivacyView struct {
+	AnnouncementID ID         `json:"announcement_id"`
+	Title          string     `json:"title"`
+	Priority       string     `json:"priority"`
+	PublishedAt    *time.Time `json:"published_at,omitempty"`
+	FirstViewedAt  *time.Time `json:"first_viewed_at,omitempty"`
+	LastViewedAt   *time.Time `json:"last_viewed_at,omitempty"`
+	ViewCount      int        `json:"view_count"`
+}
+
 type StudentPrivacyExport struct {
 	Student                Student
 	Person                 *PersonPrivacyExport
@@ -31,5 +41,11 @@ type StudentPrivacyExport struct {
 	RetentionInterventions []RetentionIntervention
 	Enrollments            []EnrollmentPrivacyExport
 	Contracts              []ContractPrivacyExport
+	Reservations           []Reservation
+	MemberBilling          []MemberBillingSnapshot
+	Attendance             []AttendanceAdmission
+	HealthForms            []HealthFormPrivacyExport
+	Announcements          []AnnouncementPrivacyView
+	CommerceSales          []CommerceSale
 	ExportedAt             time.Time
 }

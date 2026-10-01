@@ -1,19 +1,41 @@
 # EngageFit Backend — Agent Guide
 
+## Feature workflow
+
+When the user requests a feature, improvement, or fix, carry it through
+discovery, planning, implementation, and proportional testing. The direct user
+request is sufficient authorization for local development. Do not require a
+new SDD document, a `ready` status, or a separate implementation prompt.
+
+Use reasonable assumptions for routine details and keep working. Ask the user
+only when a missing product choice would materially change the result or when
+an external, destructive, or production action needs new authorization.
+
+Existing documents under `docs/sdd/` are preserved references, not workflow
+gates. If an existing spec overlaps the requested feature, use the parts that
+remain useful and prefer the user's current direction when they differ.
+
+When the user asks to implement, continue, or finish a numbered EngageFit
+spec, use `$engagefit-spec-executor`. For an umbrella initiative, preserve
+validated slices and execute every remaining slice; for an explicitly named
+slice, execute only that slice unless the user asks for the rest.
+
 ## Required context
 
 Before changing architecture, domain rules, database schema, tenancy,
-authentication, privacy, external effects, or operational behavior, read:
+authentication, privacy, external effects, or operational behavior, inspect
+the relevant parts of:
 
 1. `docs/system-design.md` — current implemented system;
 2. `docs/sdd/ARCH-001-modular-foundation.md` — target modular architecture;
-3. the applicable document under `docs/sdd/specs/`;
+3. any applicable document under `docs/sdd/specs/`, when one exists;
 4. `.ai/handoff.md` for the latest operational context when the task involves
    production or external providers.
 
-An accepted spec describes the target. `docs/system-design.md` describes what
-is currently implemented. Update the system design only after implementation
-and validation.
+The user's current request describes the target. Existing specs provide prior
+decisions and constraints; `docs/system-design.md` describes what is currently
+implemented. Update the system design after a material implementation and its
+validation.
 
 ## Repository boundaries
 
@@ -43,13 +65,17 @@ and validation.
 
 - Prefer vertical slices that include domain, persistence, use case, HTTP, and
   tests when those layers are in scope.
+- Plan as part of the task and implement once the relevant behavior and
+  boundaries are understood; a separate planning artifact is optional.
 - Keep compatibility paths explicit and temporary; document their removal
   condition.
 - Repositories and handlers must enforce tenant/unit scope even when IDs are
   already known.
 - Changes to privacy-covered entities must update export, anonymization,
   suppression, and retention behavior as applicable.
-- Do not mark a spec `validated` until its criteria are demonstrated.
+- If a spec is updated, do not mark it `validated` until its criteria are
+  demonstrated. Routine feature work does not require creating or updating a
+  spec.
 
 ## Verification
 

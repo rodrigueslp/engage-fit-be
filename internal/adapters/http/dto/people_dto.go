@@ -1,6 +1,11 @@
 package dto
 
-import "boxengage/backend/internal/app/people"
+import (
+	"time"
+
+	"boxengage/backend/internal/app/people"
+	"boxengage/backend/internal/domain"
+)
 
 type PersonDuplicateMatchResponse struct {
 	PersonID           string `json:"person_id"`
@@ -28,3 +33,29 @@ type CreatePersonResponse struct {
 	ContactStatus      string `json:"contact_status"`
 	CreatedAt          string `json:"created_at"`
 }
+
+type PersonProfileResponse struct {
+	ID                 string                          `json:"id"`
+	Name               string                          `json:"name"`
+	PreferredName      string                          `json:"preferred_name,omitempty"`
+	Phone              string                          `json:"phone,omitempty"`
+	Email              string                          `json:"email,omitempty"`
+	CPFMasked          string                          `json:"cpf_masked,omitempty"`
+	ProfileStatus      string                          `json:"profile_status"`
+	Revision           int                             `json:"revision"`
+	Address            *PersonAddressResponse          `json:"address,omitempty"`
+	Relationships      []domain.PersonUnitRelationship `json:"relationships"`
+	SourceProfiles     []domain.PersonSourceProfile    `json:"source_profiles"`
+	ExternalIdentities []domain.PersonExternalIdentity `json:"external_identities,omitempty"`
+	AthleteAccount     *domain.PersonAthleteAccount    `json:"athlete_account,omitempty"`
+	History            []domain.PeopleAuditEvent       `json:"history"`
+	CreatedAt          time.Time                       `json:"created_at"`
+	UpdatedAt          time.Time                       `json:"updated_at"`
+}
+
+type PersonSearchRequest = people.SearchInput
+type UpdatePersonRequest = people.UpdateInput
+type LinkPersonUnitRequest = people.LinkUnitInput
+type LinkExternalIdentityRequest = people.ExternalIdentityInput
+type MergePeopleRequest = people.MergeInput
+type ResolveIdentityReviewRequest = people.ResolveReviewInput

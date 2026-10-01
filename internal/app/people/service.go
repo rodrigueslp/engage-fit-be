@@ -23,6 +23,7 @@ import (
 var (
 	ErrInvalidInput          = errors.New("invalid people input")
 	ErrCPFInvalid            = errors.New("person cpf invalid")
+	ErrPhoneInvalid          = errors.New("person phone invalid")
 	ErrUnitNotFound          = errors.New("unit not found")
 	ErrCPFConflict           = errors.New("person cpf conflict")
 	ErrPossibleDuplicate     = errors.New("person possible duplicate")
@@ -106,7 +107,7 @@ func (s *Service) DuplicateCheck(ctx context.Context, authenticatedUnitID, reque
 		var ok bool
 		phone, ok = NormalizeBrazilianPhone(input.Phone)
 		if !ok {
-			return nil, ErrInvalidInput
+			return nil, ErrPhoneInvalid
 		}
 	}
 	result, err := s.people.DuplicateCheck(ctx, organizationID, requestedUnitID, cpfHash, phone)
@@ -131,7 +132,7 @@ func (s *Service) Create(ctx context.Context, authenticatedUnitID, requestedUnit
 	}
 	phone, ok := NormalizeBrazilianPhone(input.Phone)
 	if !ok {
-		return nil, false, ErrInvalidInput
+		return nil, false, ErrPhoneInvalid
 	}
 	cpf, ok := NormalizeCPF(input.CPF)
 	if !ok {
@@ -185,7 +186,7 @@ func (s *Service) Create(ctx context.Context, authenticatedUnitID, requestedUnit
 		ActorUserID:    actorUserID,
 		IdempotencyKey: idempotencyKey,
 		Fingerprint:    s.lookup("request", string(canonicalPayload)),
-		Person:         domain.Person{ID: personID, OrganizationID: organizationID, Name: name, PhoneE164: phone, Email: email, CPFEncrypted: cpfEncrypted, CPFLookupHash: s.lookup("cpf", cpf), CPFLast2: cpf[9:], ProfileStatus: domain.PersonProfileActive, CreatedAt: createdAt, UpdatedAt: createdAt},
+		Person:         domain.Person{ID: personID, OrganizationID: organizationID, Name: name, PhoneE164: phone, Email: email, CPFEncrypted: cpfEncrypted, CPFLookupHash: s.lookup("cpf", cpf), CPFLast2: cpf[9:], ProfileStatus: domain.PersonProfileActive, Revision: 1, CreatedAt: createdAt, UpdatedAt: createdAt},
 		Address:        address,
 		Review:         review,
 		Student:        domain.Student{ID: studentID, PersonID: personID, BoxID: requestedUnitID, Name: name, Phone: strings.TrimPrefix(phone, "+"), Email: email, Source: domain.SourceBoxMember, ExternalID: "person:" + string(personID), RiskStatus: domain.StudentRiskStatusActive, ContactStatus: domain.ContactStatusUnknown, MembershipStartedAt: &createdAt, MembershipStartedSource: "manual", RetentionMonitoringStatus: domain.RetentionMonitoringMonitored, CreatedAt: createdAt, UpdatedAt: createdAt},

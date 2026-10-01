@@ -31,7 +31,10 @@ func (r UserGormRepository) FindByEmail(ctx context.Context, email string) (*dom
 
 func (r UserGormRepository) FindOwnerByBoxID(ctx context.Context, boxID domain.ID) (*domain.User, error) {
 	var model models.UserModel
-	if err := r.db.WithContext(ctx).Where("box_id = ? AND role = ?", stringID(boxID), string(domain.UserRoleOwner)).First(&model).Error; err != nil {
+	if err := r.db.WithContext(ctx).Table("users u").
+		Joins("JOIN organization_user_memberships oum ON oum.user_id = u.id AND oum.active = TRUE").
+		Where("oum.organization_id = (SELECT organization_id FROM boxes WHERE id = ?) AND u.role = ?", stringID(boxID), string(domain.UserRoleOwner)).
+		Order("u.created_at ASC").First(&model).Error; err != nil {
 		return nil, err
 	}
 	user := userToDomain(model)

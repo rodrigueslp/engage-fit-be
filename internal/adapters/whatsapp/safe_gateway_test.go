@@ -42,3 +42,20 @@ func TestSafeGatewayAllowsMockWithoutRealSendPermission(t *testing.T) {
 		t.Fatalf("mock provider was called %d times", next.calls)
 	}
 }
+
+func TestSafeGatewayRejectsUnapprovedProductionDestinations(t *testing.T) {
+	next := &recordingWhatsappGateway{}
+	gateway := NewSafeGateway(next, "production", true, "", "")
+	for _, baseURL := range []string{"http://127.0.0.1:8080", "https://api.twilio.com.evil.example", "https://api.twilio.com:444"} {
+		settings := domain.WhatsappSettings{Provider: "twilio", BaseURL: baseURL, Enabled: true}
+		if err := gateway.Test(context.Background(), settings); err == nil {
+			t.Fatalf("expected test destination %q to be rejected", baseURL)
+		}
+		if _, err := gateway.Send(context.Background(), settings, services.WhatsappMessage{Phone: "+5511999999999"}); err == nil {
+			t.Fatalf("expected send destination %q to be rejected", baseURL)
+		}
+	}
+	if next.calls != 0 {
+		t.Fatalf("provider was called %d times", next.calls)
+	}
+}

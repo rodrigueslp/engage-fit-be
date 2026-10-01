@@ -35,6 +35,30 @@ func (s *peopleRepositoryStub) Create(_ context.Context, command domain.CreatePe
 	}
 	return s.result, s.replayed, s.err
 }
+func (*peopleRepositoryStub) List(context.Context, domain.ID, domain.ID, domain.PersonSearchCriteria) ([]domain.PersonSummary, error) {
+	return nil, nil
+}
+func (*peopleRepositoryStub) Get(context.Context, domain.ID, domain.ID, domain.ID) (*domain.PersonProfile, error) {
+	return nil, nil
+}
+func (*peopleRepositoryStub) Update(context.Context, domain.UpdatePersonCommand) (*domain.PersonProfile, error) {
+	return nil, nil
+}
+func (*peopleRepositoryStub) LinkUnit(context.Context, domain.LinkPersonUnitCommand) (*domain.PersonProfile, error) {
+	return nil, nil
+}
+func (*peopleRepositoryStub) LinkExternalIdentity(context.Context, domain.LinkExternalIdentityCommand) (*domain.PersonProfile, error) {
+	return nil, nil
+}
+func (*peopleRepositoryStub) ListIdentityReviews(context.Context, domain.ID, domain.ID) ([]domain.PersonIdentityReview, error) {
+	return nil, nil
+}
+func (*peopleRepositoryStub) ResolveIdentityReview(context.Context, domain.MergePeopleCommand, string) (*domain.PersonIdentityReview, *domain.PersonProfile, error) {
+	return nil, nil, nil
+}
+func (*peopleRepositoryStub) Merge(context.Context, domain.MergePeopleCommand) (*domain.PersonProfile, error) {
+	return nil, nil
+}
 func (*peopleRepositoryStub) CountStudentsWithoutPerson(context.Context) (int64, error) {
 	return 0, nil
 }
@@ -99,8 +123,32 @@ func TestNormalizePeopleFields(t *testing.T) {
 	if value, ok := NormalizeBrazilianPhone("(11) 99999-9999"); !ok || value != "+5511999999999" {
 		t.Fatalf("phone = %q, %v", value, ok)
 	}
+	if _, ok := NormalizeBrazilianPhone("(11) 23422-2322"); ok {
+		t.Fatal("landline-shaped eleven-digit phone should not be accepted as WhatsApp")
+	}
 	if value, ok := NormalizeEmail(" MARIA@Example.COM "); !ok || value != "maria@example.com" {
 		t.Fatalf("email = %q, %v", value, ok)
+	}
+}
+
+func TestPeopleServiceReturnsSpecificPhoneValidationError(t *testing.T) {
+	service := newPeopleServiceForTest(t, &peopleRepositoryStub{}, &authenticatedCipherStub{})
+	if _, err := service.DuplicateCheck(context.Background(), "unit-1", "unit-1", DuplicateCheckInput{Phone: "(11) 23422-2322"}); !errors.Is(err, ErrPhoneInvalid) {
+		t.Fatalf("duplicate check error = %v", err)
+	}
+	if _, _, err := service.Create(context.Background(), "unit-1", "unit-1", "actor", "people-phone-invalid", CreateInput{Name: "Pessoa Teste", Phone: "(11) 23422-2322", CPF: "529.982.247-25"}); !errors.Is(err, ErrPhoneInvalid) {
+		t.Fatalf("create error = %v", err)
+	}
+}
+
+func TestProfileSearchTreatsAmbiguousElevenDigitsAsCPFOrPhone(t *testing.T) {
+	service := newPeopleServiceForTest(t, &peopleRepositoryStub{}, &authenticatedCipherStub{})
+	criteria, err := service.searchCriteria("52998224725")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if criteria.CPFLookupHash == "" || criteria.PhoneE164 != "+5552998224725" {
+		t.Fatalf("ambiguous search criteria = %+v", criteria)
 	}
 }
 

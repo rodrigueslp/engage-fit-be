@@ -12,6 +12,14 @@ import (
 )
 
 func Auth(tokens services.TokenService, users repositories.UserRepository, boxes repositories.BoxRepository, sessionConfig ...SessionConfig) gin.HandlerFunc {
+	return auth(tokens, users, boxes, nil, sessionConfig...)
+}
+
+func AuthWithUnitAccess(tokens services.TokenService, users repositories.UserRepository, boxes repositories.BoxRepository, access repositories.UnitAccessAuthorizer, sessionConfig ...SessionConfig) gin.HandlerFunc {
+	return auth(tokens, users, boxes, access, sessionConfig...)
+}
+
+func auth(tokens services.TokenService, users repositories.UserRepository, boxes repositories.BoxRepository, access repositories.UnitAccessAuthorizer, sessionConfig ...SessionConfig) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		config := SessionConfig{}
 		if len(sessionConfig) > 0 {
@@ -28,7 +36,11 @@ func Auth(tokens services.TokenService, users repositories.UserRepository, boxes
 			return
 		}
 		user, err := users.FindByID(c.Request.Context(), claims.UserID)
-		if err != nil || claims.AuthVersion < 1 || user.AuthVersion != claims.AuthVersion || user.Role != claims.Role || user.BoxID != claims.BoxID {
+		if err != nil || claims.AuthVersion < 1 || user.AuthVersion != claims.AuthVersion || user.Role != claims.Role {
+			apiresponse.AbortError(c, http.StatusUnauthorized, "session_invalid", "invalid session")
+			return
+		}
+		if access == nil && user.BoxID != claims.BoxID {
 			apiresponse.AbortError(c, http.StatusUnauthorized, "session_invalid", "invalid session")
 			return
 		}
@@ -37,7 +49,14 @@ func Auth(tokens services.TokenService, users repositories.UserRepository, boxes
 			return
 		}
 		if user.Role == domain.UserRoleOwner || user.Role == domain.UserRoleCoach {
-			box, err := boxes.FindByID(c.Request.Context(), user.BoxID)
+			if access != nil {
+				context, accessErr := access.ResolveUserUnitAccess(c.Request.Context(), user.ID, claims.BoxID)
+				if accessErr != nil || context.Role != user.Role || !context.Organization.IsActive() {
+					apiresponse.AbortError(c, http.StatusForbidden, "unit_access_denied", "acesso à unidade não autorizado")
+					return
+				}
+			}
+			box, err := boxes.FindByID(c.Request.Context(), claims.BoxID)
 			if err != nil {
 				apiresponse.AbortError(c, http.StatusUnauthorized, "session_invalid", "invalid session")
 				return
@@ -52,7 +71,7 @@ func Auth(tokens services.TokenService, users repositories.UserRepository, boxes
 			}
 		}
 
-		SetAuthContext(c, user.ID, user.BoxID, user.Role)
+		SetAuthContext(c, user.ID, claims.BoxID, user.Role)
 		c.Set(authTransportKey, transport)
 		c.Next()
 	}

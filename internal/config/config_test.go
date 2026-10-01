@@ -84,6 +84,29 @@ func TestServiceCatalogRequiresCatalog(t *testing.T) {
 	}
 }
 
+func TestReservationsRequireTheirFoundations(t *testing.T) {
+	cfg := Config{DatabaseURL: "postgres://database", DBMaxOpenConnections: 2, DBMaxIdleConnections: 1, DBConnectionMaxLifetimeSeconds: 1, DBConnectionMaxIdleTimeSeconds: 1, HTTPMaxBodyBytes: 1, ImportMaxUploadBytes: 1, LoginRateLimitRequests: 1, LoginRateLimitWindowSeconds: 1, SetupRateLimitRequests: 1, SetupRateLimitWindowSeconds: 1, HTTPReadHeaderTimeoutSeconds: 1, HTTPReadTimeoutSeconds: 1, HTTPWriteTimeoutSeconds: 1, HTTPIdleTimeoutSeconds: 1, HTTPShutdownTimeoutSeconds: 1, AutomationStaleRunMinutes: 1, AutomationCatchupWindowMinutes: 1, AuthCookieName: "session", AuthCookieSameSite: "lax", AuthSessionMaxAgeSeconds: 1, FeatureReservationsEnabled: true}
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "FEATURE_RESERVATIONS_ENABLED") {
+		t.Fatalf("reservations without dependencies should fail: %v", err)
+	}
+	cfg.FeatureCatalogEnabled = true
+	cfg.FeatureMembershipsEnabled = true
+	cfg.FeaturePeopleFoundationEnabled = true
+	cfg.DataEncryptionActiveKeyID = "test"
+	cfg.DataEncryptionKeys = "test:01234567890123456789012345678901"
+	cfg.PersonLookupHMACKey = "01234567890123456789012345678901"
+	cfg.FeatureEnrollmentsEnabled = true
+	cfg.FeatureSchedulingEnabled = true
+	cfg.FeatureSchedulingGridEnabled = true
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("reservations dependencies should validate: %v", err)
+	}
+	cfg.FeatureAttendanceEnabled = true
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("attendance dependencies should validate: %v", err)
+	}
+}
+
 func TestBillingReconciliationValidationRequiresOnlyDatabaseAndAsaas(t *testing.T) {
 	valid := Config{
 		AppEnv:                         "production",

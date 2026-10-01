@@ -31,6 +31,21 @@ func TestWindowRateLimiterChecksAllKeys(t *testing.T) {
 	}
 }
 
+func TestWindowRateLimiterAllowsDistinctAccountsBehindOneProxy(t *testing.T) {
+	limiter := NewWindowRateLimiter(2, time.Minute)
+	for _, account := range []string{"first", "second", "third"} {
+		if allowed, _ := limiter.Allow("ip:proxy", "identity:"+account); !allowed {
+			t.Fatalf("distinct account %q was blocked by the shared proxy IP", account)
+		}
+	}
+	if allowed, _ := limiter.Allow("ip:proxy", "identity:first"); !allowed {
+		t.Fatal("expected second attempt for first account to be allowed")
+	}
+	if allowed, _ := limiter.Allow("ip:proxy", "identity:first"); allowed {
+		t.Fatal("expected third attempt for first account to be blocked")
+	}
+}
+
 func TestBodySizeLimitRejectsLargeLoginBeforeHandler(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()

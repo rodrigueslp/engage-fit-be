@@ -1,6 +1,6 @@
 # EngageFit — manual de engenharia e design do sistema
 
-Atualizado em: 2026-08-18
+Atualizado em: 2026-09-14
 
 Status: documento canônico da arquitetura atual.
 
@@ -50,22 +50,28 @@ configurações e comunicações.
 
 Cada box pertence obrigatoriamente a uma organização. A migration `053` criou
 uma organização determinística para cada box preexistente, usando o mesmo ID e
-nome, sem alterar sessão, autorização ou rotas. Novos boxes criados pelo
-repositório também criam a organização na mesma transação. O suporte efetivo a
-várias unidades por usuário virá depois; pertencer à mesma organização ainda
-não concede acesso a outro `box_id`.
+nome, sem alterar sessão, autorização ou rotas. Novos boxes isolados criados
+pelo onboarding também criam a organização na mesma transação. A migration
+`062` adiciona unidades dentro de uma organização, timezone IANA, membership
+organizacional e allowlist explícita; pertencer à mesma organização, sozinho,
+continua sem conceder acesso a outro `box_id`.
 
 Cada box configura:
 
-- nome;
+- nome e timezone;
 - dias sem treino que caracterizam risco de inatividade;
-- cooldown entre mensagens de risco.
+- cooldown entre mensagens de risco;
+- modo de controle de acesso da unidade (`disabled`, `manual` ou
+  `integrated`).
 
 O módulo `catalog` usa a organização como escopo das modalidades e serviços
 ofertáveis reutilizáveis, e a unidade atual como escopo dos espaços. Nesta
-fase, o owner e o coach podem ler o catálogo da unidade autorizada por
-`users.box_id`; somente o owner pode
-alterá-lo. Ainda não existe seleção ou acesso multiunidade.
+fase, o owner e o coach podem ler o catálogo da unidade selecionada e
+autorizada; somente o owner pode alterá-lo. `organization_user_memberships`
+registra o papel na organização e `user_unit_access` mantém a allowlist. O
+`box_id` do JWT é a unidade selecionada e é revalidado em toda requisição;
+`users.box_id` permanece como unidade inicial compatível. O seletor só aparece
+quando há mais de uma unidade disponível.
 
 O módulo `memberships` mantém o catálogo comercial de planos na organização,
 mas fixa `home_unit_id` na unidade da sessão que criou o plano. Somente essa
@@ -73,8 +79,9 @@ unidade pode consultar ou operar o plano, mesmo quando outra unidade pertence à
 mesma organização. O owner é o único papel autorizado; coach e platform admin
 não recebem essa superfície. Matrículas vinculam a `Person` elegível à versão
 publicada exata na unidade atual, preservam histórico comercial e projetam os
-estados `scheduled|active|expired|ended`; elas não criam contrato, cobrança ou
-decisão de acesso.
+estados `scheduled|active|expired|ended`; elas não criam contrato ou cobrança.
+O serviço público interno de acesso do mesmo módulo combina esses termos com
+contadores fornecidos por adapters de reservas e presença.
 
 O módulo `scheduling` (SPEC-006/A) gerencia os profissionais habilitados para
 conduzir sessões e aulas na organização e na unidade. O owner gerencia cadastro,
@@ -89,7 +96,7 @@ vinculadas.
 
 O owner:
 
-- acessa somente o próprio `box_id`;
+- acessa somente unidades explicitamente permitidas na própria organização;
 - importa check-ins;
 - gerencia campanhas, metas e brindes;
 - acompanha alunos, relatórios e entregas;
@@ -99,11 +106,14 @@ O owner:
 
 ### 3.3 `COACH`
 
-É um usuário operacional criado pelo owner e vinculado ao mesmo `box_id`.
-Pode consultar dashboard, radar, alunos e frequência, registrar intervenções e
-ser responsável por um acompanhamento. Não pode acessar cobrança, integrações,
-importações, campanhas, comunicação, automações, configurações ou operações de
-privacidade. Desativar o coach incrementa `auth_version` e revoga suas sessões.
+É um usuário operacional criado pelo owner e membro da mesma organização. Sua
+allowlist contém uma ou mais unidades e pode ser alterada pelo owner; o
+`users.box_id` registra somente a unidade inicial compatível. Pode consultar
+dashboard, radar, alunos e frequência no contexto selecionado, registrar
+intervenções e ser responsável por um acompanhamento. Não pode acessar
+cobrança, integrações, importações, campanhas, comunicação, automações,
+configurações ou operações de privacidade. Desativar o coach incrementa
+`auth_version` e revoga suas sessões.
 
 ### 3.4 `PLATFORM_ADMIN`
 
@@ -194,6 +204,10 @@ O roteamento usa `window.location.hash`. Não há code splitting nem cache de qu
 
 O frontend não armazena token. Todas as chamadas usam `credentials: include`; operações mutáveis leem o cookie CSRF e enviam `X-CSRF-Token`.
 
+O Nginx não registra acessos a `/api/`, pois caminhos públicos podem conter
+tokens de convite, redefinição de senha, aceite contratual e formulário de saúde.
+O backend registra o template da rota, sem o valor desses parâmetros.
+
 ## 6. Pipeline de uma requisição HTTP
 
 ```mermaid
@@ -250,7 +264,7 @@ O frontend transforma isso em `ApiError` e acrescenta `(suporte: <request_id>)`.
 O JWT é HS256 e contém:
 
 - `sub`: user ID;
-- `box_id`;
+- `box_id`, que representa a unidade operacional selecionada;
 - `role`;
 - `auth_version`;
 - `iat` e `exp`.
@@ -266,7 +280,11 @@ Bearer tem precedência quando o header existe. CSRF é exigido apenas para cook
 
 ### 7.2 Revogação por `auth_version`
 
-Toda requisição autenticada relê o usuário no PostgreSQL e compara claims com o estado atual. Logout, troca de senha, reset administrativo e rotação da credencial do admin incrementam `auth_version`.
+Toda requisição autenticada relê o usuário no PostgreSQL e compara claims com o
+estado atual. Para owner e coach, também resolve o membership organizacional e
+a allowlist da unidade do token. Logout, troca de senha, reset administrativo e
+rotação da credencial do admin incrementam `auth_version`; remover uma unidade
+da allowlist bloqueia imediatamente tokens que apontem para ela.
 
 Consequência importante: logout encerra todas as sessões daquele usuário, não apenas o navegador atual. O mesmo vale para troca/reset de senha.
 
@@ -278,13 +296,20 @@ Consequência importante: logout encerra todas as sessões daquele usuário, nã
 - CSRF usa 32 bytes aleatórios e comparação constante;
 - logout limpa os dois cookies.
 
+O login usa limites separados por identidade e IP: a identidade mantém o limite
+configurado e o IP tem uma margem maior para usuários atrás do mesmo proxy.
+Os contadores continuam locais a cada processo; uma instalação com múltiplas
+réplicas precisa de um limitador compartilhado e de `TRUSTED_PROXIES` configurado
+para a cadeia real de proxies.
+
 ### 7.4 Isolamento de tenant
 
 O isolamento é implementado na aplicação e nas queries, não por Row Level Security do PostgreSQL.
 
 Padrão obrigatório:
 
-- o middleware deriva `box_id` do usuário validado, nunca do body;
+- o middleware deriva `box_id` do JWT validado e confirma a allowlist do
+  usuário, nunca confiando no body;
 - casos de uso recebem `boxID` explícito;
 - lookups e updates tenant devem filtrar pelo box ou validar o pai antes;
 - relações sem `box_id` direto, como goals, rewards e recipients, são alcançadas por join/subquery até campaign/box;
@@ -312,6 +337,8 @@ Existem duas decisões diferentes:
 | Catálogo de planos | `FEATURE_MEMBERSHIPS_ENABLED` + catálogo | não possui efeito externo |
 | Matrículas | `FEATURE_ENROLLMENTS_ENABLED` + memberships + people | não possui efeito externo |
 | Profissionais da agenda | `FEATURE_SCHEDULING_ENABLED` | não possui efeito externo |
+| Grade e agenda | `FEATURE_SCHEDULING_GRID_ENABLED` + scheduling + catálogo | materialização interna depende de `SCHEDULING_MATERIALIZER_ENABLED`; não envia mensagens nem reserva vagas |
+| Reservas e fila | `FEATURE_RESERVATIONS_ENABLED` + grade + matrículas + pessoas | não possui efeito externo; notificações continuam separadas |
 
 Defaults:
 
@@ -330,6 +357,7 @@ Dependências validadas no startup:
 - LLM exige workouts;
 - memberships exige catálogo;
 - enrollments exige memberships e people;
+- grade exige scheduling e catálogo; o materializador exige grade;
 - permissão de envio WhatsApp/e-mail exige a feature correspondente.
 
 ## 9. Modelo de dados
@@ -337,8 +365,12 @@ Dependências validadas no startup:
 ### 9.1 Visão relacional principal
 
 ```mermaid
-erDiagram
-    ORGANIZATIONS ||--|{ BOXES : groups
+	erDiagram
+	    ORGANIZATIONS ||--|{ BOXES : groups
+	    ORGANIZATIONS ||--o{ ORGANIZATION_USER_MEMBERSHIPS : authorizes
+	    USERS ||--o{ ORGANIZATION_USER_MEMBERSHIPS : belongs
+	    USERS ||--o{ USER_UNIT_ACCESS : receives
+	    BOXES ||--o{ USER_UNIT_ACCESS : allows
     BOXES ||--o{ USERS : owns
     BOXES ||--o{ STUDENTS : contains
     ORGANIZATIONS ||--o{ PERSONS : identifies
@@ -384,7 +416,7 @@ erDiagram
 
 | Grupo | Tabelas | Papel |
 |---|---|---|
-| Tenancy/acesso | `organizations`, `boxes`, `users` | organização proprietária, unidade/tenant operacional, owner, coach, platform admin e versão de autenticação |
+| Tenancy/acesso | `organizations`, `boxes`, `users`, `organization_user_memberships`, `user_unit_access`, `organization_audit_events` | organização proprietária, unidade/contexto operacional, papéis, allowlist explícita e auditoria administrativa |
 | Ingestão | `students`, `import_histories`, `checkins`, `checkin_ingestion_sources`, `checkin_ingestion_batches` | identidade importada, frequência e entradas recorrentes idempotentes |
 | Campanhas | `campaigns`, `campaign_goals`, `campaign_progresses` | período, meta por origem e snapshot de progresso |
 | Brindes | `rewards`, `reward_deliveries` | catálogo e entrega por aluno elegível |
@@ -396,16 +428,27 @@ erDiagram
 | Governança | `messaging_policies`, `messaging_usage_buckets`, `message_dispatches`, `admin_audit_logs` | limites, reservas, custo estimado e auditoria administrativa |
 | Privacidade | `privacy_suppressions`, `privacy_audit_events` | impedir reimportação e auditar direitos do titular |
 | Catálogo | `modalities`, `unit_modalities`, `spaces`, `service_offerings`, `unit_service_offerings`, `catalog_audit_events` | modalidades e serviços da organização, ativações por unidade, espaços e auditoria |
-| Pessoas | `persons`, `person_addresses`, `person_unit_relationships`, `person_creation_requests`, `people_audit_events` | identidade humana, endereço, participação na unidade, idempotência e auditoria sem PII |
+| Pessoas | `persons`, `person_addresses`, `person_unit_relationships`, `person_external_identities`, `person_athlete_accounts`, `person_identity_reviews`, `person_creation_requests`, `people_audit_events` | identidade humana, endereço, participação na unidade, identidades externas, conta do atleta, revisão, idempotência e auditoria sem PII |
 | Planos comerciais | `membership_plans`, `membership_plan_versions`, `membership_plan_version_addons`, `membership_plan_version_addon_entitlements`, `membership_plan_entitlements`, `membership_plan_command_requests`, `membership_plan_audit_events` | catálogo por organização/unidade de origem, versões imutáveis, adicionais versionados, direitos, idempotência e auditoria |
 | Matrículas | `enrollments`, `enrollment_addons`, `enrollment_command_requests`, `enrollment_events` | vínculo da pessoa à versão imutável, composição de adicionais contratados, vigência, encerramento, idempotência e auditoria sem PII |
+| Contratos | `contract_templates`, `contract_template_versions`, `contract_instances`, `contract_acceptance_sessions`, `contract_acceptances`, `contract_signature_envelopes`, `contract_signature_webhook_events`, `contract_legal_actions`, `contract_legal_events` | documento imutável, aceite local/externo reconciliado e ciclo jurídico posterior |
+| Formulários de saúde | `health_form_submissions`, `health_form_access_events` | PAR-Q cifrado, consentimento, revisão, retenção e auditoria de leitura em módulo isolado |
+| Agenda | `scheduling_professionals`, `scheduling_professional_units`, `scheduling_series`, `scheduling_series_weekdays`, `scheduling_sessions`, `scheduling_command_requests`, `scheduling_audit_events`, `scheduling_session_events`, `scheduling_materialization_runs` | profissionais, grade semanal, ocorrências concretas, idempotência, auditoria e change log sem ocupação/reserva |
+| Reservas | `reservations`, `reservation_command_requests`, `reservation_audit_events` | ocupação, fila FIFO, falta, reposição, idempotência e auditoria sem duplicar PII |
+| Comunicados | `announcements`, `announcement_recipients` | publicações in-app, audiência congelada e histórico de visualização por vínculo explícito da PWA |
+| Financeiro do aluno | `member_billing_contracts`, `member_charges`, `member_payments`, `member_billing_command_requests` | snapshot financeiro da matrícula, parcelas, ledger, conciliação e idempotência; separado do billing SaaS |
 | Schema | `schema_migrations` | versão, checksum e tempo de execução |
 
 ### 9.3 Invariantes relevantes do banco
 
 - UUID é usado como identificador em todas as entidades;
 - todo box referencia exatamente uma organização por `organization_id`;
-- o backfill inicial preserva uma relação determinística `organization.id = box.id`; novos boxes isolados seguem a mesma regra até existir fluxo explícito de criação de segunda unidade;
+- o backfill inicial preserva uma relação determinística `organization.id = box.id`; o onboarding isolado mantém essa regra, enquanto unidades adicionais recebem outro ID e a mesma `organization_id`;
+- nomes de unidade são únicos por `(organization_id, name_key)`, timezone usa
+  identificador IANA validado pela aplicação e toda organização operacional
+  mantém ao menos uma unidade não arquivada;
+- owner/coach precisa de membership ativo na organização e acesso ativo à
+  unidade; FKs compostas impedem allowlist entre organizações;
 - campaign goal é único por `(campaign_id, source)`;
 - campaign progress é único por `(campaign_id, student_id)`;
 - reward delivery é única por `(reward_id, student_id)`;
@@ -421,9 +464,16 @@ erDiagram
 - FKs compostas impedem associar modalidade e unidade de organizações
   diferentes;
 - modalidades e espaços usam arquivamento reversível, sem exclusão física.
+- contrato financeiro é único por matrícula; parcela é única por contrato e
+  sequência; pagamento e estorno nunca ultrapassam, respectivamente, o total e
+  o valor pago da cobrança;
 - serviço ofertável é único por `(organization_id, name_key)`, usa ativação
   por unidade com FKs compostas e também possui arquivamento reversível.
 - CPF confirmado é único por organização por meio de HMAC-SHA-256 dedicado;
+- identidade Wellhub/TotalPass é única por organização e provedor; colisões e
+  contas do atleta associadas a mais de uma pessoa entram em revisão humana;
+- merge de pessoas nunca ocorre por nome/telefone e é bloqueado quando a origem
+  possui matrícula/contrato ou quando endereço/conta gerariam ambiguidade;
 - `students.person_id` é opcional para preservar imports e ativações legados,
   mas a migration inicial cria exatamente uma pessoa e um vínculo por student.
 - nome normalizado de plano é único na organização, inclusive quando arquivado;
@@ -437,6 +487,9 @@ erDiagram
 - clonar uma versão publicada para novo rascunho gera novos UUIDs para adicionais e direitos, preservando o catálogo isolado de mutações retroativas;
 - uma pessoa tem no máximo uma matrícula `lifecycle_status=active` por unidade,
   reforçada por índice parcial e FKs compostas de organização;
+- toda nova matrícula exige `phone_e164` no perfil canônico da pessoa; triggers
+  também impedem inserir matrícula sem WhatsApp ou remover o telefone enquanto
+  existir matrícula aberta (anonimização permanece uma exceção explícita);
 - matrícula seleciona adicionais opcionais pertencentes à versão exata do plano e calcula deterministicamente `total_price_cents = base_price_cents + soma(price_delta_cents)`;
 - snapshot imutável dos adicionais contratados é persistido em `enrollment_addons` (`addon_name`, `price_delta_cents`, `entitlement_summary`) e protegido por trigger contra mutação e exclusão (`protect_enrollment_addons`);
 - matrícula recorrente não possui `valid_until`; pagamento único calcula fim
@@ -446,7 +499,10 @@ erDiagram
 - modelo de contrato possui nome único na organização, rascunho mutável e versões publicadas imutáveis congeladas por trigger (`protect_contract_template_version_content`);
 - instância de contrato vinculada à matrícula preserva snapshot comercial imutável (`base_price_cents`, `addons_price_cents`, `total_price_cents`, adicionais e direitos) protegido por trigger contra mutação (`protect_contract_instance_snapshot`);
 - índice único parcial impede múltiplas instâncias ativas (`draft`, `pending_acceptance`, `accepted`) para a mesma matrícula (`uniq_active_contract_per_enrollment`);
-- port de aceite opera em modo simulador local determinístico com retenção curta e proibição estrita de execução em ambiente de produção.
+- port de aceite opera em modo simulador local determinístico com retenção curta e proibição estrita de execução em ambiente de produção;
+- envelopes externos preservam qualificação cifrada, allowlist de provider e callbacks autenticados/idempotentes; aceite reconciliado revalida a matrícula e persiste sessão, evidência minimizada, transição e evento atomicamente;
+- PAR-Q nunca é armazenado em contratos: respostas usam AES-256-GCM com associated data por organização/submissão, toda leitura detalhada é auditada e o consentimento pode ser revogado; sessões públicas usam token aleatório de uso único, persistido apenas como SHA-256, com validade de 30 minutos;
+- aditivo, renovação, pausa, retomada e cancelamento exigem contrato aceito e produzem instrução financeira explícita; nenhum deles muda matrícula ou cobrança implicitamente.
 
 ### 9.4 Fundação de pessoas e compatibilidade
 
@@ -472,6 +528,27 @@ idempotente usam HMAC-SHA-256 com `PERSON_LOOKUP_HMAC_KEY`, separado das chaves
 de sessão e de cifra. Telefone repetido exige revisão explícita e motivo, mas
 nunca produz merge. O `Student` nasce com `contact_status=unknown`; informar
 WhatsApp não cria consentimento nem libera campanhas.
+
+A migration `063_complete_people_identity.sql` adiciona nome preferido,
+revisão otimista e rastreabilidade de merge em `persons`, além de identidades
+externas, vínculo determinístico com a conta do atleta e fila de revisão. O
+backfill usa somente `(organization, provider, external_id)` e
+`athlete_student_links` já confirmados. Colisões viram revisão; nome e telefone
+nunca consolidam registros.
+
+As leituras de `people` agrupam os `students` por pessoa na unidade e aceitam
+busca protegida por nome, telefone ou CPF no body. Listas retornam somente
+contato/CPF mascarados. Owner recebe o perfil completo e pode editar; coach
+recebe projeção operacional sem documento, endereço, identidade externa ou
+conta. Edição de nome/contato atualiza `persons` e as projeções `students` na
+mesma transação durante a convivência. Um CPF já existente em outra unidade
+oferece vínculo explícito, criando relacionamento e `Student box_member`, sem
+duplicar a pessoa.
+
+O merge exige ação humana e motivo. Ele move apenas dependências compatíveis e
+mantém a origem arquivada com `merged_into_person_id`; matrículas, contratos,
+dois endereços ou duas contas distintas bloqueiam a operação. Não existe merge
+automático nem `split` nesta versão.
 
 O schema não usa soft delete. Fechar campanha altera `active`; excluir campanha remove dependências conforme as foreign keys.
 
@@ -515,15 +592,172 @@ protegido por trigger contra qualquer mutação ou exclusão posterior.
 até a próxima criação: nessa transação ela é encerrada com data final original,
 evento `enrollment.expiration_reconciled` e só então a nova matrícula é criada.
 
-O caso de uso resolve a pessoa por uma porta pública de `people`; o repositório
-de matrículas não consulta `students`, `persons` ou vínculos. O comando valida a
+O caso de uso resolve a pessoa, sua elegibilidade e o WhatsApp canônico por uma
+porta pública de `people`; o repositório de matrículas não consulta `students`,
+`persons` ou vínculos. Criar matrícula sem telefone retorna
+`enrollment_phone_required`. A UI bloqueia a revisão e leva o owner diretamente
+ao perfil para completar o contato. O banco repete a invariante para cobrir
+concorrência e escritas fora da API; uma matrícula aberta impede limpar o
+telefone, exceto no fluxo explícito de anonimização. O comando também valida a
 versão ainda publicada, os alvos do catálogo ainda ativos e o pertencimento dos
 adicionais à versão exata, usa advisory lock por pessoa/unidade, índice parcial,
 revisão otimista, fingerprint (com ordenação de `addon_ids`) e resposta
 idempotente persistida. O export de privacidade compõe o leitor público de
 `memberships` (incluindo snapshot de adicionais), sem acoplar o repositório de
-privacidade às tabelas comerciais. Nenhuma operação muda `membership_started_at`,
-check-ins, contrato, cobrança, agenda, consumo ou autorização de acesso.
+privacidade às tabelas comerciais. Nenhuma operação de matrícula muda
+`membership_started_at`, check-ins, contrato, cobrança ou agenda.
+
+#### 9.6.1 Decisão central de direito e consumo
+
+`memberships.AccessService` é o contrato interno usado por reservas e entrada
+geral. Ele recebe pessoa, unidade, alvo, instante e finalidade e devolve
+`allowed|denied`, razão estável, matrícula, direito e saldo restante quando há
+franquia. Direitos base e adicionais contratados são avaliados do mesmo modo;
+vigência e períodos respeitam o timezone da unidade.
+
+Para matrículas próprias, a mesma decisão exige os pré-requisitos operacionais
+da matrícula: contrato aceito, PAR-Q submetido, primeira cobrança integralmente
+paga e ausência de parcela vencida em aberto. A matrícula comercial continua
+`active` para preservar ciclo e histórico; a pendência bloqueia reserva e
+entrada com razão específica (`contract_pending`, `health_form_pending`,
+`payment_required` ou `payment_overdue`). Cobranças futuras ainda não vencidas
+não bloqueiam depois da quitação inicial. Vínculos corporativos Wellhub e
+TotalPass mantêm a entrada geral local independente desses documentos próprios.
+
+Reservas confirmadas e faltas são a fonte de consumo para aulas agendadas;
+fila e cancelamento não consomem. Presença ligada à reserva não é contada de
+novo, enquanto entrada geral usa somente `attendance_records` sem sessão.
+Pacotes contam a vigência inteira e limites semanais começam na segunda-feira.
+A reposição da `SPEC-007` reutiliza o crédito sem novo débito.
+
+A migration `067` congela a coorte compatível em
+`students.legacy_access_eligible`: mensalistas existentes, com início conhecido
+e ainda sem matrícula continuam entrando durante a transição. Novos alunos não
+recebem o marcador. A mesma migration acrescenta direito e saldo às decisões
+auditáveis de presença; o painel de Check-ins exibe o saldo após uma entrada
+limitada.
+
+### 9.7 Agenda recorrente e sessões publicadas
+
+`scheduling` é dono de profissionais, séries semanais e sessões concretas. Uma
+série começa como `draft`, aceita preview virtual de 1 a 56 dias e pode ser
+arquivada sem exclusão. A publicação revalida catálogo e profissional, congela
+nomes de exibição, adquire advisory locks em ordem canônica e materializa uma
+janela inclusiva de 56 dias. A natural key `(series_id, occurrence_on)` torna
+retry e múltiplas réplicas idempotentes.
+
+Sessões persistem intervalos semiabertos `[starts_at, ends_at)`, capacidade
+total e snapshots; não persistem aluno, plano, preço, reserva, presença ou
+vagas restantes. Profissional conflita em toda a organização e espaço somente
+na unidade. Owner pode criar sessão extra, cancelar, alterar uma ocorrência ou
+aplicar mudança futura à série; passado, overrides e cancelamentos são
+preservados. Coach lê apenas sessões publicadas. Cada mutação grava auditoria e
+`SessionEventV1` na mesma transação. O port público de leitura expõe snapshots
+e cursor de eventos sem acoplar consumers às tabelas.
+
+### 9.8 Reservas e lista de espera
+
+`reservations` compõe os ports públicos de sessão, decisão de acesso de
+`memberships` e pessoa. A reserva revalida a sessão publicada, o vínculo ativo e direitos da
+versão contratada, incluindo adicionais selecionados. Advisory lock por sessão
+e índice parcial tornam a última vaga segura sob concorrência; lotação produz
+fila FIFO e o cancelamento promove, na mesma transação, a primeira pessoa que
+continua elegível. Entradas em fila não consomem franquia; confirmações e faltas
+consomem limites por dia/semana/mês no timezone da sessão ou o pacote total.
+
+Depois do início, owner ou coach pode marcar uma confirmação como `no_show`. A
+falta concede uma reposição ativa vinculada à mesma pessoa e matrícula, usada
+uma única vez sem novo consumo; o cancelamento dessa reposição libera o crédito.
+O cancelamento de sessão/série chama o port de reconciliação e cancela reservas
+e fila atomicamente. Alteração de horário mantém o vínculo à sessão. Presença
+positiva e decisão de acesso pertencem a `attendance` (`SPEC-008`), e nenhum
+evento envia mensagens. O export LGPD agrega reservas sem armazenar nome ou
+contato nas tabelas do módulo.
+
+### 9.9 Presença e decisão de acesso
+
+`attendance` compõe contexto autorizado da unidade, pessoa, matrícula, sessão
+publicada e reserva sem consultar tabelas de outros módulos no caso de uso. A
+entrada geral usa a decisão central de `memberships`, liberando direito vigente
+compatível ou a coorte legada explícita; perfil local Wellhub/TotalPass continua
+sendo liberado pelo vínculo ativo. A seleção de uma aula exige sessão
+`scheduled`, janela entre 60 minutos antes do início e 120 minutos depois do
+fim, além de reserva `confirmed`; espera, ausência de reserva e sessão cancelada
+produzem negativa explicável. O núcleo não chama provedores corporativos.
+
+Cada tentativa cria `attendance_access_decisions`, inclusive a negativa. Uma
+decisão positiva cria no máximo um `attendance_record` por pessoa/dia na
+entrada geral ou por pessoa/sessão e espelha a presença em `checkins` com
+`entry_method=access_decision`, preservando relatórios e campanhas legados sem
+duplicar o mesmo dia. `attendance_command_requests`, advisory lock e fingerprint
+fornecem idempotência transacional. Owner e coach operam os endpoints sob a
+unidade autorizada; IDs adversários retornam indisponibilidade sem revelar
+existência. A flag `FEATURE_ATTENDANCE_ENABLED` fica desligada por padrão e
+exige as fundações de pessoas, matrículas, grade e reservas.
+
+O painel mobile de Check-ins reúne a decisão, o motivo e as tentativas do dia.
+As tabelas não duplicam nome, telefone ou identificador externo; a interface
+resolve o nome da pessoa em leitura e o export LGPD inclui decisões e presenças.
+
+O controle físico é opt-in por unidade. `disabled` é o default e preserva os
+relatórios de frequência, o check-in manual e o QR sem apresentar portaria.
+`manual` habilita a decisão na tela somente para homologação e exceções; o
+backend também rejeita esse comando quando a unidade não está nesse modo.
+`integrated` fica reservado no schema para adaptadores futuros de catraca, mas
+não pode ser ativado pela interface atual. Biometria pertence ao equipamento ou
+ao fornecedor da catraca e não deve ser armazenada pelo EngageFit.
+
+A decisão central também exige, para matrículas próprias, contrato aceito,
+PAR-Q enviado, primeira cobrança integralmente paga e ausência de parcela
+vencida. O painel da matrícula consulta essa mesma projeção e apresenta cada
+pré-requisito como checklist, evitando que o estado visual divirja do bloqueio
+de reserva ou presença. A área de Alunos oferece uma visão consolidada de
+planos e matrículas, com direitos de modalidade/serviço, estado efetivo e
+situação de acesso; os filtros são aplicados no cliente sobre uma leitura única
+da unidade, sem N+1 por aluno.
+
+### 9.10 Financeiro da matrícula
+
+`memberbilling` recebe a matrícula pelo contrato público de `memberships` e
+congela ciclo, valor, pessoa e unidade em um contrato financeiro próprio. Uma
+matrícula possui no máximo um contrato financeiro. A primeira parcela é criada
+atomicamente; ciclos recorrentes avançam `next_due_on` por calendário e
+materializam novas cobranças com sequência única. A leitura projeta atraso sem
+reescrever o ledger.
+
+`member_payments` é append-only para baixa manual, liquidação conciliada e
+estorno. `member_charges` mantém os totais projetados com constraints que
+impedem pagamento acima da cobrança e estorno acima do pago. Todos os comandos
+usam advisory lock e são idempotentes por organização/comando/chave; cobranças
+são lidas `FOR UPDATE` durante baixa/conciliação/estorno. O adapter instalado é
+`local_simulator`: produz Pix, boleto e URL de cartão não pagáveis e nunca chama
+rede ou recebe dados de cartão. `billing` continua exclusivo à assinatura SaaS
+da academia.
+
+O painel da matrícula aceita valores parciais na baixa manual, na conciliação
+simulada e no estorno, sempre limitado ao saldo aplicável. Cada parcela expõe
+seu histórico append-only com tipo, forma, instante, valor e motivo. Em builds
+locais de desenvolvimento, o painel também permite reenviar exatamente a
+última mutação e compara a projeção financeira e os IDs do ledger antes/depois,
+oferecendo uma homologação visível da idempotência sem expor chaves técnicas na
+experiência produtiva.
+
+### 9.11 Quiosque e vendas avulsas
+
+`commerce` é proprietário do catálogo simples por unidade e de vendas de
+balcão. Produtos ativos possuem preço em centavos e podem ser desativados sem
+alterar itens históricos. A criação da venda carrega os produtos ativos no
+servidor, consolida quantidades, congela nome/SKU/preço e grava venda, itens e
+um pagamento manual na mesma transação. Triggers diferidos exigem que soma dos
+itens, total da venda e pagamento sejam idênticos.
+
+O comando usa advisory lock e idempotência por organização, unidade e chave.
+Pix, dinheiro e maquininha passam por um port financeiro próprio com adapter
+local, sem rede; entidades de `memberbilling` e `billing` não são reutilizadas.
+Uma pessoa ativa da unidade pode ser associada sem duplicação de nome ou
+contato na persistência, e as vendas associadas entram no export LGPD. Owner
+opera as rotas sob `FEATURE_COMMERCE_ENABLED`; estoque, fiscal, fornecedores,
+compras, comissões, estornos e gateway permanecem fora do sistema.
 
 ## 10. Fluxo de importação
 
@@ -696,7 +930,22 @@ Importante: `rewards.quantity` é hoje estoque informativo. A criação de deliv
 
 ### 12.1 Dashboard
 
-O resumo combina:
+`GET /api/v1/dashboard/today` é a projeção operacional do dia local da unidade.
+Ela consulta somente leitura e compõe:
+
+- sessões publicadas com capacidade, confirmações, fila e presenças;
+- total de presenças e decisões negativas de acesso;
+- cobranças abertas vencidas ou com vencimento no dia;
+- contratos aguardando aceite e formulários PAR-Q sinalizados para revisão.
+
+Todas as fontes são filtradas por organização e unidade. Owner recebe a visão
+completa; coach recebe apenas agenda, ocupação e acesso, sem financeiro,
+contratos ou saúde. A projeção não duplica PII persistida nem expõe contato,
+respostas de saúde, documento contratual ou instrução de pagamento. O frontend
+mostra essa operação antes dos indicadores históricos e oferece atalhos para as
+telas donas de cada ação.
+
+O resumo histórico combina:
 
 - total de alunos;
 - check-ins do mês UTC atual;
@@ -820,6 +1069,9 @@ Modos de conexão:
 - `dedicated`: configuração e credencial pertencem ao box e ficam cifradas no banco.
 
 Twilio usa Content SID e variáveis numeradas. Meta Cloud permanece como adapter, mas o fluxo proativo oficial com Content Template está implementado operacionalmente para Twilio.
+Em produção, chamadas reais de teste e envio aceitam apenas HTTPS para
+`api.twilio.com` ou `graph.facebook.com`, conforme o provedor, quando há uma
+base URL configurada. O adaptador `mock://` não faz requisições de rede.
 
 ### 13.2 Pipeline de um disparo WhatsApp
 
@@ -917,6 +1169,21 @@ pública configurada no sender, pois ela participa da validação da assinatura.
 O fluxo exige Twilio habilitado e remetente numérico; Messaging Service SID
 sozinho não fornece o destino necessário ao link `wa.me`.
 
+No painel da matrícula, links de aceite e PAR-Q podem ser compartilhados
+manualmente por `wa.me` quando existe telefone e o aluno não marcou
+`opted_out`, independentemente da capability do gateway. Em `unknown`, a tela
+avisa o owner para confirmar a concordância do aluno e, quando o WhatsApp do box
+está habilitado, também oferece o modo assistido para registrar `opted_in`.
+O compartilhamento apenas abre o WhatsApp com número e mensagem preenchidos:
+não cria recipient, não chama o gateway e não consome governança de campanha.
+`opted_out` bloqueia a ação, e o aceite contratual não é tratado como
+autorização para campanhas promocionais.
+
+Contrato e PAR-Q pendentes são atualizados no modal por polling silencioso de
+três segundos enquanto a página está visível. O polling usa apenas as leituras
+autorizadas já existentes, para automaticamente encerrar a espera sem recarregar
+a página ou perder o aluno selecionado.
+
 ### 13.5 E-mail
 
 E-mail possui settings SMTP/mock, templates editáveis, campanhas, preview e recipients.
@@ -984,13 +1251,39 @@ usam cookies e CSRF próprios e não se confundem com a sessão do owner/coach.
 
 Rotas públicas: preview/claim do convite, login, solicitação/conclusão de
 recuperação de senha e confirmação de e-mail. Rotas autenticadas: perfil,
-treinos publicados, resultados, PRs, explicação contextual e logout.
+portal operacional, treinos publicados, resultados, PRs, explicação contextual
+e logout.
+
+`GET /api/v1/athlete/portal` compõe um read model por unidade ativa com agenda
+das últimas 24 horas e dos próximos 30 dias, ocupação agregada, reserva/fila e
+presença da própria pessoa, plano/matrícula, contrato, cobranças, total de
+check-ins na unidade e avisos
+derivados. A autorização não procura o aluno por PII: segue exclusivamente
+`athlete_account -> athlete_box_membership -> athlete_student_link -> person`.
+Contrato e cobrança continuam pertencendo aos seus módulos; o portal não
+grava estado, não expõe token/evidência de aceite nem referências internas de
+gateway. Instruções de pagamento passam por allowlist antes da resposta.
+
+`POST /api/v1/athlete/memberships/:membership_id/sessions/:session_id/book`
+permite inscrição do próprio atleta em sessão futura. O backend resolve o
+membership ativo até a `person`, executa a decisão de acesso, capacidade e
+fila do módulo `reservations`, exige chave de idempotência e registra o ator
+atleta em `reservation_audit_events`. A resposta contém apenas ID, estado e
+posição na fila. A rota segue a capability de reservas. Cancelamento pelo
+aluno usa `POST /api/v1/athlete/memberships/:membership_id/sessions/:session_id/reservations/:reservation_id/cancel`.
+Ela revalida vínculo e titularidade da reserva, exige sessão futura, cookie,
+CSRF e chave de idempotência; a transição registra ator atleta e promove a
+primeira pessoa elegível da fila quando libera uma vaga confirmada.
 
 `athlete_workout_results` guarda um diário flexível por treino em JSONB, com
 escala, scores por bloco/movimento, RPE e notas. O upsert recalcula PRs a partir
 do histórico inteiro afetado, portanto editar o resultado de origem não deixa
 uma melhor marca obsoleta. `athlete_personal_records` distingue `estimated` de
 `confirmed`; somente recordes confirmados entram em faixas pessoais de carga.
+`POST /api/v1/athlete/personal-records` permite uma marca manual vinculada à
+unidade do atleta. `athlete_manual_records` guarda esses lançamentos; a leitura
+de PRs escolhe a melhor marca entre lançamentos manuais confirmados e resultados
+de treinos, preservando ambos quando um resultado é editado.
 
 Pacing e referências são determinísticos (`rules-v1`). A explicação LLM é
 opcional e recebe esses cálculos como limite factual; falha ou feature
@@ -1004,7 +1297,35 @@ O envio usa o SMTP do primeiro box ativo e `PUBLIC_WEB_URL` para montar o link.
 
 O frontend `#/athlete` é mobile-first, permite separar múltiplos boxes e é
 instalável como PWA; mantém a API fora do cache do service worker para reduzir
-risco de exposição de dados privados após logout.
+risco de exposição de dados privados após logout. Além de treino, histórico e
+PRs, a aba `Agenda` usa seletor semanal e lista compacta do dia selecionado; o
+detalhe da aula mostra ocupação agregada e estado da reserva do próprio atleta.
+Reservas futuras confirmadas ou em espera podem ser canceladas após confirmação
+na interface. `Extras` reúne timer e conversor kg/lb; `Plano e pagamentos` é
+aberto pelo perfil. A tela de plano apresenta
+matrícula, documento contratual, financeiro e avisos com loading, vazio, erro e
+retry próprios. O atleta pode inscrever-se ou entrar na fila em aulas futuras.
+`Hoje` apresenta apenas o treino da data atual ou o próximo publicado; treinos
+antigos ficam no histórico. A aba `PRs` oferece lançamento direto de marcas.
+`Perfil` apresenta check-ins por unidade e a solicitação de verificação de
+e-mail. Conversor kg/lb e timer (cronômetro, AMRAP, EMOM e Tabata) executam
+somente no navegador. A aba `Avisos` lista comunicados in-app publicados para a
+audiência congelada do membership e registra primeiro/último acesso sem expor
+PII. Assinatura embutida e notificações push permanecem fora deste contrato.
+
+### 13.8 Comunicados in-app
+
+`announcements` é dono de rascunho, prioridade, agenda e ciclo de publicação.
+O owner pode segmentar por todos os atletas ativos da unidade, origem do
+vínculo ou plano ativo. Ao publicar ou agendar, `announcement_recipients`
+congela somente contas da PWA alcançadas por vínculo explícito; alterações
+posteriores de matrícula não reescrevem o histórico.
+
+Publicações agendadas tornam-se visíveis quando `publish_at <= now`; a primeira
+leitura materializa o estado publicado se necessário. Cada abertura registra
+`first_viewed_at`, `last_viewed_at` e `view_count`. A feature não reutiliza
+recipients de WhatsApp/e-mail, não contém endereço de contato e não abre rede.
+Push e canais externos permanecem fora da `SPEC-014` entregue localmente.
 
 ## 14. Automações, concorrência e idempotência
 
@@ -1113,7 +1434,8 @@ O JSON contém:
 A exportação também gera `privacy_audit_events`.
 
 Quando o student possui `person_id`, a exportação autorizada inclui pessoa,
-endereço e CPF descriptografado. Respostas operacionais comuns retornam no
+endereço, unidades, identidades externas, vínculo da conta do atleta e CPF
+descriptografado. Respostas operacionais comuns retornam no
 máximo `cpf_masked`; listas, conflitos, logs, métricas e auditoria de people
 nunca recebem CPF integral, ciphertext, telefone bruto ou endereço.
 
@@ -1134,8 +1456,10 @@ Ela:
 - grava auditoria.
 
 Quando existe uma pessoa vinculada sem outro `Student` não anonimizado, a mesma
-transação também limpa nome, telefone, e-mail, CPF cifrado/hash/últimos dígitos
-e remove o endereço. Se existir outro perfil ativo inesperado, a PII da pessoa
+transação também limpa nome/nome preferido, telefone, e-mail, CPF
+cifrado/hash/últimos dígitos, cria supressão para identidades externas, remove
+endereço/identidades e desvincula a conta do atleta. Se existir outro perfil
+ativo, a PII da pessoa
 é preservada e um evento sem PII registra essa decisão.
 
 O hash não é reversível, mas identificadores de baixa entropia ainda podem ser testados por força bruta por quem possuir acesso ao banco. O controle de acesso ao PostgreSQL continua essencial.
@@ -1314,6 +1638,20 @@ publicar o frontend em qualquer ordem e habilitar somente após smoke de
 cadastro, replay, conflitos e privacy. Rollback operacional é desligar a flag;
 as estruturas e os students compatíveis permanecem.
 
+A evolução `063` é igualmente aditiva. Depois de aplicá-la, reconciliar
+identidades corporativas e revisões antes de liberar consolidações:
+
+```sql
+SELECT provider, COUNT(*) FROM person_external_identities GROUP BY provider;
+SELECT reason, COUNT(*) FROM person_identity_reviews
+WHERE status = 'pending' GROUP BY reason;
+SELECT COUNT(*) FROM person_athlete_accounts;
+```
+
+Rollback operacional continua sendo desligar
+`FEATURE_PEOPLE_FOUNDATION_ENABLED`; não executar down migration nem remover
+revisões pendentes.
+
 ### 17.5 Rollout do catálogo versionado de planos
 
 A migration provisória `057_create_membership_plan_catalog.sql` é aditiva:
@@ -1384,6 +1722,43 @@ tempo real e snapshot imutável em `#/students`. O rollback operacional, se
 necessário, consiste em retornar os binários; as tabelas e triggers aditivos
 permanecem sem corromper ou afetar versões de planos ou matrículas básicas.
 
+### 17.8 Rollout do contexto multiunidade
+
+A migration `062_create_multi_unit_access.sql` adiciona `boxes.timezone` e
+`boxes.name_key`, cria memberships, allowlists e auditoria de organização e faz
+backfill de todo owner/coach para sua unidade atual. O trigger de compatibilidade
+mantém novos usuários criados pelo caminho legado associados à organização e à
+unidade inicial; outro trigger normaliza nomes de boxes antigos.
+
+Antes de publicar a API, executar a migration em job separado e reconciliar:
+
+```sql
+SELECT COUNT(*) FROM users
+WHERE role IN ('OWNER', 'COACH') AND box_id IS NOT NULL;
+SELECT COUNT(*) FROM organization_user_memberships WHERE active;
+SELECT COUNT(*) FROM user_unit_access WHERE active;
+SELECT COUNT(*) FROM boxes WHERE timezone IS NULL OR name_key IS NULL;
+```
+
+Em uma base sem acessos customizados, as três primeiras contagens devem
+coincidir e a última deve ser zero. Depois do backend, o frontend pode ser
+publicado em qualquer ordem: se `GET /units` não existir, ele mantém a unidade
+atual como contexto único. O smoke deve criar uma segunda unidade, alternar o
+contexto, confirmar isolamento dos dados e revogar/conceder a unidade a um
+coach. Rollback do frontend/API preserva o schema aditivo e continua usando
+`users.box_id`; não remover as tabelas nem editar allowlists manualmente.
+
+### 17.9 Rollout do financeiro do aluno
+
+A migration `068_create_member_billing.sql` é aditiva e não cria cobranças para
+matrículas existentes. Publicar primeiro schema e backend com
+`FEATURE_MEMBER_BILLING_ENABLED=false`; a configuração recusa habilitar a
+capability sem matrículas. Homologar em dados sintéticos criação única e
+recorrente, idempotência, baixa parcial/total, conciliação duplicada, estorno,
+isolamento entre unidades e export de privacidade. O frontend tolera capability
+ausente. O rollback desliga a flag e preserva contratos, cobranças e ledger.
+Não habilitar em produção enquanto o único adapter for `local_simulator`.
+
 ## 18. Runtime, containers e shutdown
 
 ### 18.1 API
@@ -1407,6 +1782,7 @@ permanecem sem corromper ou afetar versões de planos ou matrículas básicas.
 - assets com cache de um ano e HTML sem cache;
 - healthcheck `/health`;
 - security headers no Nginx;
+- o build do backend usa Go 1.26.8, fixado no Dockerfile;
 - `VITE_API_BASE_URL` e nome do cookie CSRF são fixados no build.
 
 ## 19. Observabilidade e diagnóstico
@@ -1472,6 +1848,9 @@ A lista executável completa está em `.env.example`. Os grupos conceituais são
 | Planos | `FEATURE_MEMBERSHIPS_ENABLED` (depende de `FEATURE_CATALOG_ENABLED`) | exposição prematura do catálogo comercial |
 | Matrículas | `FEATURE_ENROLLMENTS_ENABLED` (depende de memberships e people) | exposição prematura do vínculo comercial da pessoa |
 | Profissionais da agenda | `FEATURE_SCHEDULING_ENABLED` | exposição prematura de profissionais da agenda |
+| Grade e agenda | `FEATURE_SCHEDULING_GRID_ENABLED`, `SCHEDULING_MATERIALIZER_ENABLED` | publicação sem manutenção do horizonte ou exposição prematura de sessões |
+| Comunicados in-app | `FEATURE_ANNOUNCEMENTS_ENABLED` | publicação prematura na PWA; não habilita push nem envio externo |
+| Quiosque | `FEATURE_COMMERCE_ENABLED` (depende de people) | exposição prematura de vendas; não habilita estoque, fiscal ou gateway |
 | Retenção | `PRIVACY_RETENTION_*` | exclusão prematura ou retenção excessiva |
 
 Production faz fail-fast para banco, JWT, cookie Secure, admin e cifra. Setup/Prometheus habilitados exigem tokens fortes.
@@ -1485,12 +1864,17 @@ O contrato definitivo está em `internal/adapters/http/router.go`. Mapa resumido
 | `/health*`, `/metrics` | público/controlado | runtime e observabilidade |
 | `/api/v1/capabilities` | público | booleans de disponibilidade |
 | `/api/v1/auth`, `/setup/owner` | público/autenticado | sessão e onboarding |
+| `/api/v1/auth/unit-context`, `/api/v1/units` | OWNER/COACH, conforme allowlist | listar contextos autorizados e trocar a unidade da sessão |
+| `/api/v1/units`, `/api/v1/units/:unit_id`, `/api/v1/team/coaches/:id/units` | OWNER | criar/atualizar unidades e administrar a allowlist da equipe |
 | `/api/v1/box`, `/students`, `/checkins` | OWNER/COACH, conforme allowlist | tenant, alunos e frequência |
 | `/api/v1/organization`, `/modalities`, `/service-offerings`, `/units/:unit_id/{modalities,spaces,service-offerings}` | OWNER/COACH para leitura; OWNER para mutação | organização atual, modalidades, espaços e serviços ofertáveis |
-| `/api/v1/units/:unit_id/people` | OWNER + capability `people` | duplicate check e cadastro manual idempotente |
+| `/api/v1/units/:unit_id/people*` | OWNER/COACH para lista/perfil minimizado; OWNER para mutações + capability `people` | busca protegida, cadastro, perfil/edição, vínculo de unidade, identidades, revisão e merge seguro |
 | `/api/v1/membership-plans*` | OWNER + capability `memberships` | catálogo comercial, rascunho, publicação, nova versão e arquivamento |
-| `/api/v1/units/:unit_id/{students/:student_id/enrollments,enrollments/:enrollment_id*}` | OWNER + capability `enrollments` | consulta, criação idempotente e encerramento de matrícula |
+| `/api/v1/units/:unit_id/{students/:student_id/enrollments,enrollments/roster,enrollments/:enrollment_id*}` | OWNER + capability `enrollments` | consulta, visão consolidada por plano/direito, pendências de acesso, criação idempotente e encerramento de matrícula |
+| `/api/v1/units/:unit_id/{enrollments/:enrollment_id/member-billing,member-billing/*}` | OWNER + capabilities `enrollments` e `member_billing` | contrato financeiro, parcelas, baixa manual, conciliação e estorno |
 | `/api/v1/units/:unit_id/scheduling/professionals*` | OWNER para mutações/exportação; COACH para leitura ativa | gestão e consulta de profissionais habilitados para agenda |
+| `/api/v1/units/:unit_id/scheduling/series*`, `/scheduling/preview` | OWNER + `scheduling_grid` | rascunho, preview, publicação, mudança futura e cancelamento da grade |
+| `/api/v1/units/:unit_id/scheduling/sessions*` | OWNER para mutação; OWNER/COACH para leitura | agenda publicada, sessão extra, exceção e cancelamento auditável |
 | `/api/v1/retention*`, `/students/:id/retention-monitoring`, `/team/members` | OWNER/COACH | radar, jornada, exclusões reversíveis, ações e consulta da equipe |
 | `/api/v1/imports`, `/checkin-ingestion*` | OWNER ou credencial de ingestão | upload manual e entrada recorrente |
 | `/api/v1/team/coaches*` | OWNER | criação, desativação e senha de coaches |
@@ -1503,8 +1887,11 @@ O contrato definitivo está em `internal/adapters/http/router.go`. Mapa resumido
 | `/api/v1/email*` | OWNER + capability | e-mail |
 | `/api/v1/workouts*` | OWNER + capability | treino/LLM/WhatsApp |
 | `/api/v1/automation*` | OWNER + capability | schedules e runs |
-| `/api/v1/reports*`, `/dashboard*` | OWNER | leitura operacional |
-| `/api/v1/admin*` | PLATFORM_ADMIN | governança, settings e reset |
+| `/api/v1/reports*` | OWNER | leitura gerencial |
+| `/api/v1/dashboard*` | OWNER/COACH; pendências sensíveis somente OWNER | leitura operacional e projeção do dia no contexto selecionado |
+| `/api/v1/units/:unit_id/announcements*` | OWNER + capability `announcements` | rascunho, segmentação, agenda, publicação, arquivamento e métricas de leitura |
+| `/api/v1/athlete*` | público nos fluxos de conta; sessão própria do atleta nas leituras privadas | convite/login, perfil, portal multiunidade, treino, resultados e PRs |
+| `/api/v1/admin*` | PLATFORM_ADMIN | governança, settings, reset e criação de unidade em organização existente |
 
 Ao adicionar endpoint:
 
@@ -1635,7 +2022,7 @@ Hoje há lógica de audiência semelhante em três packages. Mudanças devem ser
 | worker no processo da API | operação simples | acoplamento de recursos e deploy |
 | rate limit em memória | zero infraestrutura extra | não é global entre réplicas |
 | sem RLS | código/repositories mais simples | isolamento depende de disciplina/testes |
-| `Organization` adicionada sem trocar o tenant da sessão | evolução aditiva e sem regressão dos fluxos atuais | multiunidade ainda exige memberships, allowlist e seleção explícita de contexto |
+| `Organization` acima do contexto `Box` selecionável | catálogo compartilhado sem afrouxar o isolamento operacional | cada novo módulo precisa decidir explicitamente se pertence à organização ou à unidade |
 | plano pertence à organização, mas é operado só pela unidade de origem | prepara identidade organizacional sem ampliar autorização | catálogo compartilhado entre unidades exige contrato futuro explícito |
 | matrícula referencia a versão em vez de duplicar termos | preserva snapshot comercial sem PII redundante | histórico depende da retenção das versões imutáveis |
 | estado efetivo de matrícula calculado na leitura | evita worker diário e segundo status persistido | expiração só é reconciliada administrativamente na criação seguinte |
@@ -1657,9 +2044,8 @@ Hoje há lógica de audiência semelhante em três packages. Mudanças devem ser
 
 ### Produto/qualidade
 
-- implementar adicionais, contratos, cobrança, consumo/decisão de acesso e
-  acesso multiunidade nas slices futuras; a matrícula atual continua
-  operacional e restrita ao `users.box_id`;
+- integrar gateway financeiro real; o app do aluno já expõe cobranças próprias,
+  mas o financeiro atual opera por simulador local e somente na unidade da matrícula;
 - recuperação de senha por token/e-mail;
 - paginação e filtros server-side;
 - histórico e conversão de brindes/mensagens;
@@ -1797,13 +2183,14 @@ Você domina o núcleo quando consegue explicar:
 | Catálogo de estrutura e serviços | `internal/app/catalog`, `catalog_repository.go`, `catalog_handler.go` |
 | Catálogo versionado de planos | `internal/app/memberships`, `membership_repository.go`, `membership_handler.go`, `engage-fit-fe/src/pages/plans/PlansPage.tsx` |
 | Matrículas | `internal/app/memberships/enrollment_service.go`, `enrollment_repository.go`, `enrollment_handler.go`, `engage-fit-fe/src/features/enrollments/EnrollmentPanel.tsx` |
-| Contratos e termos de adesão | `internal/app/contracts`, `contract_repository.go`, `contract_handler.go`, `engage-fit-fe/src/features/contracts` |
-| Profissionais da agenda | `internal/app/scheduling`, `scheduling_repository.go`, `scheduling_handler.go`, `engage-fit-fe/src/pages/schedule/SchedulePage.tsx` |
+| Contratos, aceite e ciclo jurídico | `internal/app/contracts`, `internal/app/contractlifecycle`, `contract_repository.go`, `contract_lifecycle_repository.go`, `engage-fit-fe/src/features/contracts` |
+| PAR-Q e formulários sensíveis | `internal/app/healthforms`, `health_form_repository.go`, `engage-fit-fe/src/features/healthforms` |
+| Agenda, grade e profissionais | `internal/app/scheduling`, `scheduling_repository.go`, `scheduling_grid_repository.go`, `scheduling_handler.go`, `scheduling_grid_handler.go`, `engage-fit-fe/src/pages/schedule` |
 | Pessoas/cadastro manual | `internal/app/people`, `people_repository.go`, `people_handler.go` |
 | Importação | `internal/app/imports/import_checkins_usecase.go` |
 | Campanhas/progresso | `internal/app/campaigns/campaign_usecases.go` |
 | Frequência/check-ins | `internal/adapters/persistence/postgres/repositories/checkin_repository.go`, `engage-fit-fe/src/pages/checkins/CheckinsPage.tsx` |
-| Risco/dashboard | `internal/app/dashboard/dashboard_usecases.go` |
+| Risco/dashboard e operação do dia | `internal/app/dashboard`, `today_operations_repository.go`, `engage-fit-fe/src/pages/dashboard` |
 | WhatsApp/audiência | `internal/app/messages/message_usecases.go` |
 | Ativação WhatsApp | `internal/app/contactactivation/service.go`, `contact_activation_repository.go` |
 | Governança | `internal/adapters/persistence/postgres/repositories/messaging_governance_repository.go` |

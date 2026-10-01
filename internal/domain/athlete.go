@@ -94,6 +94,7 @@ type AthletePersonalRecord struct {
 	Unit           string     `json:"unit"`
 	Status         string     `json:"status"`
 	SourceResultID ID         `json:"source_result_id"`
+	SourceManualID ID         `json:"source_manual_id,omitempty"`
 	AchievedAt     time.Time  `json:"achieved_at"`
 	ConfirmedAt    *time.Time `json:"confirmed_at,omitempty"`
 }

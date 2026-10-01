@@ -1,5 +1,7 @@
 package dto
 
+import "boxengage/backend/internal/domain"
+
 type StudentResponse struct {
 	ID                      string `json:"id"`
 	PersonID                string `json:"person_id,omitempty"`
@@ -47,17 +49,22 @@ type StudentPrivacyExportResponse struct {
 	ContactConsents        []ContactConsentResponse          `json:"contact_consents"`
 	RetentionInterventions []RetentionInterventionResponse   `json:"retention_interventions"`
 	Enrollments            []EnrollmentPrivacyExportResponse `json:"enrollments"`
+	Attendance             []domain.AttendanceAdmission      `json:"attendance"`
+	MemberBilling          []domain.MemberBillingSnapshot    `json:"member_billing"`
 	ExportedAt             string                            `json:"exported_at"`
 }
 
 type PersonPrivacyExportResponse struct {
-	ID            string                 `json:"id"`
-	Name          string                 `json:"name"`
-	Phone         string                 `json:"phone"`
-	Email         string                 `json:"email"`
-	CPF           string                 `json:"cpf"`
-	ProfileStatus string                 `json:"profile_status"`
-	Address       *PersonAddressResponse `json:"address,omitempty"`
+	ID                 string                          `json:"id"`
+	Name               string                          `json:"name"`
+	Phone              string                          `json:"phone"`
+	Email              string                          `json:"email"`
+	CPF                string                          `json:"cpf"`
+	ProfileStatus      string                          `json:"profile_status"`
+	Address            *PersonAddressResponse          `json:"address,omitempty"`
+	Relationships      []domain.PersonUnitRelationship `json:"relationships"`
+	ExternalIdentities []domain.PersonExternalIdentity `json:"external_identities"`
+	AthleteAccount     *domain.PersonAthleteAccount    `json:"athlete_account,omitempty"`
 }
 
 type PersonAddressResponse struct {

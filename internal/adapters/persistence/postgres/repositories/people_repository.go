@@ -25,12 +25,13 @@ func (r PeopleGormRepository) ResolveEnrollmentSubject(ctx context.Context, orga
 	var row struct {
 		PersonID           *string
 		DisplayName        string
+		PhoneE164          string
 		AnonymizedAt       *string
 		ProfileStatus      *string
 		RelationshipStatus *string
 	}
 	err := databaseForContext(r.db, ctx).Table("students s").
-		Select("s.person_id, s.name AS display_name, s.anonymized_at::text AS anonymized_at, p.profile_status, r.relationship_status").
+		Select("s.person_id, s.name AS display_name, COALESCE(p.phone_e164, '') AS phone_e164, s.anonymized_at::text AS anonymized_at, p.profile_status, r.relationship_status").
 		Joins("JOIN boxes b ON b.id = s.box_id AND b.organization_id = ?", stringID(organizationID)).
 		Joins("LEFT JOIN persons p ON p.id = s.person_id AND p.organization_id = b.organization_id").
 		Joins("LEFT JOIN person_unit_relationships r ON r.person_id = p.id AND r.organization_id = p.organization_id AND r.unit_id = s.box_id").
@@ -45,7 +46,7 @@ func (r PeopleGormRepository) ResolveEnrollmentSubject(ctx context.Context, orga
 	if row.PersonID == nil || *row.PersonID == "" {
 		return nil, nil
 	}
-	subject := &domain.EnrollmentSubject{PersonID: domainID(*row.PersonID), DisplayName: row.DisplayName, Eligible: true}
+	subject := &domain.EnrollmentSubject{PersonID: domainID(*row.PersonID), DisplayName: row.DisplayName, PhoneE164: row.PhoneE164, Eligible: true}
 	switch {
 	case row.AnonymizedAt != nil || row.ProfileStatus == nil || *row.ProfileStatus == string(domain.PersonProfileAnonymized):
 		subject.Eligible, subject.IneligibleReason = false, "person_anonymized"
@@ -88,9 +89,9 @@ func (r PeopleGormRepository) DuplicateCheck(ctx context.Context, organizationID
 	if cpfLookupHash != "" {
 		var row duplicateMatchRow
 		err := db.Table("persons p").
-			Select("p.id AS person_id, p.name, COALESCE(p.phone_e164, '') AS phone_e164, r.relationship_status").
-			Joins("JOIN person_unit_relationships r ON r.person_id = p.id AND r.organization_id = p.organization_id").
-			Where("p.organization_id = ? AND p.cpf_lookup_hash = ? AND p.profile_status <> 'anonymized' AND r.unit_id = ?", stringID(organizationID), cpfLookupHash, stringID(unitID)).
+			Select("p.id AS person_id, p.name, COALESCE(p.phone_e164, '') AS phone_e164, COALESCE(r.relationship_status, '') AS relationship_status").
+			Joins("LEFT JOIN person_unit_relationships r ON r.person_id = p.id AND r.organization_id = p.organization_id AND r.unit_id = ?", stringID(unitID)).
+			Where("p.organization_id = ? AND p.cpf_lookup_hash = ? AND p.profile_status <> 'anonymized' AND p.merged_into_person_id IS NULL", stringID(organizationID), cpfLookupHash).
 			Take(&row).Error
 		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, err
@@ -275,11 +276,11 @@ func addressFieldsPresent(address domain.PersonAddress) []string {
 }
 
 func personToModel(person domain.Person) *models.PersonModel {
-	return &models.PersonModel{ID: stringID(person.ID), OrganizationID: stringID(person.OrganizationID), Name: person.Name, PhoneE164: peopleNullableString(person.PhoneE164), Email: peopleNullableString(person.Email), CPFEncrypted: peopleNullableString(person.CPFEncrypted), CPFLookupHash: peopleNullableString(person.CPFLookupHash), CPFLast2: peopleNullableString(person.CPFLast2), ProfileStatus: string(person.ProfileStatus), CreatedAt: person.CreatedAt, UpdatedAt: person.UpdatedAt}
+	return &models.PersonModel{ID: stringID(person.ID), OrganizationID: stringID(person.OrganizationID), Name: person.Name, PreferredName: peopleNullableString(person.PreferredName), PhoneE164: peopleNullableString(person.PhoneE164), Email: peopleNullableString(person.Email), CPFEncrypted: peopleNullableString(person.CPFEncrypted), CPFLookupHash: peopleNullableString(person.CPFLookupHash), CPFLast2: peopleNullableString(person.CPFLast2), ProfileStatus: string(person.ProfileStatus), MergedIntoPersonID: peopleNullableID(person.MergedIntoID), Revision: person.Revision, CreatedAt: person.CreatedAt, UpdatedAt: person.UpdatedAt}
 }
 
 func personToDomain(person models.PersonModel) domain.Person {
-	return domain.Person{ID: domainID(person.ID), OrganizationID: domainID(person.OrganizationID), Name: person.Name, PhoneE164: optionalString(person.PhoneE164), Email: optionalString(person.Email), CPFEncrypted: optionalString(person.CPFEncrypted), CPFLookupHash: optionalString(person.CPFLookupHash), CPFLast2: optionalString(person.CPFLast2), ProfileStatus: domain.PersonProfileStatus(person.ProfileStatus), CreatedAt: person.CreatedAt, UpdatedAt: person.UpdatedAt}
+	return domain.Person{ID: domainID(person.ID), OrganizationID: domainID(person.OrganizationID), Name: person.Name, PreferredName: optionalString(person.PreferredName), PhoneE164: optionalString(person.PhoneE164), Email: optionalString(person.Email), CPFEncrypted: optionalString(person.CPFEncrypted), CPFLookupHash: optionalString(person.CPFLookupHash), CPFLast2: optionalString(person.CPFLast2), ProfileStatus: domain.PersonProfileStatus(person.ProfileStatus), MergedIntoID: optionalID(person.MergedIntoPersonID), Revision: person.Revision, CreatedAt: person.CreatedAt, UpdatedAt: person.UpdatedAt}
 }
 
 func addressToModel(address domain.PersonAddress) *models.PersonAddressModel {
@@ -297,12 +298,30 @@ func peopleNullableString(value string) *string {
 	return &value
 }
 
+func peopleNullableID(value domain.ID) *string {
+	if value == "" {
+		return nil
+	}
+	result := stringID(value)
+	return &result
+}
+
+func optionalID(value *string) domain.ID {
+	if value == nil {
+		return ""
+	}
+	return domainID(*value)
+}
+
 func hmacEqual(left, right string) bool {
 	return len(left) == len(right) && subtle.ConstantTimeCompare([]byte(left), []byte(right)) == 1
 }
 
 func mapPeopleWriteError(err error) error {
 	var postgresError *pgconn.PgError
+	if errors.As(err, &postgresError) && postgresError.Code == "23514" && postgresError.ConstraintName == "persons_open_enrollment_phone_required" {
+		return people.ErrOpenEnrollmentPhoneRequired
+	}
 	if errors.As(err, &postgresError) && postgresError.Code == "23505" {
 		switch postgresError.ConstraintName {
 		case "idx_persons_organization_cpf_lookup":
@@ -312,4 +331,53 @@ func mapPeopleWriteError(err error) error {
 		}
 	}
 	return err
+}
+
+func (r PeopleGormRepository) ResolveReservationPerson(ctx context.Context, organizationID, unitID, personID domain.ID) (string, error) {
+	var row struct{ DisplayName string }
+	err := databaseForContext(r.db, ctx).Table("persons p").
+		Select("COALESCE(p.preferred_name, p.name) AS display_name").
+		Joins("JOIN person_unit_relationships r ON r.person_id = p.id AND r.organization_id = p.organization_id AND r.unit_id = ? AND r.relationship_status = 'active'", stringID(unitID)).
+		Where("p.id = ? AND p.organization_id = ? AND p.profile_status = 'active'", stringID(personID), stringID(organizationID)).
+		Take(&row).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return "", nil
+	}
+	return row.DisplayName, err
+}
+
+func (r PeopleGormRepository) ListEnrollmentRosterPeople(ctx context.Context, organizationID, unitID domain.ID) ([]domain.EnrollmentRosterPerson, error) {
+	type rosterPersonRow struct {
+		PersonID   string
+		StudentID  string
+		PersonName string
+		Source     string
+	}
+	rows := []rosterPersonRow{}
+	err := databaseForContext(r.db, ctx).Raw(`
+		SELECT p.id::text AS person_id, COALESCE(student.id::text, '') AS student_id,
+			COALESCE(NULLIF(p.preferred_name, ''), p.name) AS person_name,
+			COALESCE(student.source, '') AS source
+		FROM persons p
+		JOIN person_unit_relationships pur
+		  ON pur.person_id=p.id AND pur.organization_id=p.organization_id AND pur.unit_id=?
+		LEFT JOIN LATERAL (
+			SELECT s.id, s.source FROM students s
+			WHERE s.person_id=p.id AND s.box_id=? AND s.anonymized_at IS NULL
+			ORDER BY s.created_at LIMIT 1
+		) student ON TRUE
+		WHERE p.organization_id=? AND p.merged_into_person_id IS NULL`,
+		stringID(unitID), stringID(unitID), stringID(organizationID),
+	).Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	result := make([]domain.EnrollmentRosterPerson, 0, len(rows))
+	for _, row := range rows {
+		result = append(result, domain.EnrollmentRosterPerson{
+			PersonID: domain.ID(row.PersonID), StudentID: domain.ID(row.StudentID),
+			PersonName: row.PersonName, Source: domain.Source(row.Source),
+		})
+	}
+	return result, nil
 }

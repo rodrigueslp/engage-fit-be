@@ -1,7 +1,7 @@
 # SPEC-001 — Organização, unidades, modalidades e espaços
 
-- Status: `implementing`
-- Versão: `0.5`
+- Status: `validated`
+- Versão: `0.6`
 - Depende de: `ARCH-001`
 - Bloqueia: `001/A-B` bloqueiam `SPEC-002`; `001/B-D` bloqueiam `SPEC-003` e
   agenda; `001/C` bloqueia permissões multiunidade
@@ -272,12 +272,29 @@ Status: `validated locally` em 2026-08-12.
 
 ### Slice `001-C` — Acesso e contexto multiunidade
 
-- implementar memberships de usuário, allowlist e seleção de unidade;
-- testar duas unidades da mesma organização e duas organizações distintas.
+Status: `validated locally` em 2026-09-14.
 
-Esta slice pode ser adiada enquanto o piloto operar uma única unidade. O
-backend continua usando `users.box_id` como contexto autorizado até sua
-implementação.
+- migration `062_create_multi_unit_access.sql` adiciona timezone e chave de
+  nome às unidades, memberships organizacionais, allowlist explícita e
+  auditoria, com backfill e compatibilidade para usuários legados;
+- o JWT mantém `box_id` como contexto selecionado, e o middleware revalida
+  membership, allowlist, organização e estado da unidade a cada requisição;
+- owner e platform admin podem criar unidades; owner pode atualizar a unidade
+  e administrar a allowlist de coaches;
+- `GET /units` lista somente unidades autorizadas e
+  `POST /auth/unit-context` alterna a sessão sem ampliar permissões;
+- modalidades e serviços continuam pertencendo à organização, com ativação
+  independente em cada unidade; espaços e demais dados operacionais continuam
+  isolados pelo `box_id` selecionado;
+- o frontend preserva a experiência de unidade única, exibe o seletor apenas
+  quando necessário e oferece criação mobile de unidade e gestão de acesso da
+  equipe.
+
+Evidências: migration e repositories testados em PostgreSQL descartável com
+duas unidades da mesma organização e uma organização externa, incluindo
+backfill, constraints cruzadas, compartilhamento do catálogo, troca e revogação
+de acesso. Testes HTTP cobrem owner, coach, criação, arquivamento e troca de
+contexto; Playwright cobre os fluxos mobile de owner e equipe.
 
 ### Slice `001-D` — Catálogo de serviços ofertáveis
 

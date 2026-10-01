@@ -31,7 +31,7 @@ func (h CatalogHandler) Organization(c *gin.Context) {
 		respondCatalogError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, dto.OrganizationResponse{ID: string(current.Organization.ID), Name: current.Organization.Name, Status: string(current.Organization.EffectiveStatus()), CurrentUnit: dto.OrganizationUnitResponse{ID: string(current.Unit.ID), Name: current.Unit.Name, Status: string(current.Unit.EffectiveStatus())}})
+	c.JSON(http.StatusOK, dto.OrganizationResponse{ID: string(current.Organization.ID), Name: current.Organization.Name, Status: string(current.Organization.EffectiveStatus()), CurrentUnit: dto.OrganizationUnitResponse{ID: string(current.Unit.ID), Name: current.Unit.Name, Timezone: current.Unit.Timezone, Status: string(current.Unit.EffectiveStatus())}})
 }
 
 func (h CatalogHandler) ListModalities(c *gin.Context) {

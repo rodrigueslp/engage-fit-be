@@ -1,7 +1,7 @@
 # SPEC-002 — Pessoa, identidades e vínculos
 
-- Status: `reviewed`
-- Versão: `0.3`
+- Status: `validated locally`
+- Versão: `1.0`
 - Data: 2026-08-18
 - Depende de: `ARCH-001`, `SPEC-001/A-B`
 - Bloqueia: planos/matrículas, contratos, cobrança do aluno e histórico unificado
@@ -14,12 +14,13 @@ migração de leitura e consolidação de identidades na mesma entrega:
 - [`SPEC-002/A`](SPEC-002-A-person-foundation-manual-registration.md) —
   fundação, backfill um-para-um e cadastro manual compatível; estado
   `validated`;
-- `SPEC-002/B` — perfil unificado, edição e migração gradual de leituras;
-- `SPEC-002/C` — identidades externas, revisão e consolidação segura.
+- [`SPEC-002/B`](SPEC-002-B-unified-person-profile.md) — perfil unificado,
+  edição e migração gradual de leituras; estado `validated locally`;
+- [`SPEC-002/C`](SPEC-002-C-external-identities-review-merge.md) — identidades
+  externas, revisão e consolidação segura; estado `validated locally`.
 
-A slice A foi a única autorizada até aqui e já está integrada e validada.
-As slices B/C ainda não estão autorizadas; os contratos amplos
-abaixo apenas orientam seu detalhamento futuro.
+As três slices estão integradas e validadas localmente. A implementação de B/C
+usa a migration aditiva `063_complete_people_identity.sql`.
 
 ## 1. Resultado esperado
 
@@ -211,9 +212,9 @@ Esse status descreve participação operacional, não pagamento ou contrato.
 
 ### Compatibilidade com `athlete_accounts`
 
-Adicionar vínculo opcional e único entre conta e pessoa. Login e sessões
-continuam independentes de usuários administrativos. A conta não é criada
-automaticamente no cadastro operacional.
+O vínculo opcional e único entre conta e pessoa foi entregue em `002/C`.
+Login e sessões continuam independentes de usuários administrativos. A conta
+não é criada automaticamente no cadastro operacional.
 
 ## 9. Contratos HTTP propostos
 
@@ -297,11 +298,22 @@ Feature flag sugerida: `FEATURE_PEOPLE_FOUNDATION_ENABLED`.
 - API HTTP com idempotência e códigos de conflito;
 - Playwright mobile de cadastro, duplicidade e perfil.
 
-## 14. Decisões abertas
+## 14. Decisões posteriores preservadas
 
 - política para menor/dependente sem CPF próprio;
 - permissão exata da recepção e visualização parcial de documentos;
 - gatilho que torna e-mail/endereço necessário para contrato, pagamento ou
   emissão;
 - momento em que o perfil de origem `students` deixa de ser exposto nas APIs;
-- UX final de merge manual e reversão operacional.
+- reversão operacional de merge. A implementação atual preserva a origem
+  arquivada e bloqueia dependências incompatíveis, mas não oferece `split`.
+
+## 15. Evidências de validação
+
+- `SPEC-002/A` preservada conforme suas evidências originais;
+- `SPEC-002/B-C` detalhadas nos documentos próprios e validadas localmente;
+- migration `063` aplicada em banco PostgreSQL descartável depois da `062`,
+  com backfill seguro de identidades e segundo run sem migrations;
+- busca/edição, revisão otimista, compatibilidade de `students`, exportação,
+  anonimização, identidade externa e merge seguro cobertos por testes;
+- TypeScript, build Vite e Playwright mobile aprovados.

@@ -18,6 +18,7 @@ func TestCoachAccessIsLimitedToOperationalRoutes(t *testing.T) {
 	}, TenantRoleAccess())
 	router.GET("/api/v1/retention/radar", func(c *gin.Context) { c.Status(http.StatusNoContent) })
 	router.GET("/api/v1/retention/rules", func(c *gin.Context) { c.Status(http.StatusNoContent) })
+	router.GET("/api/v1/dashboard/today", func(c *gin.Context) { c.Status(http.StatusNoContent) })
 	router.GET("/api/v1/imports", func(c *gin.Context) { c.Status(http.StatusNoContent) })
 	router.GET("/api/v1/modalities", func(c *gin.Context) { c.Status(http.StatusNoContent) })
 	router.POST("/api/v1/modalities", func(c *gin.Context) { c.Status(http.StatusNoContent) })
@@ -31,6 +32,11 @@ func TestCoachAccessIsLimitedToOperationalRoutes(t *testing.T) {
 	router.ServeHTTP(rulesAllowed, httptest.NewRequest(http.MethodGet, "/api/v1/retention/rules", nil))
 	if rulesAllowed.Code != http.StatusNoContent {
 		t.Fatalf("coach should access retention rules, got %d", rulesAllowed.Code)
+	}
+	todayAllowed := httptest.NewRecorder()
+	router.ServeHTTP(todayAllowed, httptest.NewRequest(http.MethodGet, "/api/v1/dashboard/today", nil))
+	if todayAllowed.Code != http.StatusNoContent {
+		t.Fatalf("coach should access today operations, got %d", todayAllowed.Code)
 	}
 	catalogAllowed := httptest.NewRecorder()
 	router.ServeHTTP(catalogAllowed, httptest.NewRequest(http.MethodGet, "/api/v1/modalities", nil))

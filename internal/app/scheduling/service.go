@@ -919,6 +919,17 @@ func (s *Service) Anonymize(ctx context.Context, authenticatedUserID, requestedU
 		if current.LinkedUserID != nil {
 			return ErrSchedulingAnonymizationBlocked
 		}
+		if gridRepo, ok := s.repo.(interface {
+			CountActiveSeriesForProfessional(context.Context, domain.ID, domain.ID) (int64, error)
+		}); ok {
+			count, countErr := gridRepo.CountActiveSeriesForProfessional(txCtx, unitCtx.OrganizationID, professionalID)
+			if countErr != nil {
+				return countErr
+			}
+			if count > 0 {
+				return ErrSchedulingAnonymizationBlocked
+			}
+		}
 		if current.Revision != input.ExpectedRevision {
 			return ErrSchedulingRevisionConflict
 		}
@@ -1023,26 +1034,43 @@ func (s *Service) ExportPrivacy(ctx context.Context, authenticatedUserID, reques
 	if err != nil {
 		return nil, err
 	}
+	assignments := []domain.ScheduleSeries{}
+	if gridRepo, ok := s.repo.(portrepo.SchedulingGridRepository); ok {
+		all, listErr := gridRepo.ListSeries(ctx, unitCtx.OrganizationID, requestedUnitID, true)
+		if listErr != nil {
+			return nil, listErr
+		}
+		for _, series := range all {
+			if series.ProfessionalID != professionalID {
+				continue
+			}
+			series.ReferenceHealth = domain.ScheduleReferenceHealth{}
+			series.TargetNameSnapshot = ""
+			series.ProfessionalNameSnapshot = ""
+			series.SpaceNameSnapshot = ""
+			assignments = append(assignments, series)
+		}
+	}
 
 	return &domain.ProfessionalPrivacyExport{
-		Professional: *prof,
-		Events:       events,
-		ExportedAt:   s.now(),
+		Professional:           *prof,
+		Events:                 events,
+		DraftSeriesAssignments: assignments,
+		ExportedAt:             s.now(),
 	}, nil
 }
 
 func (s *Service) ResolveProfessionalForUser(ctx context.Context, organizationID, unitID, userID domain.ID) (*domain.ID, error) {
-	prof, err := s.repo.FindByLinkedUser(ctx, organizationID, userID)
+	professionals, err := s.repo.ListProfessionals(ctx, organizationID, unitID, false, "")
 	if err != nil {
-		if errors.Is(err, ErrSchedulingProfessionalNotFound) {
-			return nil, nil
-		}
 		return nil, err
 	}
-	if prof == nil || !prof.ActiveInUnit || prof.Status != domain.ProfessionalStatusActive {
-		return nil, nil
+	for _, prof := range professionals {
+		if prof.LinkedUserID != nil && *prof.LinkedUserID == userID && prof.ActiveInUnit && prof.Status == domain.ProfessionalStatusActive {
+			return &prof.ID, nil
+		}
 	}
-	return &prof.ID, nil
+	return nil, nil
 }
 
 func computeFingerprint(command string, payload any) string {

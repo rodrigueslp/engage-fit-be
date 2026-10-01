@@ -83,16 +83,27 @@ type Config struct {
 	FeatureWorkoutsEnabled              bool
 	FeatureLLMEnabled                   bool
 	FeatureBillingEnabled               bool
+	FeatureMemberBillingEnabled         bool
 	FeatureCatalogEnabled               bool
 	FeatureServiceCatalogEnabled        bool
 	FeaturePeopleFoundationEnabled      bool
 	FeatureMembershipsEnabled           bool
 	FeatureEnrollmentsEnabled           bool
 	FeatureContractsEnabled             bool
+	FeatureContractLifecycleEnabled     bool
+	FeatureHealthFormsEnabled           bool
+	ContractSignatureProviders          string
+	ContractSignatureWebhookToken       string
 	ContractAcceptanceAdapter           string
 	ContractAcceptanceSimulatorEnabled  bool
 	ContractAcceptanceSessionTTLMinutes int
 	FeatureSchedulingEnabled            bool
+	FeatureSchedulingGridEnabled        bool
+	FeatureReservationsEnabled          bool
+	FeatureAttendanceEnabled            bool
+	FeatureAnnouncementsEnabled         bool
+	FeatureCommerceEnabled              bool
+	SchedulingMaterializerEnabled       bool
 	BuildVersion                        string
 	BuildCommit                         string
 	BuildTime                           string
@@ -175,16 +186,27 @@ func Load() Config {
 		FeatureWorkoutsEnabled:              getEnvBool("FEATURE_WORKOUTS_ENABLED", appEnv != "production"),
 		FeatureLLMEnabled:                   getEnvBool("FEATURE_LLM_ENABLED", appEnv != "production"),
 		FeatureBillingEnabled:               getEnvBool("FEATURE_BILLING_ENABLED", false),
+		FeatureMemberBillingEnabled:         getEnvBool("FEATURE_MEMBER_BILLING_ENABLED", false),
 		FeatureCatalogEnabled:               getEnvBool("FEATURE_CATALOG_ENABLED", appEnv != "production"),
 		FeatureServiceCatalogEnabled:        getEnvBool("FEATURE_SERVICE_CATALOG_ENABLED", appEnv != "production"),
 		FeaturePeopleFoundationEnabled:      getEnvBool("FEATURE_PEOPLE_FOUNDATION_ENABLED", false),
 		FeatureMembershipsEnabled:           getEnvBool("FEATURE_MEMBERSHIPS_ENABLED", appEnv != "production"),
 		FeatureEnrollmentsEnabled:           getEnvBool("FEATURE_ENROLLMENTS_ENABLED", appEnv != "production"),
 		FeatureContractsEnabled:             getEnvBool("FEATURE_CONTRACTS_ENABLED", false),
+		FeatureContractLifecycleEnabled:     getEnvBool("FEATURE_CONTRACT_LIFECYCLE_ENABLED", false),
+		FeatureHealthFormsEnabled:           getEnvBool("FEATURE_HEALTH_FORMS_ENABLED", false),
+		ContractSignatureProviders:          getEnv("CONTRACT_SIGNATURE_PROVIDERS", "local_signature_simulator"),
+		ContractSignatureWebhookToken:       getEnv("CONTRACT_SIGNATURE_WEBHOOK_TOKEN", ""),
 		ContractAcceptanceAdapter:           getEnv("CONTRACT_ACCEPTANCE_ADAPTER", "disabled"),
 		ContractAcceptanceSimulatorEnabled:  getEnvBool("CONTRACT_ACCEPTANCE_SIMULATOR_ENABLED", false),
 		ContractAcceptanceSessionTTLMinutes: getEnvInt("CONTRACT_ACCEPTANCE_SESSION_TTL_MINUTES", 30),
 		FeatureSchedulingEnabled:            getEnvBool("FEATURE_SCHEDULING_ENABLED", false),
+		FeatureSchedulingGridEnabled:        getEnvBool("FEATURE_SCHEDULING_GRID_ENABLED", false),
+		FeatureReservationsEnabled:          getEnvBool("FEATURE_RESERVATIONS_ENABLED", false),
+		FeatureAttendanceEnabled:            getEnvBool("FEATURE_ATTENDANCE_ENABLED", false),
+		FeatureAnnouncementsEnabled:         getEnvBool("FEATURE_ANNOUNCEMENTS_ENABLED", false),
+		FeatureCommerceEnabled:              getEnvBool("FEATURE_COMMERCE_ENABLED", false),
+		SchedulingMaterializerEnabled:       getEnvBool("SCHEDULING_MATERIALIZER_ENABLED", false),
 		BuildVersion:                        getEnv("BUILD_VERSION", ""),
 		BuildCommit:                         getEnv("BUILD_COMMIT", ""),
 		BuildTime:                           getEnv("BUILD_TIME", ""),
@@ -253,8 +275,26 @@ func (c Config) Validate() error {
 	if c.FeatureMembershipsEnabled && !c.FeatureCatalogEnabled {
 		return errors.New("FEATURE_MEMBERSHIPS_ENABLED exige FEATURE_CATALOG_ENABLED")
 	}
+	if c.FeatureSchedulingGridEnabled && (!c.FeatureSchedulingEnabled || !c.FeatureCatalogEnabled) {
+		return errors.New("FEATURE_SCHEDULING_GRID_ENABLED exige FEATURE_SCHEDULING_ENABLED e FEATURE_CATALOG_ENABLED")
+	}
+	if c.SchedulingMaterializerEnabled && !c.FeatureSchedulingGridEnabled {
+		return errors.New("SCHEDULING_MATERIALIZER_ENABLED exige FEATURE_SCHEDULING_GRID_ENABLED")
+	}
+	if c.FeatureReservationsEnabled && (!c.FeatureSchedulingGridEnabled || !c.FeatureEnrollmentsEnabled || !c.FeaturePeopleFoundationEnabled) {
+		return errors.New("FEATURE_RESERVATIONS_ENABLED exige FEATURE_SCHEDULING_GRID_ENABLED, FEATURE_ENROLLMENTS_ENABLED e FEATURE_PEOPLE_FOUNDATION_ENABLED")
+	}
+	if c.FeatureAttendanceEnabled && (!c.FeatureReservationsEnabled || !c.FeatureSchedulingGridEnabled || !c.FeatureEnrollmentsEnabled || !c.FeaturePeopleFoundationEnabled) {
+		return errors.New("FEATURE_ATTENDANCE_ENABLED exige FEATURE_RESERVATIONS_ENABLED, FEATURE_SCHEDULING_GRID_ENABLED, FEATURE_ENROLLMENTS_ENABLED e FEATURE_PEOPLE_FOUNDATION_ENABLED")
+	}
 	if c.FeatureEnrollmentsEnabled && (!c.FeatureMembershipsEnabled || !c.FeaturePeopleFoundationEnabled) {
 		return errors.New("FEATURE_ENROLLMENTS_ENABLED exige FEATURE_MEMBERSHIPS_ENABLED e FEATURE_PEOPLE_FOUNDATION_ENABLED")
+	}
+	if c.FeatureMemberBillingEnabled && !c.FeatureEnrollmentsEnabled {
+		return errors.New("FEATURE_MEMBER_BILLING_ENABLED requires FEATURE_ENROLLMENTS_ENABLED")
+	}
+	if c.FeatureCommerceEnabled && !c.FeaturePeopleFoundationEnabled {
+		return errors.New("FEATURE_COMMERCE_ENABLED exige FEATURE_PEOPLE_FOUNDATION_ENABLED")
 	}
 	if c.WhatsappAllowRealSend && !c.FeatureWhatsappEnabled {
 		return errors.New("WHATSAPP_ALLOW_REAL_SEND exige FEATURE_WHATSAPP_ENABLED")
@@ -270,6 +310,15 @@ func (c Config) Validate() error {
 	}
 	if c.FeatureContractsEnabled && !c.FeatureEnrollmentsEnabled {
 		return errors.New("FEATURE_CONTRACTS_ENABLED exige FEATURE_ENROLLMENTS_ENABLED")
+	}
+	if c.FeatureContractLifecycleEnabled && !c.FeatureContractsEnabled {
+		return errors.New("FEATURE_CONTRACT_LIFECYCLE_ENABLED exige FEATURE_CONTRACTS_ENABLED")
+	}
+	if c.AppEnv == "production" && c.FeatureContractLifecycleEnabled && len(c.ContractSignatureWebhookToken) < 32 {
+		return errors.New("CONTRACT_SIGNATURE_WEBHOOK_TOKEN deve ter ao menos 32 caracteres em production")
+	}
+	if c.FeatureHealthFormsEnabled && (!c.FeatureEnrollmentsEnabled || !c.FeaturePeopleFoundationEnabled) {
+		return errors.New("FEATURE_HEALTH_FORMS_ENABLED exige FEATURE_ENROLLMENTS_ENABLED e FEATURE_PEOPLE_FOUNDATION_ENABLED")
 	}
 	adapter := c.ContractAcceptanceAdapter
 	if adapter == "" {

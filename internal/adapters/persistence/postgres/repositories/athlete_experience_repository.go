@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -49,6 +50,21 @@ type athletePersonalRecordModel struct {
 }
 
 func (athletePersonalRecordModel) TableName() string { return "athlete_personal_records" }
+
+type athleteManualRecordModel struct {
+	ID               string `gorm:"primaryKey"`
+	AthleteAccountID string
+	MembershipID     string
+	MovementKey      string
+	MovementName     string
+	Metric           string
+	BestValue        float64
+	Unit             string
+	AchievedAt       time.Time
+	CreatedAt        time.Time
+}
+
+func (athleteManualRecordModel) TableName() string { return "athlete_manual_records" }
 
 type athleteAccountTokenModel struct {
 	ID               string `gorm:"primaryKey"`
@@ -223,10 +239,53 @@ func (r AthleteGormRepository) ListPersonalRecords(ctx context.Context, athleteI
 		return nil, err
 	}
 	items := make([]domain.AthletePersonalRecord, 0, len(rows))
+	index := make(map[string]int, len(rows))
 	for _, row := range rows {
+		index[row.MovementKey+"\x00"+row.Metric] = len(items)
 		items = append(items, personalRecordToDomain(row))
 	}
+	var manual []athleteManualRecordModel
+	if err := r.db.WithContext(ctx).Where("athlete_account_id = ?", string(athleteID)).Find(&manual).Error; err != nil {
+		return nil, err
+	}
+	for _, row := range manual {
+		candidate := domain.AthletePersonalRecord{ID: domain.ID(row.ID), AthleteID: athleteID, MovementKey: row.MovementKey, MovementName: row.MovementName, Metric: row.Metric, BestValue: row.BestValue, Unit: row.Unit, Status: "confirmed", SourceManualID: domain.ID(row.ID), AchievedAt: row.AchievedAt}
+		key := row.MovementKey + "\x00" + row.Metric
+		if pos, ok := index[key]; ok {
+			current := items[pos]
+			if candidate.BestValue > current.BestValue && row.Metric != "time" || candidate.BestValue < current.BestValue && row.Metric == "time" || candidate.BestValue == current.BestValue && current.Status != "confirmed" {
+				items[pos] = candidate
+			}
+		} else {
+			index[key] = len(items)
+			items = append(items, candidate)
+		}
+	}
+	sort.Slice(items, func(i, j int) bool {
+		if items[i].MovementName == items[j].MovementName {
+			return items[i].Metric < items[j].Metric
+		}
+		return items[i].MovementName < items[j].MovementName
+	})
 	return items, nil
+}
+
+func (r AthleteGormRepository) SaveManualPersonalRecord(ctx context.Context, record *domain.AthletePersonalRecord, membershipID domain.ID) error {
+	if record.ID == "" {
+		record.ID = domain.ID(uuid.NewString())
+	}
+	row := athleteManualRecordModel{ID: string(record.ID), AthleteAccountID: string(record.AthleteID), MembershipID: string(membershipID), MovementKey: movementKey(record.MovementName), MovementName: record.MovementName, Metric: record.Metric, BestValue: record.BestValue, Unit: record.Unit, AchievedAt: record.AchievedAt, CreatedAt: time.Now().UTC()}
+	result := r.db.WithContext(ctx).Exec(`INSERT INTO athlete_manual_records (id, athlete_account_id, membership_id, movement_key, movement_name, metric, best_value, unit, achieved_at, created_at)
+		SELECT ?, ?, abm.id, ?, ?, ?, ?, ?, ?, ? FROM athlete_box_memberships abm
+		WHERE abm.id = ? AND abm.athlete_account_id = ? AND abm.status = 'active'`, row.ID, row.AthleteAccountID, row.MovementKey, row.MovementName, row.Metric, row.BestValue, row.Unit, row.AchievedAt, row.CreatedAt, row.MembershipID, row.AthleteAccountID)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	record.MovementKey, record.SourceManualID, record.Status = row.MovementKey, record.ID, "confirmed"
+	return nil
 }
 
 func (r AthleteGormRepository) ConfirmPersonalRecord(ctx context.Context, athleteID, recordID domain.ID, now time.Time) error {

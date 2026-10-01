@@ -9,6 +9,14 @@ type BoxGormRepository struct {
 	db *gorm.DB
 }
 
+type OrganizationGormRepository struct {
+	db *gorm.DB
+}
+
+func NewOrganizationGormRepository(db *gorm.DB) OrganizationGormRepository {
+	return OrganizationGormRepository{db: db}
+}
+
 func NewBoxGormRepository(db *gorm.DB) BoxGormRepository {
 	return BoxGormRepository{db: db}
 }
@@ -37,8 +45,43 @@ func NewEnrollmentGormRepository(db *gorm.DB) EnrollmentGormRepository {
 	return EnrollmentGormRepository{db: db}
 }
 
+type ReservationGormRepository struct{ db *gorm.DB }
+
+func NewReservationGormRepository(db *gorm.DB) ReservationGormRepository {
+	return ReservationGormRepository{db: db}
+}
+
 type BillingGormRepository struct {
 	db *gorm.DB
+}
+
+type MemberBillingGormRepository struct{ db *gorm.DB }
+type CommerceGormRepository struct{ db *gorm.DB }
+
+func NewCommerceGormRepository(db *gorm.DB) CommerceGormRepository {
+	return CommerceGormRepository{db: db}
+}
+
+type HealthFormGormRepository struct {
+	db     *gorm.DB
+	cipher services.SecretCipher
+}
+
+type ContractLifecycleGormRepository struct {
+	db     *gorm.DB
+	cipher services.SecretCipher
+}
+
+func NewContractLifecycleGormRepository(db *gorm.DB, cipher services.SecretCipher) ContractLifecycleGormRepository {
+	return ContractLifecycleGormRepository{db: db, cipher: cipher}
+}
+
+func NewHealthFormGormRepository(db *gorm.DB, cipher services.SecretCipher) HealthFormGormRepository {
+	return HealthFormGormRepository{db: db, cipher: cipher}
+}
+
+func NewMemberBillingGormRepository(db *gorm.DB) MemberBillingGormRepository {
+	return MemberBillingGormRepository{db: db}
 }
 
 func NewBillingGormRepository(db *gorm.DB) BillingGormRepository {

@@ -100,6 +100,33 @@ func TestEnrollmentEffectiveStatusPrecedence(t *testing.T) {
 	}
 }
 
+func TestEnrollmentAccessStatusListsEveryPendingRequirement(t *testing.T) {
+	status := enrollmentAccessStatus(domain.EnrollmentEffectiveActive, domain.MembershipAccessPrerequisites{})
+	if status.Eligible {
+		t.Fatal("enrollment without prerequisites must not be eligible")
+	}
+	want := []domain.MembershipAccessReason{
+		domain.MembershipAccessReasonContractPending,
+		domain.MembershipAccessReasonHealthFormPending,
+		domain.MembershipAccessReasonPaymentRequired,
+	}
+	if len(status.PendingReasonCodes) != len(want) {
+		t.Fatalf("pending reasons = %v, want %v", status.PendingReasonCodes, want)
+	}
+	for index := range want {
+		if status.PendingReasonCodes[index] != want[index] {
+			t.Fatalf("pending reasons = %v, want %v", status.PendingReasonCodes, want)
+		}
+	}
+
+	eligible := enrollmentAccessStatus(domain.EnrollmentEffectiveActive, domain.MembershipAccessPrerequisites{
+		ContractAccepted: true, HealthFormSubmitted: true, InitialPaymentPaid: true,
+	})
+	if !eligible.Eligible || len(eligible.PendingReasonCodes) != 0 || !eligible.NoOverduePayment {
+		t.Fatalf("eligible status = %+v", eligible)
+	}
+}
+
 func TestEnrollmentDateAndEndValidation(t *testing.T) {
 	location := time.FixedZone("America/Sao_Paulo", -3*60*60)
 	now := time.Date(2026, 8, 19, 15, 0, 0, 0, location)

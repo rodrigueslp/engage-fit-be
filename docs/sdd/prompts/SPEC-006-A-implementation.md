@@ -1,12 +1,13 @@
-# Prompt do agente implementador — SPEC-006/A
+# Registro do prompt de implementação — SPEC-006/A
 
 Você é o agente executor da
 `SPEC-006/A — Fundação de profissionais da agenda` do EngageFit.
 
-A SPEC-006 é uma guia `reviewed` e a SPEC-006/A é a única slice `ready`.
-Antes de criar código, migration ou endpoint, confirme esses status. Se a
-documentação tiver voltado a `draft` ou sido substituída, interrompa e devolva
-a tarefa ao responsável pela spec.
+A `SPEC-006/A` está `validated` desde 2026-08-27. Este documento registra o
+prompt usado para sua implementação; não autoriza uma nova implementação ou
+ampliação de escopo. A `SPEC-006/B` possui documento próprio em `draft`, sem
+prompt e sem autorização. Mudanças posteriores exigem uma spec ou revisão
+própria.
 
 ## Contexto obrigatório
 

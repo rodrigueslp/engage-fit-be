@@ -15,10 +15,48 @@ import (
 
 type AttendanceHandler struct {
 	service *attendance.Service
+	access  *attendance.AccessService
 }
 
 func NewAttendanceHandler(service *attendance.Service) AttendanceHandler {
 	return AttendanceHandler{service: service}
+}
+
+func NewAttendanceAccessHandler(service *attendance.AccessService) AttendanceHandler {
+	return AttendanceHandler{access: service}
+}
+
+func (h AttendanceHandler) Admit(c *gin.Context) {
+	userID, err := middleware.UserID(c)
+	if err != nil {
+		respondUnauthorized(c)
+		return
+	}
+	var request attendance.AdmitInput
+	if err := c.ShouldBindJSON(&request); err != nil {
+		respondBadRequest(c)
+		return
+	}
+	result, err := h.access.Admit(c.Request.Context(), userID, domain.ID(c.Param("unit_id")), c.GetHeader("Idempotency-Key"), request)
+	if err != nil {
+		respondAttendanceError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, result)
+}
+
+func (h AttendanceHandler) Today(c *gin.Context) {
+	userID, err := middleware.UserID(c)
+	if err != nil {
+		respondUnauthorized(c)
+		return
+	}
+	result, err := h.access.ListToday(c.Request.Context(), userID, domain.ID(c.Param("unit_id")))
+	if err != nil {
+		respondAttendanceError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, result)
 }
 
 func (h AttendanceHandler) CreateSession(c *gin.Context) {
@@ -99,6 +137,10 @@ func respondAttendanceError(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, attendance.ErrInvalidInput):
 		respondPublicError(c, http.StatusBadRequest, "invalid_checkin", "Confira os dados informados e tente novamente.")
+	case errors.Is(err, attendance.ErrIdempotencyReused):
+		respondPublicError(c, http.StatusConflict, "idempotency_key_reused", "Use uma nova chave para uma entrada diferente.")
+	case errors.Is(err, attendance.ErrAccessUnavailable):
+		respondPublicError(c, http.StatusNotFound, "attendance_unavailable", "Operação de presença indisponível.")
 	case errors.Is(err, attendance.ErrSessionUnavailable):
 		respondPublicError(c, http.StatusGone, "checkin_session_unavailable", "Este QR Code expirou. Peça à academia para exibir um novo código.")
 	case errors.Is(err, attendance.ErrStudentNotFound), errors.Is(err, gorm.ErrRecordNotFound):

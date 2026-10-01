@@ -4,9 +4,531 @@ Manual canônico de arquitetura e negócio: `docs/system-design.md`.
 
 Guia operacional consolidado: `docs/application-readiness-guide.md`.
 
-Atualizado em: 2026-08-27 (integrações de SPEC-004/A e SPEC-006/A validadas localmente; sem push/deploy)
+Atualizado em: 2026-09-26 (ajustes locais da SPEC-010)
 
-## Checkpoint atual — SPEC-006/A implementada e validada (Fundação de Profissionais da Agenda)
+## Checkpoint — ajustes da PWA do aluno (SPEC-010)
+
+Após a homologação visual, foi adicionado cancelamento de reserva futura pelo
+próprio aluno, inclusive posição na espera, com confirmação na interface,
+validação de titularidade e auditoria. O backend reaproveita a transição de
+reservas e a promoção automática da fila. Na navegação inferior, `Extras`
+substitui `Plano` e concentra timer/conversor; `Plano e pagamentos` passou para
+`Perfil`. Alterações locais, sem push ou deploy.
+Validação após este ajuste: `go test ./...`, `go vet ./...`, build Vite e
+Playwright completo (`63 passed`, `2 skipped`).
+
+Pedido direto do responsável pelo produto ampliou a SPEC-010 validada:
+agenda diária, inscrição em aula, PR manual, seleção correta do treino atual,
+verificação de e-mail com retorno visível, conversor kg/lb, timer e total de
+check-ins por unidade. O backend reutiliza a decisão de reserva e os vínculos
+explícitos do atleta. As migrations aditivas `075` e `076` registram ator
+atleta na auditoria e marcas manuais. Não houve push, deploy, uso de provider
+real ou alteração de dados produtivos. Os dois prints de referência da agenda
+foram recebidos; a interface agora usa semana fixa, lista compacta e detalhe da
+aula com inscrição. Mantém ocupação agregada, sem lista nominal de presença ou
+check-in autônomo.
+
+Validação local: `go test ./...`, `go vet ./...`, typecheck e build Vite
+aprovados; Playwright completo `63 passed, 2 skipped`, com os seis cenários
+focados da PWA aprovados; teste PostgreSQL do escopo/PR manual e teste real de
+reserva concorrente/fila/auditoria do ator atleta aprovados após atualizar a
+massa do teste à regra de WhatsApp da migration `073`. Migrator reaplicado no
+banco descartável: `0 applied`; revisão visual da agenda em 360 px realizada.
+Após o refinamento visual, build Vite e os seis testes Playwright da PWA foram
+reexecutados e aprovados. Um teste detectou que a navegação inferior cobria o
+botão de inscrição no detalhe; a camada foi corrigida e o teste passou.
+
+## Checkpoint atual — desenvolvimento orientado pela solicitação da feature
+
+Este checkpoint prevalece sobre os gates de processo registrados nos
+checkpoints históricos abaixo.
+
+Por decisão do responsável pelo produto, o SDD deixou de ser um requisito para
+iniciar e concluir features. A partir deste ponto, uma solicitação direta ao
+agente autoriza o trabalho local completo: entender o comportamento atual,
+planejar internamente, implementar backend/frontend conforme necessário,
+executar testes proporcionais e entregar o resultado.
+
+Regras do fluxo atual:
+
+- não exigir criação de spec, promoção `draft -> ready`, prompt de
+  implementação ou tarefa separada de planejamento;
+- usar `docs/sdd/` como histórico e referência de produto/arquitetura, sem
+  apagar seus documentos ou perder decisões já registradas;
+- usar `docs/system-design.md` como descrição do sistema implementado e
+  atualizá-lo depois de mudanças materiais validadas;
+- perguntar somente quando faltar uma decisão de produto que altere
+  materialmente o resultado ou quando for necessária nova autorização para
+  ação externa, destrutiva ou produtiva;
+- preservar alterações preexistentes e manter backend, frontend, migrations e
+  testes consistentes na mesma entrega;
+- continuar sem autorização implícita para push, deploy, banco de produção,
+  provedores reais ou efeitos externos. Push em `main` pode acionar o Railway.
+
+### Complemento local — homologação visual da SPEC-005
+
+Em 2026-09-18, a validação funcional identificou que o domínio já aceitava
+parcialidade e idempotência, mas a tela quitava/concluía sempre o saldo total e
+não apresentava os lançamentos do ledger. O painel financeiro da matrícula foi
+completado sem migration nem mudança de contrato HTTP:
+
+- baixa manual, conciliação simulada e estorno agora recebem valor, validado
+  contra o saldo ou líquido pago disponível;
+- cada parcela expõe o histórico append-only com tipo, forma, data, valor e
+  motivo do lançamento;
+- builds locais oferecem reenvio exato da última mutação e comparam contrato,
+  totais, parcelas e IDs do ledger para confirmar visualmente que não houve
+  duplicação; o controle não aparece no build produtivo;
+- Playwright móvel cobre baixa parcial, replay, conciliação parcial, quitação,
+  estorno parcial e quatro lançamentos do ledger; a suíte frontend completa
+  passou com `53 passed` e `2 skipped`, além de typecheck, build e revisão da
+  captura `360x800`.
+
+Nenhum backend, migration, dado de produção, gateway real, push ou deploy foi
+alterado.
+
+### Complemento local — matrícula, contrato e WhatsApp
+
+Em 2026-09-18, o painel da matrícula foi reorganizado em módulos recolhíveis:
+`Contrato e aceite`, `Questionário de saúde`, `Alterações contratuais` e
+`Cobranças e pagamentos`. O bloqueio do ciclo jurídico agora explica que o
+contrato deve ser emitido e aceito antes de aditivos, pausas, renovações ou
+cancelamentos; o PAR-Q deixa explícito que o preenchimento administrativo deve
+ocorrer com o aluno presente e continua isolado do contrato.
+
+Após gerar uma sessão de aceite, o owner pode iniciar a ativação assistida do
+WhatsApp. O aluno primeiro abre a conversa com o número do box; após o estado
+`opted_in`, a tela oferece uma mensagem transacional pré-preenchida com o link
+do contrato para envio manual. O aceite não concede consentimento promocional
+e nenhum gateway, campanha ou disparo automático foi adicionado. Playwright
+móvel cobre ativação, atualização do consentimento e composição do link.
+
+Complemento de UX em 2026-09-22: se já existe telefone e não há `opted_out`,
+contrato e PAR-Q oferecem diretamente o botão manual `wa.me`, mesmo com a
+capability do gateway desligada. Estado `unknown` mostra o cuidado de confirmar
+a concordância; `opted_out` continua bloqueando o compartilhamento.
+
+### Complemento local — PAR-Q remoto, sincronização e tela de alunos
+
+Em 2026-09-18, a jornada da matrícula passou a gerar sessão pública de PAR-Q
+com token aleatório armazenado somente como SHA-256, validade de 30 minutos e
+uso único. O aluno responde e consente em uma página mobile pública; as
+respostas continuam cifradas e separadas do contrato. A migration aditiva
+`072_create_health_form_sessions.sql` registra somente o ciclo da sessão.
+
+O modal consulta silenciosamente contrato e PAR-Q pendentes a cada três
+segundos enquanto estiver visível, atualizando o status sem reload, nova busca
+ou reabertura. O link do PAR-Q pode ser copiado, aberto ou compartilhado pelo
+mesmo fluxo assistido de WhatsApp usado pelo contrato.
+
+A tela Alunos agora apresenta uma visão por vez: `Alunos da unidade` para
+matrícula e operação, e `Pessoas e cadastros` para identidade unificada. A
+listagem de pessoas ganhou paginação de 10 itens. Validação: `go test ./...`,
+build Vite e Playwright completo com `57 passed` e `2 skipped`.
+
+### Entrega local — SPEC-013 concluída
+
+Em 2026-09-17, a solicitação `$engagefit-spec-executor execute a SPEC-013`
+derivou a iniciativa do catálogo e da arquitetura, pois ainda não existia
+documento próprio, e a concluiu como `validated locally`.
+
+- migration aditiva `071_create_commerce.sql` para produtos, vendas, itens,
+  pagamentos manuais e comandos idempotentes, com escopo composto por unidade;
+- módulo `commerce` owner-only: produto ativo/inativo, preço congelado,
+  quantidades consolidadas, total calculado no servidor e venda anônima ou
+  vinculada a uma pessoa ativa;
+- port financeiro próprio e adapter manual para Pix, dinheiro e maquininha,
+  sem compartilhar entidades de `memberbilling`, chamar rede ou aceitar cartão;
+- reconciliação diferida no PostgreSQL exige soma dos itens = total da venda =
+  pagamento; advisory lock e fingerprint protegem repetição concorrente;
+- frontend mobile com catálogo, carrinho, busca opcional de pessoa, registro da
+  venda e histórico, deixando explícita a ausência de estoque e emissão fiscal;
+- exportação LGPD inclui vendas vinculadas; feature flag
+  `FEATURE_COMMERCE_ENABLED` fica desligada por padrão;
+- validação: regras unitárias, migration `001..071` em PostgreSQL descartável
+  com segundo run, isolamento e totais, `go test ./...`, `go vet ./...`,
+  TypeScript, build Vite, Playwright focado (`1 passed`) e completo
+  (`53 passed`, `2 skipped`), além de `git diff --check` nos dois repositórios.
+
+A tentativa adicional de executar toda a suíte PostgreSQL contra o banco
+compartilhado local encontrou duas colisões preexistentes de tokens fixos em
+`athlete_repository_integration_test` e `attendance_repository_integration_test`;
+os testes descartáveis específicos da SPEC-013 passaram. Nenhum push, deploy,
+dado de produção, gateway, estoque ou efeito externo foi alterado.
+
+As especificações e seus estados permanecem intactos para consulta. Em
+especial, a `SPEC-006/B` continua sendo uma referência detalhada para grade e
+preview, mas seu estado `draft` não bloqueia uma futura solicitação direta do
+usuário para implementar a feature. O escopo e as prioridades de cada novo
+trabalho vêm da solicitação atual, confrontada com o código existente e com as
+restrições arquiteturais ainda aplicáveis.
+
+Foi criada a skill pessoal `$engagefit-spec-executor`. Quando o usuário pedir
+uma iniciativa inteira, por exemplo `SPEC-006`, ela deve preservar slices já
+`validated` e executar todos os restantes na mesma entrega; nesse exemplo,
+preserva A e executa B, C e D. Quando o usuário pedir uma slice explícita, por
+exemplo `SPEC-006/B`, executa somente essa slice, salvo instrução contrária.
+Iniciativas ainda sem slice implementada são executadas por inteiro. A ausência
+de documento próprio de uma slice não cria um gate: a skill deriva o trabalho
+da spec-guia, catálogo, arquitetura e código atual.
+
+### Entrega local — SPEC-014 concluída
+
+Em 2026-09-17, a solicitação `$engagefit-spec-executor execute a SPEC-014`
+derivou a iniciativa do catálogo e da arquitetura, pois ainda não existia
+documento próprio, e a concluiu como `validated locally`.
+
+- migration aditiva `070_create_announcements.sql` para publicações e
+  destinatários congelados com primeiro/último acesso e contador de leitura;
+- módulo `announcements` owner-only, tenant/unidade, com rascunho, prioridade,
+  público geral/por origem/por plano, publicação imediata/agendada e arquivo;
+- PWA com aba `Avisos`, filtro pelo membership, destaque de prioridade, não
+  lido e recibo de visualização;
+- feature flag `FEATURE_ANNOUNCEMENTS_ENABLED` desligada por default, sem push,
+  WhatsApp, e-mail, provider ou efeito externo;
+- exportação de privacidade inclui o histórico de visualização sem duplicar
+  contato pessoal;
+- validação: regras unitárias, integração PostgreSQL, migrations `001..070`
+  em banco vazio com segundo run, `go test ./...`, TypeScript, build Vite e
+  Playwright mobile focado (`2 passed`) e completo (`52 passed`, `2 skipped`).
+
+Nenhum push, deploy, dado de produção ou provider externo foi alterado.
+
+### Entrega local — SPEC-010 concluída
+
+Em 2026-09-16, a solicitação `$engagefit-spec-executor execute a SPEC-010`
+derivou a iniciativa do catálogo e dos contratos validados de `004` a `008`,
+pois ainda não existia documento próprio, e a concluiu como
+`validated locally`.
+
+- endpoint autenticado `GET /api/v1/athlete/portal`, com read model por vínculo
+  explícito conta/membership/student/person e suporte multiunidade;
+- agenda das últimas 24 horas e próximos 30 dias com ocupação, reserva, fila e
+  presença próprias; plano, contrato e cobranças do titular no mesmo payload;
+- instruções financeiras allowlisted, sem token/evidência contratual, payload
+  bruto de provider, lookup por PII ou dados de outro aluno;
+- avisos derivados para plano, contrato, pagamento e lista de espera, sem
+  persistência, push ou antecipação da `SPEC-014`;
+- PWA mobile com abas Agenda e Plano, documento expansível, estados de loading,
+  vazio, erro/retry e filtro pelo membership selecionado;
+- nenhuma migration, escrita, provider ou efeito externo foi acrescentado;
+- validação: regras unitárias, PostgreSQL migrado, `go test ./...`, `go vet
+  ./...`, TypeScript, build Vite, Playwright focado (`5 passed`) e completo
+  (`50 passed`, `2 skipped`), mais revisão visual em `360x800`.
+
+Nenhum push, deploy ou dado de produção foi alterado. Reserva/cancelamento pelo
+atleta, assinatura embutida, gateway real e notificações continuam fora do
+escopo.
+
+### Entrega local — SPEC-009 concluída
+
+Em 2026-09-16, a solicitação `$engagefit-spec-executor execute a SPEC-009`
+derivou a iniciativa do catálogo e dos contratos validados de `004` a `008`,
+pois ainda não existia documento próprio, e a concluiu como
+`validated locally`.
+
+- read model somente leitura, tenant/unidade e timezone, para aulas, ocupação,
+  fila, presenças, acessos negados, cobranças vencidas/do dia e pessoas com
+  contrato ou PAR-Q pendente;
+- endpoint `GET /api/v1/dashboard/today`; owner recebe a visão completa e coach
+  somente agenda/acesso, sem dados financeiros, jurídicos ou de saúde;
+- frontend mobile abre a operação do dia no topo do dashboard com estados
+  claros e atalhos para Agenda e Alunos;
+- nenhuma migration, escrita, provider ou efeito externo foi acrescentado;
+- validação local: teste de timezone, HTTP focado, projeção no PostgreSQL
+  migrado, TypeScript, build Vite e Playwright em `360x800`, com revisão visual.
+
+A baseline completa passou: `go test ./...`, `go vet ./...`, TypeScript, build
+Vite e Playwright (`49 passed`, `2 skipped`). Os cenários de capability de
+Planos e Estrutura agora recarregam a página depois de trocar cookies/mocks,
+isolando corretamente cada sessão. A tela Hoje também valida o formato da
+resposta e apresenta erro local quando um backend/mocked contract é inválido,
+sem derrubar o restante do dashboard.
+
+Nenhum push, deploy ou dado de produção foi alterado.
+
+### Entrega local — SPEC-004 concluída
+
+Em 2026-09-16, a solicitação `$engagefit-spec-executor execute a SPEC-004`
+preservou `004/A` validada e concluiu localmente `004/B-D`.
+
+- migration aditiva `069_complete_contract_experience.sql` com envelopes e
+  callbacks de assinatura, respostas PAR-Q isoladas e cifradas, ações
+  jurídicas e trilhas de acesso/evento;
+- `004/B`: qualificação cifrada, provider allowlisted, webhook autenticado e
+  idempotente, revalidação da matrícula e aceite externo atômico; o simulador
+  não abre rede e é recusado em produção;
+- `004/C`: módulo `healthforms` owner-only, consentimento/revogação, indicação
+  conservadora de revisão, retenção própria, leitura auditada e export do
+  titular, sem compartilhar respostas com contratos;
+- `004/D`: aditivo, renovação, pausa, retomada e cancelamento vinculados a
+  contrato aceito, com instrução financeira `manual_review` e nenhum efeito
+  implícito em matrícula, cobrança, reserva ou acesso;
+- frontend mobile integrado ao painel de matrícula para PAR-Q, envelope e
+  histórico/registro do ciclo jurídico;
+- validação local: suíte backend, `go vet`, typecheck/build frontend, Playwright
+  de contratos/PAR-Q (`5 passed`, incluindo `360x800`) e migrations `001..069`
+  em PostgreSQL vazio com segundo run sem novas aplicações.
+
+Nenhum push, deploy, dado real, provider externo ou efeito de rede foi
+executado. As flags `FEATURE_CONTRACT_LIFECYCLE_ENABLED` e
+`FEATURE_HEALTH_FORMS_ENABLED` ficam desligadas por default. Ativação produtiva
+de `004/B` ainda exige escolha/homologação do provider, credenciais e revisão
+jurídica; o código provider-neutral está pronto para o conector concreto.
+
+### Entrega local — SPEC-005 concluída
+
+Em 2026-09-16, a solicitação `$engagefit-spec-executor execute a SPEC-005`
+derivou a iniciativa do catálogo e dos contratos de pessoas, matrículas e
+contratos, pois ainda não existia documento próprio, e a concluiu como
+`validated locally`.
+
+- migration aditiva `068_create_member_billing.sql` com contrato financeiro por
+  matrícula, cobranças, ledger de pagamentos/estornos e comandos idempotentes;
+- módulo `memberbilling` separado do billing SaaS, com preço/ciclo congelados da
+  matrícula, recorrência por calendário, projeção de vencimento, baixa manual,
+  conciliação e estorno;
+- Pix, boleto e cartão usam somente adapter `local_simulator`, sem rede, cartão,
+  credencial ou pagamento real; gateway produtivo permanece fora do escopo;
+- segurança e privacidade: owner, unidade/tenant compostos, capability desligada
+  por default, `404` seguro, nenhuma PII duplicada e export do titular ampliado;
+- frontend: painel financeiro mobile dentro da matrícula, com resumo, parcelas,
+  geração recorrente e operação de baixa/conciliação/estorno;
+- validação local: regras unitárias, suíte backend, migrations `001..068` em
+  PostgreSQL vazio e segundo run, TypeScript, build Vite e Playwright em
+  `360x800`, com revisão visual; race detector indisponível sem CGO.
+
+Nenhum push, deploy, dado de produção ou provedor externo foi alterado. A flag
+`FEATURE_MEMBER_BILLING_ENABLED` e a migration `068` permanecem locais.
+
+### Entrega local — SPEC-003 concluída
+
+Em 2026-09-16, a solicitação `$engagefit-spec-executor execute a SPEC-003`
+preservou `003/A-B-C` validadas e concluiu a slice restante `003/D`; a
+iniciativa está `validated locally`.
+
+- decisão central em `memberships` usada por reservas e entrada geral, com
+  vigência, unidade, modalidade/serviço, adicionais, reserva obrigatória,
+  limite diário, período e pacote;
+- contador único: confirmação/falta consome aula, fila/cancelamento não,
+  presença de reserva não duplica e entrada geral usa presença sem sessão;
+- saldo restante e razão estável auditáveis, com advisory lock por
+  pessoa/direito para evitar ultrapassagem concorrente;
+- migration aditiva `067_complete_membership_access.sql` congela a coorte de
+  mensalistas legados sem matrícula e amplia a decisão de presença com direito
+  e saldo; novos cadastros não herdam o fallback;
+- painel mobile de Check-ins apresenta saldo após entradas limitadas;
+- validação: testes unitários e de integração PostgreSQL, migrations `001..067`
+  em banco vazio e segundo run com zero aplicações, suíte backend, `go vet`,
+  typecheck, build e Playwright completo (`46 passed`, `2 skipped`), com revisão
+  visual em `360x800`; race detector indisponível sem CGO.
+
+Nenhum push, deploy ou dado de produção foi alterado. A migration `067`
+permanece local e o fallback legado deve ser removido quando sua coorte chegar
+a zero.
+
+### Entrega local — SPEC-008 concluída
+
+Em 2026-09-16, a solicitação `$engagefit-spec-executor execute a SPEC-008`
+derivou a iniciativa do catálogo e dos contratos validados de pessoas,
+matrículas, agenda e reservas, pois não existia documento próprio, e a concluiu
+como `validated locally`.
+
+- migration aditiva `066_create_attendance_access.sql` com decisões positivas e
+  negativas, presenças, idempotência, escopo composto e espelho compatível de
+  frequência;
+- backend: mensalista exige matrícula vigente; Wellhub/TotalPass usa vínculo
+  local ativo; presença em aula exige sessão disponível, janela operacional e
+  reserva confirmada, negando lista de espera ou ausência de reserva;
+- segurança e privacidade: owner/coach, autorização por unidade, `404` seguro,
+  capability desligada por padrão, nenhuma PII duplicada nas tabelas e export
+  do titular ampliado com decisões/presenças;
+- frontend: portaria mobile dentro de Check-ins, escolha da pessoa e sessão
+  opcional, resposta explicável e histórico das tentativas do dia;
+- validação local: regras unitárias, suíte backend, migration PostgreSQL vazia e
+  segundo run, integração PostgreSQL específica, TypeScript, build Vite e
+  Playwright em `360x800`, com revisão visual.
+
+Nenhum push, deploy, dado de produção, catraca ou provedor corporativo foi
+acionado. A flag `FEATURE_ATTENDANCE_ENABLED` e a migration `066` permanecem
+locais; integração nativa Wellhub/TotalPass continua na `SPEC-012`.
+
+### Entrega local — SPEC-007 concluída
+
+Em 2026-09-15, a solicitação `$engagefit-spec-executor execute a SPEC-007`
+derivou a iniciativa do catálogo, pois não existia documento próprio, e a
+concluiu como `validated locally`.
+
+- migration aditiva `065_create_reservations.sql` com ocupação, fila, crédito
+  único de reposição, idempotência, auditoria e constraints tenant/unidade;
+- backend: elegibilidade por matrícula/direito e adicional contratado, limites
+  por período no timezone da sessão, locks concorrentes, fila FIFO com
+  revalidação na promoção, cancelamento, falta, reposição e reconciliação
+  transacional ao cancelar sessões/séries;
+- segurança/privacidade: capability própria desligada por default, owner/coach,
+  CSRF, `404` para escopo adversário, nenhuma PII duplicada em reservas e export
+  do titular ampliado;
+- frontend: ocupação nos cards e painel mobile de reserva/fila, promoção,
+  cancelamento, falta e seleção opcional de crédito de reposição;
+- validação local: aplicação, suíte backend, migration PostgreSQL vazia e
+  segundo run, TypeScript, build Vite e Playwright em `360x800`, além de revisão
+  visual do painel.
+
+Nenhum push, deploy, dado de produção ou efeito externo foi executado. A flag
+`FEATURE_RESERVATIONS_ENABLED` e a migration `065` permanecem locais.
+
+### Entrega local — SPEC-006 concluída
+
+Em 2026-09-15, a solicitação `$engagefit-spec-executor execute a SPEC-006`
+preservou `006/A` validada e concluiu as slices restantes `006/B-D`. A
+iniciativa está `validated locally`.
+
+- migration aditiva `064_complete_scheduling.sql`: séries/dias semanais,
+  sessões concretas, eventos públicos, runs de materialização e evolução
+  compatível da idempotência/auditoria de profissionais;
+- backend: rascunho e preview determinístico de 1–56 dias, referências por
+  port público do catálogo, timezone/DST, conflito semiaberto de profissional e
+  espaço, publicação atômica de 56 dias, materializador com claim diário,
+  leitura owner/coach, sessão extra, cancelamentos e alterações de uma sessão
+  ou desta e próximas;
+- segurança e fronteiras: tenancy/unidade, RBAC, capability separada
+  `scheduling_grid`, publicação condicionada ao materializador, locks
+  canônicos, revisão otimista, idempotência, snapshots, auditoria e
+  `SessionEventV1` sem aluno/preço/reserva/presença;
+- privacidade: anonimização do profissional bloqueada por série ativa e export
+  ampliado com atribuições pseudônimas sem nomes externos;
+- frontend: áreas mobile `Agenda`, `Grade` e `Profissionais`, criação/revisão/
+  publicação de série, agenda Hoje/Semana, sessão extra, cancelamento e fluxos
+  `Somente esta`/`Esta e as próximas`;
+- validação: domínio, aplicação, HTTP, config, migration vazia e segundo run,
+  integração PostgreSQL de create/preview/publish/conflito/materialização/
+  override/cancelamento/eventos, `go test`, `go vet`, TypeScript, build Vite e
+  Playwright completo (`44 passed`, `2 skipped`), com revisão visual em
+  `360x800`. O race detector depende de CGO e ficou indisponível no ambiente.
+
+Nenhum push, deploy, dado de produção ou provedor externo foi alterado. A
+migration `064` permanece local e as flags continuam desligadas por default.
+Reservas, ocupação, lista de espera, presença, consumo, mensagens e acesso
+continuam fora do escopo (`SPEC-007/008+`).
+
+### Entrega local — SPEC-002 concluída
+
+Em 2026-09-15, a solicitação `$engagefit-spec-executor execute a SPEC-002`
+preservou `002/A` validada e concluiu as slices restantes `002/B-C`. A
+iniciativa está `validated locally`.
+
+- migration aditiva `063_complete_people_identity.sql`: revisão/nome preferido
+  de pessoa, identidade Wellhub/TotalPass, vínculo determinístico com conta do
+  atleta e fila de revisão humana;
+- backend: lista e busca protegida por nome/telefone/CPF, perfil unificado,
+  edição com revisão otimista, vínculo a unidade, identidades externas e merge
+  auditável com bloqueio de dependências incompatíveis;
+- compatibilidade: atualizações de nome/contato mantêm `students`; CPF existente
+  em outra unidade oferece vínculo e cria um `Student box_member`; nenhuma
+  consolidação ocorre por nome ou telefone;
+- privacidade: coach recebe perfil minimizado; exportação inclui unidade,
+  identidade externa e conta; anonimização cria supressão e remove os novos
+  vínculos quando a pessoa deixa de possuir perfil ativo;
+- frontend: diretório e perfil mobile, edição, vínculo de provedor e fila de
+  revisão, preservando abaixo as operações legadas por `student_id` durante a
+  migração gradual;
+- validação: `go test ./...` com a suíte PostgreSQL completa em banco
+  descartável migrado de `001` a `063`, segundo run da migration, `go vet`,
+  typecheck, build Vite e Playwright completo (`43 passed`, `2 skipped`), com
+  o fluxo de perfil exercitado em 360x800.
+
+Nenhum push, deploy, dado de produção ou provedor externo foi alterado. A
+migration `063` permanece local. A reversão de merge (`split`) continua fora
+do escopo; merges com matrícula, contrato, dois endereços ou duas contas são
+bloqueados para revisão posterior.
+
+### Entrega local — SPEC-001 concluída
+
+Em 2026-09-14, a solicitação direta `$engagefit-spec-executor execute a
+SPEC-001` concluiu a slice restante `001/C` e preservou `001/A-B-D` já
+validadas. A iniciativa agora está `validated` localmente.
+
+- backend: migration `062_create_multi_unit_access.sql`, timezone e unicidade
+  normalizada por organização, memberships, allowlist, auditoria, criação e
+  manutenção de unidades, administração do acesso de coaches e troca segura do
+  `box_id` selecionado no JWT;
+- compatibilidade: `users.box_id` permanece como unidade inicial, novos
+  usuários legados recebem membership/acesso por trigger e o frontend mantém a
+  experiência de unidade única quando a nova API não está disponível;
+- catálogo/equipe: modalidades e serviços são compartilhados na organização
+  com ativação por unidade, e usuários operacionais são resolvidos pelo vínculo
+  organizacional sem permitir acesso cruzado fora da allowlist;
+- frontend: seletor responsivo, cards e ciclo de vida das unidades, criação e
+  edição mobile e atualização otimista/rollback da allowlist dos coaches;
+- validação: testes unitários/HTTP, migration e repositories em PostgreSQL
+  descartável, TypeScript/build e Playwright multiunidade. Produção não foi
+  alterada e nenhum push/deploy foi realizado.
+
+Próxima ação: revisar o diff local e, somente com autorização explícita,
+preparar commit/push/deploy. A migration `062` permanece local.
+
+---
+
+## Checkpoint anterior — SPEC-006/B em draft, aguardando revisão das decisões
+
+## Checkpoint atual — SPEC-006/B em draft, aguardando revisão das decisões
+
+Este checkpoint prevalece sobre todos os registros históricos abaixo.
+
+Foi preparada e revisada exclusivamente a documentação da próxima slice de
+agenda:
+
+- nova spec executável
+  `docs/sdd/specs/SPEC-006-B-scheduling-recurring-grid-preview.md`, versão
+  `0.1`, status `draft`;
+- catálogo SDD, README, rastreabilidade de `REQ-001` e guia `SPEC-006`
+  apontam para a nova slice sem alterar o estado do sistema implementado;
+- `docs/system-design.md` permaneceu inalterado porque continua descrevendo
+  somente comportamento implementado;
+- nenhum prompt de implementação foi criado, pois a spec ainda não está
+  `ready`.
+
+O recorte documental termina em séries semanais persistidas como rascunho e
+ocorrências virtuais de preview. Não publica/materializa sessões, não cria
+reserva, lista de espera ou presença, não altera matrícula, não consome direito
+e não decide acesso. `memberships`, `reservations` e `attendance` não possuem
+chamada de runtime na slice B; somente `catalog` fornece um resolver público
+estreito para alvo e espaço.
+
+Decisões propostas que ainda exigem confirmação: permitir sobreposição salva
+em rascunho com bloqueio no preview; timezone IANA por série; preview inicial
+de 14 e máximo de 56 dias; lifecycle `draft|archived`; capability separada
+`scheduling_grid`; retenção de 1.825 dias para rascunhos
+arquivados/auditoria, com commands por 365 dias; bloqueio de anonimização do
+profissional enquanto houver série ativa; e ausência deliberada de contratos
+com memberships, reservations e attendance.
+
+Estado preservado:
+
+- `SPEC-001/A-B-D`, `SPEC-002/A`, `SPEC-003/A-B-C`, `SPEC-004/A` e
+  `SPEC-006/A` continuam implementadas, integradas e validadas localmente;
+- produção continua na migration `052`; migrations `060` e `061` permanecem
+  somente locais;
+- não houve código, migration, endpoint, frontend, flag, banco, push, deploy
+  ou integração externa;
+- arquivos não rastreados e alterações preexistentes do usuário foram
+  preservados.
+
+Validação documental registrada em 2026-08-28:
+
+- `git diff --check` sem erros;
+- estrutura Markdown e cercas de código da nova spec verificadas;
+- nenhum prompt de implementação de `SPEC-006/B` foi criado, pois a spec
+  continua em `draft`.
+
+Próxima ação: revisar as oito decisões abertas com o responsável pelo produto.
+Somente após confirmação e promoção explícita da `SPEC-006/B` para `ready`
+poderá ser criado um prompt separado. `SPEC-006/C-D`, `SPEC-003/D`,
+`SPEC-004/B-D`, `SPEC-005` e `SPEC-007+` continuam sem autorização.
+
+---
+
+## Checkpoint anterior — SPEC-006/A implementada e validada (Fundação de Profissionais da Agenda)
 
 Este checkpoint prevalece sobre todos os registros históricos abaixo.
 
@@ -53,13 +575,13 @@ A fatia vertical completa da **SPEC-006/A — Fundação de profissionais da age
   `061_create_scheduling_professionals.sql` estão somente no código/local;
   produção continua em `052`. O race detector e os cenários de migration vazia/
   upgrade não foram repetidos nesta revisão de integração;
-- `SPEC-006/A` está `validated`. `SPEC-004/A` está implementada e integrada,
-  mas seu documento ainda permanece `ready`: só promovê-la para `validated`
-  após fechar formalmente suas evidências de validação e homologação local.
+- `SPEC-004/A` e `SPEC-006/A` estão `validated`, implementadas e integradas
+  localmente. A validação de contratos não autoriza habilitar o simulador em
+  produção.
 
-Próxima ação recomendada: fechar a validação documental e a homologação de
-`SPEC-004/A`, sem habilitar o simulador em produção. Depois, detalhar a próxima
-slice de agenda (`SPEC-006/B`) antes de qualquer implementação de grade/sessão.
+Próxima ação recomendada: detalhar a próxima slice de agenda (`SPEC-006/B`)
+antes de qualquer implementação de grade/sessão. Manter o simulador de
+contratos desabilitado em produção.
 
 ---
 
@@ -3073,5 +3595,5 @@ WodScope. Antes de produção, implementar recuperação/verificação de conta.
 Mensagem sugerida:
 
 ```txt
-Leia integralmente `.ai/handoff.md`, começando pelo checkpoint atual do topo, e use `docs/system-design.md`, `docs/sdd/REQ-001-primeiro-passo-operacional.md`, `docs/sdd/ARCH-001-modular-foundation.md` e as SPECs como fontes canônicas. Estado local integrado: `SPEC-001/A-B-D`, `SPEC-002/A`, `SPEC-003/A-B-C`, `SPEC-004/A` (implementada, ainda `ready` documentalmente) e `SPEC-006/A` (implementada e `validated`). O backend está em `272c26e`; o frontend em `b808ea4`. Migrations `060` e `061` permanecem locais; produção continua em `052`. Antes de iniciar nova implementação, fechar formalmente a validação/homologação de `SPEC-004/A`; a próxima frente de agenda requer detalhar `SPEC-006/B`. PAR-Q continua em `healthforms`, e `SPEC-004/B-D`, `SPEC-005`, `SPEC-006/B-D`, `SPEC-003/D` e `SPEC-007+` não estão autorizadas para implementação. Não faça push dos `main`: Railway usa esses branches como source automático e o backend executa migrations no pre-deploy, portanto push implica deploy de produção. Preserve `.ai/acordo-fundadores-engagefit.md`, `docs/proposta-engagefit-guilherme.html` e qualquer outra alteração não commitada.
+Leia integralmente `.ai/handoff.md`, começando pelo checkpoint atual do topo, e use `docs/system-design.md`, `docs/sdd/REQ-001-primeiro-passo-operacional.md`, `docs/sdd/ARCH-001-modular-foundation.md` e as SPECs como fontes canônicas. Estado local integrado e validado: `SPEC-001/A-B-D`, `SPEC-002/A`, `SPEC-003/A-B-C`, `SPEC-004/A` e `SPEC-006/A`. O backend está em `272c26e`; o frontend em `b808ea4`. Migrations `060` e `061` permanecem locais; produção continua em `052`. `SPEC-006/B` possui documento executável próprio em `draft`, sem prompt: revisar e confirmar suas oito decisões abertas antes de qualquer promoção para `ready`. PAR-Q continua em `healthforms`, e `SPEC-004/B-D`, `SPEC-005`, `SPEC-006/B-D`, `SPEC-003/D` e `SPEC-007+` não estão autorizadas para implementação. Não faça push dos `main`: Railway usa esses branches como source automático e o backend executa migrations no pre-deploy, portanto push implica deploy de produção. Preserve `.ai/acordo-fundadores-engagefit.md`, `docs/proposta-engagefit-guilherme.html` e qualquer outra alteração não commitada.
 ```

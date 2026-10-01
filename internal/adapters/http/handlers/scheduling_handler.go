@@ -242,9 +242,10 @@ func (h SchedulingHandler) PrivacyExport(c *gin.Context) {
 	}
 
 	response := dto.SchedulingPrivacyExportResponse{
-		Professional: professionalResponse(export.Professional),
-		Events:       events,
-		ExportedAt:   export.ExportedAt.Format(time.RFC3339),
+		Professional:           professionalResponse(export.Professional),
+		Events:                 events,
+		DraftSeriesAssignments: export.DraftSeriesAssignments,
+		ExportedAt:             export.ExportedAt.Format(time.RFC3339),
 	}
 
 	c.JSON(http.StatusOK, response)
@@ -344,6 +345,36 @@ func respondSchedulingError(c *gin.Context, err error) {
 		respondPublicError(c, http.StatusUnprocessableEntity, "scheduling_professional_account_unavailable", "conta indisponível ou fora da unidade")
 	case errors.Is(err, scheduling.ErrSchedulingAnonymizationBlocked):
 		respondPublicError(c, http.StatusUnprocessableEntity, "scheduling_professional_anonymization_blocked", "o profissional precisa estar arquivado e sem conta vinculada para ser anonimizado")
+	case errors.Is(err, scheduling.ErrScheduleSeriesNotFound):
+		respondPublicError(c, http.StatusNotFound, "schedule_series_not_found", "série não encontrada")
+	case errors.Is(err, scheduling.ErrScheduleSessionNotFound):
+		respondPublicError(c, http.StatusNotFound, "schedule_session_not_found", "sessão não encontrada")
+	case errors.Is(err, scheduling.ErrScheduleSeriesArchived):
+		respondPublicError(c, http.StatusConflict, "schedule_series_archived", "a série não aceita esta alteração")
+	case errors.Is(err, scheduling.ErrScheduleSeriesAlreadyPublished):
+		respondPublicError(c, http.StatusConflict, "schedule_series_already_published", "transição inválida para a série")
+	case errors.Is(err, scheduling.ErrScheduleConflict):
+		respondPublicError(c, http.StatusConflict, "scheduling_conflict", "há conflito de profissional ou espaço")
+	case errors.Is(err, scheduling.ErrScheduleSessionAlreadyStarted):
+		respondPublicError(c, http.StatusConflict, "schedule_session_already_started", "a sessão já começou")
+	case errors.Is(err, scheduling.ErrScheduleSessionCancelled):
+		respondPublicError(c, http.StatusConflict, "schedule_session_cancelled", "a sessão está cancelada")
+	case errors.Is(err, scheduling.ErrScheduleTargetUnavailable):
+		respondPublicError(c, http.StatusUnprocessableEntity, "scheduling_target_unavailable", "modalidade ou serviço indisponível")
+	case errors.Is(err, scheduling.ErrScheduleSpaceUnavailable):
+		respondPublicError(c, http.StatusUnprocessableEntity, "scheduling_space_unavailable", "espaço indisponível")
+	case errors.Is(err, scheduling.ErrScheduleProfessionalUnavailable):
+		respondPublicError(c, http.StatusUnprocessableEntity, "scheduling_professional_unavailable", "profissional indisponível")
+	case errors.Is(err, scheduling.ErrScheduleInvalidLocalTime):
+		respondPublicError(c, http.StatusUnprocessableEntity, "invalid_local_time", "horário local inválido ou ambíguo")
+	case errors.Is(err, scheduling.ErrSchedulePreviewRangeInvalid):
+		respondPublicError(c, http.StatusUnprocessableEntity, "scheduling_preview_range_invalid", "intervalo de consulta inválido")
+	case errors.Is(err, scheduling.ErrSchedulePreviewTooLarge):
+		respondPublicError(c, http.StatusUnprocessableEntity, "scheduling_preview_too_large", "prévia excede o limite")
+	case errors.Is(err, scheduling.ErrScheduleSeriesInvalid):
+		respondPublicError(c, http.StatusUnprocessableEntity, "scheduling_series_invalid", "dados da agenda inválidos")
+	case errors.Is(err, scheduling.ErrScheduleMaterializerUnavailable):
+		respondPublicError(c, http.StatusServiceUnavailable, "scheduling_materializer_unavailable", "publicação temporariamente indisponível")
 	default:
 		respondPublicError(c, http.StatusInternalServerError, "internal_error", "erro interno ao processar profissional")
 	}

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"boxengage/backend/internal/adapters/persistence/postgres"
+	catalogapp "boxengage/backend/internal/app/catalog"
 	schedulingapp "boxengage/backend/internal/app/scheduling"
 	"boxengage/backend/internal/domain"
 	"github.com/google/uuid"
@@ -231,5 +232,174 @@ func TestSchedulingPostgresIntegration(t *testing.T) {
 				t.Fatalf("audit event AfterData contained linked_user_id: %+v", ev)
 			}
 		}
+	}
+}
+
+func TestSchedulingGridPostgresIntegration(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL is not configured")
+	}
+	db, err := postgres.Open(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	now := time.Date(2026, 9, 15, 12, 0, 0, 0, time.UTC)
+	if err := db.Exec("DELETE FROM scheduling_materialization_runs WHERE execution_key = ?", "materialize:2026-09-15").Error; err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = db.Exec("DELETE FROM scheduling_materialization_runs WHERE execution_key = ?", "materialize:2026-09-15").Error
+	})
+	box := &domain.Box{Name: "Schedule Grid " + uuid.NewString()[:8], Status: domain.BoxStatusActive, CreatedAt: now, UpdatedAt: now}
+	owner := &domain.User{Name: "Owner Grid", Email: uuid.NewString() + "@example.test", PasswordHash: "hash", AuthVersion: 1, Role: domain.UserRoleOwner, Active: true, CreatedAt: now, UpdatedAt: now}
+	if err := NewBoxGormRepository(db).SaveWithOwner(ctx, box, owner); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		org := string(box.OrganizationID)
+		unit := string(box.ID)
+		_ = db.Exec("DELETE FROM scheduling_session_events WHERE organization_id = ?", org).Error
+		_ = db.Exec("DELETE FROM scheduling_audit_events WHERE organization_id = ?", org).Error
+		_ = db.Exec("DELETE FROM scheduling_command_requests WHERE organization_id = ?", org).Error
+		_ = db.Exec("DELETE FROM scheduling_sessions WHERE organization_id = ?", org).Error
+		_ = db.Exec("DELETE FROM scheduling_series_weekdays WHERE organization_id = ?", org).Error
+		_ = db.Exec("DELETE FROM scheduling_series WHERE organization_id = ?", org).Error
+		_ = db.Exec("DELETE FROM scheduling_professional_units WHERE organization_id = ?", org).Error
+		_ = db.Exec("DELETE FROM scheduling_professionals WHERE organization_id = ?", org).Error
+		_ = db.Exec("DELETE FROM catalog_audit_events WHERE organization_id = ?", org).Error
+		_ = db.Exec("DELETE FROM unit_modalities WHERE organization_id = ?", org).Error
+		_ = db.Exec("DELETE FROM modalities WHERE organization_id = ?", org).Error
+		_ = db.Exec("DELETE FROM user_unit_access WHERE organization_id = ?", org).Error
+		_ = db.Exec("DELETE FROM organization_user_memberships WHERE organization_id = ?", org).Error
+		_ = db.Exec("DELETE FROM users WHERE box_id = ?", unit).Error
+		_ = db.Exec("DELETE FROM boxes WHERE id = ?", unit).Error
+		_ = db.Exec("DELETE FROM organizations WHERE id = ?", org).Error
+	})
+	tx := NewGormTransactionManager(db)
+	catalogRepo := NewCatalogGormRepository(db)
+	modality, err := catalogapp.NewService(catalogRepo, tx).CreateModality(ctx, box.ID, owner.ID, "CrossFit", "#0F766E")
+	if err != nil {
+		t.Fatal(err)
+	}
+	schedulingRepo := NewSchedulingGormRepository(db)
+	access := NewSchedulingAccessGormAdapter(db)
+	professionalService := schedulingapp.NewService(schedulingRepo, access, access, tx, schedulingapp.WithClock(func() time.Time { return now }))
+	professional, _, err := professionalService.Create(ctx, owner.ID, box.ID, "prof.grid."+uuid.NewString(), schedulingapp.CreateInput{DisplayName: "Marina"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	grid := schedulingapp.NewGridService(schedulingRepo, access, catalogRepo, tx, schedulingapp.WithGridClock(func() time.Time { return now }))
+	input := schedulingapp.SeriesMutationInput{TargetKind: domain.ScheduleTargetModality, TargetID: modality.ID, ProfessionalID: professional.ID, DeliveryMode: domain.ScheduleDeliveryGroup, Capacity: 16, DurationMinutes: 60, Weekdays: []int{0, 1, 2, 3, 4, 5, 6}, LocalStartTime: "18:30", Timezone: "America/Sao_Paulo", EffectiveFrom: "2026-09-15"}
+	series, fresh, err := grid.CreateSeries(ctx, owner.ID, box.ID, "series.create."+uuid.NewString(), input)
+	if err != nil || !fresh {
+		t.Fatalf("create series fresh=%v err=%v", fresh, err)
+	}
+	preview, err := grid.PreviewGrid(ctx, owner.ID, box.ID, "2026-09-15", "2026-09-28")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !preview.ReadyForFuturePublication || len(preview.Occurrences) != 14 {
+		t.Fatalf("preview=%+v", preview)
+	}
+	published, fresh, err := grid.PublishSeries(ctx, owner.ID, box.ID, series.ID, "series.publish."+uuid.NewString(), series.Revision)
+	if err != nil || !fresh {
+		t.Fatalf("publish fresh=%v err=%v", fresh, err)
+	}
+	if published.Series.Status != domain.ScheduleSeriesPublished || len(published.Sessions) != 56 {
+		t.Fatalf("published status=%s sessions=%d", published.Series.Status, len(published.Sessions))
+	}
+	materialized, err := grid.Materialize(ctx)
+	if err != nil || materialized != 0 {
+		t.Fatalf("idempotent materialization created=%d err=%v", materialized, err)
+	}
+	materialized, err = grid.Materialize(ctx)
+	if err != nil || materialized != 0 {
+		t.Fatalf("replayed materialization created=%d err=%v", materialized, err)
+	}
+	if err := db.Exec("UPDATE scheduling_materialization_runs SET status = 'failed', error_code = 'retry_test' WHERE execution_key = ?", "materialize:2026-09-15").Error; err != nil {
+		t.Fatal(err)
+	}
+	materialized, err = grid.Materialize(ctx)
+	if err != nil || materialized != 0 {
+		t.Fatalf("retried materialization created=%d err=%v", materialized, err)
+	}
+	changeInput := input
+	changeInput.LocalStartTime = "19:30"
+	changeInput.ExpectedRevision = published.Series.Revision
+	changedSeries, fresh, err := grid.ChangeSeries(ctx, owner.ID, box.ID, series.ID, "series.change."+uuid.NewString(), schedulingapp.SeriesChangeInput{SeriesMutationInput: changeInput, EffectiveOn: "2026-09-16"})
+	if err != nil || !fresh {
+		t.Fatalf("change series fresh=%v err=%v", fresh, err)
+	}
+	if changedSeries.Series.Revision != published.Series.Revision+1 || len(changedSeries.Sessions) != 55 {
+		t.Fatalf("changed series revision=%d sessions=%d", changedSeries.Series.Revision, len(changedSeries.Sessions))
+	}
+	conflicting, _, err := grid.CreateSeries(ctx, owner.ID, box.ID, "series.conflict."+uuid.NewString(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err = grid.PublishSeries(ctx, owner.ID, box.ID, conflicting.ID, "series.conflict.publish."+uuid.NewString(), conflicting.Revision); !errors.Is(err, schedulingapp.ErrScheduleConflict) {
+		t.Fatalf("expected publication conflict, got %v", err)
+	}
+	concurrentInput := input
+	concurrentInput.LocalStartTime = "10:00"
+	firstConcurrent, _, err := grid.CreateSeries(ctx, owner.ID, box.ID, "series.concurrent.first."+uuid.NewString(), concurrentInput)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondConcurrent, _, err := grid.CreateSeries(ctx, owner.ID, box.ID, "series.concurrent.second."+uuid.NewString(), concurrentInput)
+	if err != nil {
+		t.Fatal(err)
+	}
+	type publishAttempt struct {
+		result *schedulingapp.PublishResult
+		err    error
+	}
+	attempts := make(chan publishAttempt, 2)
+	for _, candidate := range []*domain.ScheduleSeries{firstConcurrent, secondConcurrent} {
+		candidate := candidate
+		go func() {
+			result, _, publishErr := grid.PublishSeries(ctx, owner.ID, box.ID, candidate.ID, "series.concurrent.publish."+uuid.NewString(), candidate.Revision)
+			attempts <- publishAttempt{result: result, err: publishErr}
+		}()
+	}
+	successes, conflicts := 0, 0
+	for range 2 {
+		attempt := <-attempts
+		switch {
+		case attempt.err == nil && attempt.result != nil && len(attempt.result.Sessions) == 56:
+			successes++
+		case errors.Is(attempt.err, schedulingapp.ErrScheduleConflict):
+			conflicts++
+		default:
+			t.Fatalf("unexpected concurrent publication result=%+v err=%v", attempt.result, attempt.err)
+		}
+	}
+	if successes != 1 || conflicts != 1 {
+		t.Fatalf("concurrent publications successes=%d conflicts=%d", successes, conflicts)
+	}
+	listed, err := grid.ListSessions(ctx, owner.ID, box.ID, now, now.AddDate(0, 0, 7), false)
+	if err != nil || len(listed) == 0 {
+		t.Fatalf("list sessions=%d err=%v", len(listed), err)
+	}
+	first := listed[0]
+	changed, _, err := grid.ChangeSession(ctx, owner.ID, box.ID, first.ID, "session.change."+uuid.NewString(), schedulingapp.SessionMutationInput{TargetKind: first.TargetKind, TargetID: first.TargetID, ProfessionalID: first.ProfessionalID, SpaceID: first.SpaceID, DeliveryMode: first.DeliveryMode, Capacity: first.Capacity, StartsAt: first.StartsAt.Add(30 * time.Minute), DurationMinutes: 60, Timezone: first.Timezone, ExpectedRevision: first.Revision})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !changed.ManualOverride || changed.Revision != 2 {
+		t.Fatalf("changed=%+v", changed)
+	}
+	cancelled, _, err := grid.CancelSession(ctx, owner.ID, box.ID, changed.ID, "session.cancel."+uuid.NewString(), schedulingapp.RevisionReasonInput{ExpectedRevision: changed.Revision, Reason: "Ajuste operacional"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cancelled.Status != domain.ScheduleSessionCancelled {
+		t.Fatalf("cancelled=%+v", cancelled)
+	}
+	events, err := grid.ListSessionEvents(ctx, box.OrganizationID, box.ID, 0, 100)
+	if err != nil || len(events) < 58 {
+		t.Fatalf("events=%d err=%v", len(events), err)
 	}
 }

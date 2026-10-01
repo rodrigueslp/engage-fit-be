@@ -63,7 +63,7 @@ func TestEnrollmentLifecycleIdempotencyConcurrencyAndPrivacy(t *testing.T) {
 	})
 
 	personID, studentID, relationshipID := uuid.NewString(), uuid.NewString(), uuid.NewString()
-	if err := db.Exec(`INSERT INTO persons (id, organization_id, name) VALUES (?, ?, 'Ana Enrollment')`, personID, string(boxes[0].OrganizationID)).Error; err != nil {
+	if err := db.Exec(`INSERT INTO persons (id, organization_id, name, phone_e164) VALUES (?, ?, 'Ana Enrollment', '+5511999999999')`, personID, string(boxes[0].OrganizationID)).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Exec(`INSERT INTO students (id, box_id, person_id, name, source, contact_status, membership_started_at) VALUES (?, ?, ?, 'Ana Enrollment', 'box_member', 'unknown', '2025-01-10')`, studentID, string(boxes[0].ID), personID).Error; err != nil {
@@ -100,6 +100,28 @@ func TestEnrollmentLifecycleIdempotencyConcurrencyAndPrivacy(t *testing.T) {
 	created, replayed, err := service.Create(ctx, boxes[0].ID, domain.ID(studentID), owners[0].ID, initialCreateKey, createInput)
 	if err != nil || replayed || created.ValidUntil != nil || created.EffectiveStatus != domain.EnrollmentEffectiveActive {
 		t.Fatalf("recurring create=%+v replayed=%v err=%v", created, replayed, err)
+	}
+	roster, err := service.ListRoster(ctx, boxes[0].ID)
+	if err != nil {
+		t.Fatalf("list enrollment roster: %v", err)
+	}
+	var rosterItem *domain.EnrollmentRosterItem
+	for index := range roster {
+		if roster[index].EnrollmentID == created.ID {
+			rosterItem = &roster[index]
+			break
+		}
+	}
+	if rosterItem == nil || rosterItem.PlanID != monthlyPlan.ID || len(rosterItem.Targets) != 1 || rosterItem.Targets[0].ID != modality.ID {
+		t.Fatalf("roster item=%+v", rosterItem)
+	}
+	if rosterItem.AccessStatus.Eligible || len(rosterItem.AccessStatus.PendingReasonCodes) != 3 {
+		t.Fatalf("roster access status=%+v", rosterItem.AccessStatus)
+	}
+	accessService := memberships.NewAccessService(enrollmentRepository, NewMembershipAccessUsageGormAdapter(db), NewAttendanceGormRepository(db))
+	accessDecision, err := accessService.Evaluate(ctx, domain.MembershipAccessRequest{OrganizationID: boxes[0].OrganizationID, UnitID: boxes[0].ID, PersonID: domain.ID(personID), TargetKind: domain.ScheduleTargetModality, TargetID: modality.ID, OccurredAt: now, Purpose: domain.MembershipAccessCheckin})
+	if err != nil || accessDecision.Outcome != domain.MembershipAccessAllowed || accessDecision.EnrollmentID != created.ID || accessDecision.EntitlementID == "" {
+		t.Fatalf("membership access decision=%+v err=%v", accessDecision, err)
 	}
 	createdReplay, replayed, err := service.Create(ctx, boxes[0].ID, domain.ID(studentID), owners[0].ID, initialCreateKey, createInput)
 	if err != nil || !replayed || createdReplay.ID != created.ID {
@@ -191,7 +213,7 @@ func TestEnrollmentLifecycleIdempotencyConcurrencyAndPrivacy(t *testing.T) {
 	}
 
 	concurrentStudent, concurrentPerson := uuid.NewString(), uuid.NewString()
-	if err := db.Exec(`INSERT INTO persons (id, organization_id, name) VALUES (?, ?, 'Concurrent Person')`, concurrentPerson, string(boxes[0].OrganizationID)).Error; err != nil {
+	if err := db.Exec(`INSERT INTO persons (id, organization_id, name, phone_e164) VALUES (?, ?, 'Concurrent Person', '+5511988888888')`, concurrentPerson, string(boxes[0].OrganizationID)).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Exec(`INSERT INTO students (id, box_id, person_id, name, source, contact_status) VALUES (?, ?, ?, 'Concurrent Person', 'box_member', 'unknown')`, concurrentStudent, string(boxes[0].ID), concurrentPerson).Error; err != nil {
@@ -228,7 +250,7 @@ func TestEnrollmentLifecycleIdempotencyConcurrencyAndPrivacy(t *testing.T) {
 	}
 
 	rollbackStudent, rollbackPerson := uuid.NewString(), uuid.NewString()
-	if err := db.Exec(`INSERT INTO persons (id, organization_id, name) VALUES (?, ?, 'Rollback Person')`, rollbackPerson, string(boxes[0].OrganizationID)).Error; err != nil {
+	if err := db.Exec(`INSERT INTO persons (id, organization_id, name, phone_e164) VALUES (?, ?, 'Rollback Person', '+5511977777777')`, rollbackPerson, string(boxes[0].OrganizationID)).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Exec(`INSERT INTO students (id, box_id, person_id, name, source, contact_status) VALUES (?, ?, ?, 'Rollback Person', 'box_member', 'unknown')`, rollbackStudent, string(boxes[0].ID), rollbackPerson).Error; err != nil {

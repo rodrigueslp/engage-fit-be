@@ -109,6 +109,76 @@ func (h AthleteHandler) Me(c *gin.Context) {
 	c.JSON(http.StatusOK, athleteMeResponse(athleteContext))
 }
 
+func (h AthleteHandler) Portal(c *gin.Context) {
+	athleteID, err := middleware.AthleteID(c)
+	if err != nil {
+		respondUnauthorized(c)
+		return
+	}
+	portal, err := h.service.Portal(c.Request.Context(), athleteID)
+	if err != nil {
+		respondError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, portal)
+}
+
+func (h AthleteHandler) BookClass(c *gin.Context) {
+	athleteID, err := middleware.AthleteID(c)
+	if err != nil {
+		respondUnauthorized(c)
+		return
+	}
+	value, fresh, err := h.service.BookClass(c.Request.Context(), athleteID, domain.ID(c.Param("membership_id")), domain.ID(c.Param("session_id")), c.GetHeader("Idempotency-Key"))
+	if errors.Is(err, athlete.ErrPortalMembershipUnavailable) {
+		respondPublicError(c, http.StatusNotFound, "athlete_membership_unavailable", "vínculo com a unidade não encontrado")
+		return
+	}
+	if errors.Is(err, athlete.ErrInvalidInput) {
+		respondBadRequest(c)
+		return
+	}
+	if err != nil {
+		respondReservationError(c, err)
+		return
+	}
+	if !fresh {
+		c.Header("Idempotency-Replayed", "true")
+		c.JSON(http.StatusOK, gin.H{"id": value.ID, "status": value.Status, "waitlist_position": value.WaitlistPosition})
+		return
+	}
+	if value.Status == domain.ReservationWaitlisted {
+		c.JSON(http.StatusAccepted, gin.H{"id": value.ID, "status": value.Status, "waitlist_position": value.WaitlistPosition})
+		return
+	}
+	c.JSON(http.StatusCreated, gin.H{"id": value.ID, "status": value.Status, "waitlist_position": value.WaitlistPosition})
+}
+
+func (h AthleteHandler) CancelClassReservation(c *gin.Context) {
+	athleteID, err := middleware.AthleteID(c)
+	if err != nil {
+		respondUnauthorized(c)
+		return
+	}
+	value, fresh, err := h.service.CancelClassReservation(c.Request.Context(), athleteID, domain.ID(c.Param("membership_id")), domain.ID(c.Param("session_id")), domain.ID(c.Param("reservation_id")), c.GetHeader("Idempotency-Key"))
+	if errors.Is(err, athlete.ErrPortalMembershipUnavailable) {
+		respondPublicError(c, http.StatusNotFound, "athlete_membership_unavailable", "vínculo com a unidade não encontrado")
+		return
+	}
+	if errors.Is(err, athlete.ErrInvalidInput) {
+		respondBadRequest(c)
+		return
+	}
+	if err != nil {
+		respondReservationError(c, err)
+		return
+	}
+	if !fresh {
+		c.Header("Idempotency-Replayed", "true")
+	}
+	c.JSON(http.StatusOK, gin.H{"id": value.ID, "status": value.Status})
+}
+
 func (h AthleteHandler) Workouts(c *gin.Context) {
 	athleteID, err := middleware.AthleteID(c)
 	if err != nil {
@@ -187,6 +257,38 @@ func (h AthleteHandler) PersonalRecords(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, items)
+}
+func (h AthleteHandler) RecordPersonalBest(c *gin.Context) {
+	athleteID, err := middleware.AthleteID(c)
+	if err != nil {
+		respondUnauthorized(c)
+		return
+	}
+	var input struct {
+		MembershipID string  `json:"membership_id"`
+		MovementName string  `json:"movement_name"`
+		Metric       string  `json:"metric"`
+		BestValue    float64 `json:"best_value"`
+		AchievedOn   string  `json:"achieved_on"`
+	}
+	if c.ShouldBindJSON(&input) != nil {
+		respondBadRequest(c)
+		return
+	}
+	record, err := h.service.RecordPersonalBest(c.Request.Context(), athleteID, athlete.ManualRecordInput{MembershipID: domain.ID(input.MembershipID), MovementName: input.MovementName, Metric: input.Metric, BestValue: input.BestValue, AchievedOn: input.AchievedOn})
+	if errors.Is(err, athlete.ErrPortalMembershipUnavailable) {
+		respondPublicError(c, http.StatusNotFound, "athlete_membership_unavailable", "vínculo com a unidade não encontrado")
+		return
+	}
+	if errors.Is(err, athlete.ErrInvalidInput) {
+		respondPublicError(c, http.StatusBadRequest, "athlete_record_invalid", "revise movimento, marca e data informados")
+		return
+	}
+	if err != nil {
+		respondError(c, err)
+		return
+	}
+	c.JSON(http.StatusCreated, record)
 }
 func (h AthleteHandler) ExplainWorkout(c *gin.Context) {
 	athleteID, err := middleware.AthleteID(c)

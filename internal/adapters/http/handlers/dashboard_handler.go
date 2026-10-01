@@ -9,6 +9,7 @@ import (
 	"boxengage/backend/internal/adapters/http/middleware"
 	"boxengage/backend/internal/app/dashboard"
 	"boxengage/backend/internal/app/rewards"
+	"boxengage/backend/internal/domain"
 )
 
 type DashboardHandler struct {
@@ -17,10 +18,33 @@ type DashboardHandler struct {
 	nearGoal        dashboard.ListNearGoalStudentsUseCase
 	atRisk          dashboard.ListAtRiskStudentsUseCase
 	pendingRewards  rewards.ListPendingRewardDeliveriesUseCase
+	today           dashboard.GetTodayOperationsUseCase
 }
 
-func NewDashboardHandler(summary dashboard.GetDashboardSummaryUseCase, activeCampaigns dashboard.ListActiveCampaignsUseCase, nearGoal dashboard.ListNearGoalStudentsUseCase, atRisk dashboard.ListAtRiskStudentsUseCase, pendingRewards rewards.ListPendingRewardDeliveriesUseCase) DashboardHandler {
-	return DashboardHandler{summary: summary, activeCampaigns: activeCampaigns, nearGoal: nearGoal, atRisk: atRisk, pendingRewards: pendingRewards}
+func NewDashboardHandler(summary dashboard.GetDashboardSummaryUseCase, activeCampaigns dashboard.ListActiveCampaignsUseCase, nearGoal dashboard.ListNearGoalStudentsUseCase, atRisk dashboard.ListAtRiskStudentsUseCase, pendingRewards rewards.ListPendingRewardDeliveriesUseCase, today dashboard.GetTodayOperationsUseCase) DashboardHandler {
+	return DashboardHandler{summary: summary, activeCampaigns: activeCampaigns, nearGoal: nearGoal, atRisk: atRisk, pendingRewards: pendingRewards, today: today}
+}
+
+func (h DashboardHandler) Today(c *gin.Context) {
+	boxID, err := middleware.BoxID(c)
+	if err != nil {
+		respondUnauthorized(c)
+		return
+	}
+	result, err := h.today.Execute(c.Request.Context(), boxID)
+	if err != nil {
+		respondError(c, err)
+		return
+	}
+	role, _ := middleware.Role(c)
+	if role != "OWNER" {
+		// Keep collection fields as [] instead of null so the frontend can use
+		// one stable response shape for owners and coaches. The sensitive data
+		// remains fully redacted for non-owners.
+		result.Charges = []domain.TodayCharge{}
+		result.PeopleActions = []domain.TodayPeopleAction{}
+	}
+	c.JSON(http.StatusOK, result)
 }
 
 func (h DashboardHandler) Summary(c *gin.Context) {

@@ -14,9 +14,10 @@ type OrganizationResponse struct {
 }
 
 type OrganizationUnitResponse struct {
-	ID     string `json:"id"`
-	Name   string `json:"name"`
-	Status string `json:"status"`
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Timezone string `json:"timezone"`
+	Status   string `json:"status"`
 }
 
 type ModalityResponse struct {

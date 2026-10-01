@@ -60,7 +60,8 @@ type SchedulingAuditEventResponse struct {
 }
 
 type SchedulingPrivacyExportResponse struct {
-	Professional ProfessionalResponse           `json:"professional"`
-	Events       []SchedulingAuditEventResponse `json:"events"`
-	ExportedAt   string                         `json:"exported_at"`
+	Professional           ProfessionalResponse           `json:"professional"`
+	Events                 []SchedulingAuditEventResponse `json:"events"`
+	DraftSeriesAssignments any                            `json:"draft_series_assignments"`
+	ExportedAt             string                         `json:"exported_at"`
 }

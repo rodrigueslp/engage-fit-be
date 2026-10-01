@@ -11,13 +11,15 @@ import (
 )
 
 type athleteRepositoryStub struct {
-	invitation     domain.AthleteInvitation
-	account        *domain.AthleteAccount
-	accountErr     error
-	claimedAccount *domain.AthleteAccount
-	claimedID      domain.ID
-	context        domain.AthleteContext
-	session        domain.AthleteSession
+	invitation       domain.AthleteInvitation
+	account          *domain.AthleteAccount
+	accountErr       error
+	claimedAccount   *domain.AthleteAccount
+	claimedID        domain.ID
+	context          domain.AthleteContext
+	session          domain.AthleteSession
+	manualRecord     *domain.AthletePersonalRecord
+	manualMembership domain.ID
 }
 
 func (s *athleteRepositoryStub) SaveInvitation(context.Context, *domain.AthleteInvitation) error {
@@ -68,6 +70,11 @@ func (s *athleteRepositoryStub) ListWorkoutResults(context.Context, domain.ID) (
 }
 func (s *athleteRepositoryStub) ListPersonalRecords(context.Context, domain.ID) ([]domain.AthletePersonalRecord, error) {
 	return nil, nil
+}
+func (s *athleteRepositoryStub) SaveManualPersonalRecord(_ context.Context, value *domain.AthletePersonalRecord, membershipID domain.ID) error {
+	copy := *value
+	s.manualRecord, s.manualMembership = &copy, membershipID
+	return nil
 }
 func (s *athleteRepositoryStub) ConfirmPersonalRecord(context.Context, domain.ID, domain.ID, time.Time) error {
 	return nil

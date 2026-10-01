@@ -29,6 +29,7 @@ type AthleteRepository interface {
 	UpsertWorkoutResult(ctx context.Context, result *domain.AthleteWorkoutResult) ([]domain.AthletePersonalRecord, error)
 	ListWorkoutResults(ctx context.Context, athleteID domain.ID) ([]domain.AthleteWorkoutResult, error)
 	ListPersonalRecords(ctx context.Context, athleteID domain.ID) ([]domain.AthletePersonalRecord, error)
+	SaveManualPersonalRecord(ctx context.Context, record *domain.AthletePersonalRecord, membershipID domain.ID) error
 	ConfirmPersonalRecord(ctx context.Context, athleteID, recordID domain.ID, now time.Time) error
 	SaveAccountToken(ctx context.Context, token *domain.AthleteAccountToken) error
 	ConsumeAccountToken(ctx context.Context, tokenHash, purpose string, now time.Time) (*domain.AthleteAccount, error)

@@ -1,8 +1,8 @@
 # SPEC-006 — Agenda, profissionais e grade recorrente
 
-- Status: `reviewed`
-- Versão: `0.2`
-- Data: 2026-08-24
+- Status: `validated locally`
+- Versão: `1.0`
+- Data: 2026-09-15
 - Depende de: `ARCH-001`, `SPEC-001/B-D`, `SPEC-003/A-B-C`
 - Bloqueia: `SPEC-003/D`, `SPEC-007`, `SPEC-008`, partes de `SPEC-009`,
   `SPEC-010` e `SPEC-012`
@@ -13,11 +13,11 @@
 - Repositórios futuros envolvidos: `engage-fit-be` e `engage-fit-fe`
 - Migration: número não definido; será reservado pelo integrador
 
-Esta é uma spec-guia revisada e não autoriza implementar a iniciativa inteira.
-Cada slice da seção 18 precisa de spec executável própria e estado `ready`
-antes de criar migration ou contrato público definitivo. A
-[`SPEC-006/A`](SPEC-006-A-scheduling-professionals.md) é a única slice pronta
-para execução; B, C e D permanecem sem autorização.
+Implementação local concluída em 2026-09-15 após solicitação direta da
+iniciativa. A slice A foi preservada; B, C e D foram entregues como uma única
+evolução aditiva na migration `064_complete_scheduling.sql`, com grade,
+preview, publicação, sessões, materialização, cancelamentos e exceções. Nenhum
+push, deploy ou efeito externo foi executado.
 
 ## 1. Objetivo e resultado esperado
 
@@ -1210,8 +1210,9 @@ não bloqueiam a `SPEC-006/A`.
 
 ## 18. Fatiamento recomendado
 
-As slices são sequenciais e verticais. Somente a slice A possui documento
-executável `ready`; B, C e D continuam sem autorização.
+As slices foram implementadas na ordem sequencial A → B → C → D. A permanece
+`validated`; B, C e D estão `validated locally` pela evidência registrada no
+handoff e nos testes da iniciativa.
 
 ### [`SPEC-006/A` — Fundação de profissionais](SPEC-006-A-scheduling-professionals.md)
 
@@ -1223,24 +1224,28 @@ Entrega:
 - leitura mínima por coach e filtro futuro `mine` preparado;
 - nenhuma série ou sessão.
 
-Estado: `ready`. Decisões de nome, conta, visibilidade e anonimização foram
-fechadas; o contrato estreito de access está definido na slice; nenhum campo
-clínico ou de comissão entra no modelo.
+Estado: `validated`. Decisões de nome, conta, visibilidade e anonimização foram
+fechadas e a fundação foi implementada e validada localmente; nenhum campo
+clínico ou de comissão entrou no modelo.
 
-### `SPEC-006/B` — Grade recorrente em rascunho e preview
+### [`SPEC-006/B` — Grade recorrente em rascunho e preview](SPEC-006-B-scheduling-recurring-grid-preview.md)
 
 Entrega:
 
 - série semanal, dias, horário, duração, capacidade, alvo, espaço opcional e
   responsável obrigatório;
 - resolução por port de catalog, rascunho e preview determinístico;
-- conflito contra agenda publicada existente;
+- conflito entre rascunhos; a slice C estende o mesmo motor para sessões
+  publicadas antes de autorizar publicação;
 - UI `Grade`, revisão e estados mobile;
 - ainda não publica nem persiste sessões.
 
 Valor vertical: owner prepara e revisa sua grade real sem expor sessão
 incompleta. Gate: recorrência, espaço, responsável, capacidade, timezone,
 horizonte e conflito validados.
+
+Estado: `validated locally`. Os defaults conservadores do documento próprio
+foram adotados e validados em conjunto com publicação e sessões.
 
 ### `SPEC-006/C` — Publicação, materialização e agenda
 
@@ -1274,10 +1279,10 @@ reservations/attendance/notifications revisadas.
 
 ### Ordem e paralelização
 
-`A` pode ser detalhada primeiro. `B` depende de `A`; `C` depende de `B`; `D`
-depende de `C`. Frontend e backend de uma mesma slice permanecem com o mesmo
-owner de módulo. Não paralelizar migrations ou contratos dessas slices entre
-agentes sem integrador, pois todos alteram `scheduling`.
+`A` está concluída. `B` depende de `A`; `C` depende de `B`; `D` depende de
+`C`. Frontend e backend de uma mesma slice permanecem com o mesmo owner de
+módulo. Não paralelizar migrations ou contratos dessas slices entre agentes
+sem integrador, pois todos alteram `scheduling`.
 
 ## 19. Dependências explícitas e riscos
 
@@ -1352,7 +1357,7 @@ Antes de qualquer slice `ready`:
 - contrato público revisado pelos donos dos módulos consumidores;
 - prompt do executor restringindo explicitamente as demais slices.
 
-O estado `reviewed` desta guia não autoriza implementar B, C ou D. Somente o
-documento próprio em `ready` autoriza uma slice; hoje isso se limita à
-`SPEC-006/A`. Nenhum documento autoriza push, deploy, migration de produção ou
-habilitação de feature flag.
+O estado `reviewed` desta guia não autoriza implementar B, C ou D. A
+`SPEC-006/B` permanece `draft` até confirmação explícita de suas decisões
+abertas e não possui prompt de implementação. Nenhum documento autoriza push,
+deploy, migration de produção ou habilitação de feature flag.

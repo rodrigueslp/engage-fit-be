@@ -50,7 +50,9 @@ func (r SchedulingGormRepository) FindCommand(ctx context.Context, organizationI
 		Command:        row.Command,
 		IdempotencyKey: row.IdempotencyKey,
 		Fingerprint:    row.RequestFingerprint,
-		ProfessionalID: domainID(row.ProfessionalID),
+		ProfessionalID: optionalStringDomainID(row.ProfessionalID),
+		SeriesID:       optionalStringDomainID(row.SeriesID),
+		SessionID:      optionalStringDomainID(row.SessionID),
 		ResponseData:   response,
 		CreatedAt:      row.CreatedAt,
 	}, nil
@@ -71,7 +73,9 @@ func (r SchedulingGormRepository) CreateCommand(ctx context.Context, request *do
 		Command:            request.Command,
 		IdempotencyKey:     request.IdempotencyKey,
 		RequestFingerprint: request.Fingerprint,
-		ProfessionalID:     stringID(request.ProfessionalID),
+		ProfessionalID:     optionalDomainIDString(request.ProfessionalID),
+		SeriesID:           optionalDomainIDString(request.SeriesID),
+		SessionID:          optionalDomainIDString(request.SessionID),
 		ResponseData:       responseData,
 		CreatedAt:          request.CreatedAt,
 	}
@@ -245,7 +249,30 @@ func (r SchedulingGormRepository) CreateAuditEvent(ctx context.Context, event *d
 		Reason:         reason,
 		CreatedAt:      event.CreatedAt,
 	}
+	switch event.EntityType {
+	case "professional":
+		row.ProfessionalID = optionalDomainIDString(event.EntityID)
+	case "series":
+		row.SeriesID = optionalDomainIDString(event.EntityID)
+	case "session":
+		row.SessionID = optionalDomainIDString(event.EntityID)
+	}
 	return schedulingWriteError(databaseForContext(r.db, ctx).Create(&row).Error)
+}
+
+func optionalDomainIDString(value domain.ID) *string {
+	if value == "" {
+		return nil
+	}
+	v := stringID(value)
+	return &v
+}
+
+func optionalStringDomainID(value *string) domain.ID {
+	if value == nil {
+		return ""
+	}
+	return domainID(*value)
 }
 
 func (r SchedulingGormRepository) ListAuditEventsForProfessional(ctx context.Context, organizationID, unitID, professionalID domain.ID) ([]domain.SchedulingAuditEvent, error) {

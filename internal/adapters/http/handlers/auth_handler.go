@@ -9,6 +9,7 @@ import (
 	"boxengage/backend/internal/adapters/http/dto"
 	"boxengage/backend/internal/adapters/http/middleware"
 	"boxengage/backend/internal/app/auth"
+	"boxengage/backend/internal/domain"
 )
 
 type AuthHandler struct {
@@ -16,6 +17,7 @@ type AuthHandler struct {
 	currentUser auth.GetCurrentUserUseCase
 	password    auth.ChangePasswordUseCase
 	logout      auth.LogoutUseCase
+	switchUnit  auth.SwitchUnitContextUseCase
 	session     middleware.SessionConfig
 }
 
@@ -25,6 +27,11 @@ func NewAuthHandler(login auth.LoginUseCase, currentUser auth.GetCurrentUserUseC
 		config = session[0]
 	}
 	return AuthHandler{login: login, currentUser: currentUser, password: password, logout: logout, session: config}
+}
+
+func (h AuthHandler) WithUnitContext(useCase auth.SwitchUnitContextUseCase) AuthHandler {
+	h.switchUnit = useCase
+	return h
 }
 
 func (h AuthHandler) ChangePassword(c *gin.Context) {
@@ -113,11 +120,43 @@ func (h AuthHandler) Me(c *gin.Context) {
 		return
 	}
 
+	boxID, boxErr := middleware.BoxID(c)
+	if boxErr != nil && user.Role != "PLATFORM_ADMIN" {
+		respondUnauthorized(c)
+		return
+	}
 	c.JSON(http.StatusOK, dto.CurrentUserResponse{
 		ID:    string(user.ID),
-		BoxID: string(user.BoxID),
+		BoxID: string(boxID),
 		Name:  user.Name,
 		Email: user.Email,
 		Role:  string(user.Role),
 	})
+}
+
+func (h AuthHandler) SwitchUnitContext(c *gin.Context) {
+	userID, err := middleware.UserID(c)
+	if err != nil {
+		respondUnauthorized(c)
+		return
+	}
+	var request dto.SwitchUnitContextRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		respondPublicError(c, http.StatusBadRequest, "invalid_unit_context", "unidade inválida")
+		return
+	}
+	token, err := h.switchUnit.Execute(c.Request.Context(), userID, domain.ID(request.UnitID))
+	if errors.Is(err, auth.ErrUnitAccessDenied) {
+		respondPublicError(c, http.StatusNotFound, "unit_not_found", "unidade não encontrada")
+		return
+	}
+	if err != nil {
+		respondError(c, err)
+		return
+	}
+	if err := middleware.SetSession(c, h.session, token); err != nil {
+		respondPublicError(c, http.StatusInternalServerError, "session_creation_failed", "could not create session")
+		return
+	}
+	c.JSON(http.StatusOK, dto.LoginResponse{AccessToken: token})
 }

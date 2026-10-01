@@ -26,6 +26,7 @@ type WindowRateLimiter struct {
 	mu      sync.Mutex
 	entries map[string]windowEntry
 	limit   int
+	ipLimit int
 	window  time.Duration
 	now     func() time.Time
 }
@@ -37,7 +38,11 @@ func NewWindowRateLimiter(limit int, window time.Duration) *WindowRateLimiter {
 	if window <= 0 {
 		window = time.Minute
 	}
-	return &WindowRateLimiter{entries: map[string]windowEntry{}, limit: limit, window: window, now: time.Now}
+	ipLimit := limit * 10
+	if ipLimit < 100 {
+		ipLimit = 100
+	}
+	return &WindowRateLimiter{entries: map[string]windowEntry{}, limit: limit, ipLimit: ipLimit, window: window, now: time.Now}
 }
 
 func (l *WindowRateLimiter) Allow(keys ...string) (bool, time.Duration) {
@@ -54,7 +59,11 @@ func (l *WindowRateLimiter) Allow(keys ...string) (bool, time.Duration) {
 	var retryAfter time.Duration
 	for _, key := range keys {
 		entry := l.entries[key]
-		if entry.count >= l.limit && entry.expiresAt.After(now) {
+		limit := l.limit
+		if strings.HasPrefix(key, "ip:") {
+			limit = l.ipLimit
+		}
+		if entry.count >= limit && entry.expiresAt.After(now) {
 			remaining := entry.expiresAt.Sub(now)
 			if remaining > retryAfter {
 				retryAfter = remaining

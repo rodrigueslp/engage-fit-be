@@ -7,7 +7,29 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"boxengage/backend/internal/app/announcements"
+	"boxengage/backend/internal/app/attendance"
+	"boxengage/backend/internal/app/people"
+	"boxengage/backend/internal/app/reservations"
 )
+
+func TestRouterUsesConsistentUnitWildcardAcrossEnabledCapabilities(t *testing.T) {
+	t.Helper()
+
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			t.Fatalf("router construction panicked with unit-scoped capabilities enabled: %v", recovered)
+		}
+	}()
+
+	NewRouter(RouterDependencies{
+		AttendanceAccessService: attendance.NewAccessService(nil, nil, nil, nil),
+		AnnouncementService:     announcements.NewService(nil),
+		PeopleService:           &people.Service{},
+		ReservationService:      reservations.NewService(nil, nil, nil, nil, nil, nil),
+	})
+}
 
 func TestHealthEndpoints(t *testing.T) {
 	ready := true

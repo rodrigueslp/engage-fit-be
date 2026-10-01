@@ -1,13 +1,12 @@
-# Prompt do agente implementador — SPEC-004/A
+# Registro do prompt de implementação — SPEC-004/A
 
 Você é o agente executor da
 `SPEC-004/A — Fundação de contratos e emissão vinculada à matrícula` do
 EngageFit.
 
-A `SPEC-004/A` foi revisada e está em `ready` para a fundação local descrita
-neste prompt. No início da execução, confirme que o documento canônico ainda
-está em `ready`; se tiver voltado a `draft` ou sido substituído, não crie
-código, migration ou endpoint e devolva a tarefa ao responsável pela spec.
+A `SPEC-004/A` está `validated` desde 2026-08-27. Este documento registra o
+prompt usado para sua implementação; não autoriza uma nova implementação ou
+ampliação de escopo. Mudanças posteriores exigem uma spec ou revisão própria.
 
 ## Contexto obrigatório
 
@@ -24,7 +23,7 @@ Antes de alterar qualquer arquivo, leia integralmente:
 8. `engage-fit-be/docs/sdd/REQ-001-primeiro-passo-operacional.md`;
 9. `SPEC-002/A`, `SPEC-003/A`, `SPEC-003/B`, `SPEC-003/C` e a guia
    `SPEC-003`;
-10. a versão `ready` da `SPEC-004/A`.
+10. a versão canônica da `SPEC-004/A`.
 
 Use a `SPEC-004/A` como único contrato executável. Inspecione profundamente os
 padrões integrados antes de criar abstrações. Se uma mudança de contrato for

@@ -3,6 +3,7 @@ package whatsapp
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"strings"
 
 	"boxengage/backend/internal/domain"
@@ -28,10 +29,16 @@ func NewSafeGateway(next services.WhatsappGateway, appEnv string, allowRealSend 
 }
 
 func (g SafeGateway) Test(ctx context.Context, settings domain.WhatsappSettings) error {
+	if err := g.validateDestination(settings); err != nil {
+		return err
+	}
 	return g.next.Test(ctx, settings)
 }
 
 func (g SafeGateway) Send(ctx context.Context, settings domain.WhatsappSettings, message services.WhatsappMessage) (*services.WhatsappSendResult, error) {
+	if err := g.validateDestination(settings); err != nil {
+		return nil, err
+	}
 	if isMock(settings) {
 		return g.next.Send(ctx, settings, message)
 	}
@@ -56,6 +63,27 @@ func (g SafeGateway) Send(ctx context.Context, settings domain.WhatsappSettings,
 	}
 	message.Phone = g.devRecipientPhone
 	return g.next.Send(ctx, settings, message)
+}
+
+func (g SafeGateway) validateDestination(settings domain.WhatsappSettings) error {
+	if g.appEnv != "production" || strings.TrimSpace(settings.BaseURL) == "" || isMock(settings) {
+		return nil
+	}
+	parsed, err := url.Parse(settings.BaseURL)
+	if err != nil || parsed.Scheme != "https" || parsed.User != nil || parsed.Port() != "" || parsed.RawQuery != "" || parsed.Fragment != "" {
+		return fmt.Errorf("invalid WhatsApp provider URL")
+	}
+	switch strings.ToLower(strings.TrimSpace(settings.Provider)) {
+	case "", "twilio":
+		if parsed.Hostname() == "api.twilio.com" {
+			return nil
+		}
+	case "meta_cloud":
+		if parsed.Hostname() == "graph.facebook.com" {
+			return nil
+		}
+	}
+	return fmt.Errorf("WhatsApp provider URL is not allowed")
 }
 
 func parseAllowedPhones(value string) map[string]struct{} {

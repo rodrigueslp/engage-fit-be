@@ -57,6 +57,9 @@ func (h BoxesHandler) Update(c *gin.Context) {
 	box.Name = request.Name
 	box.RiskInactiveDays = request.RiskInactiveDays
 	box.RiskMessageCooldownDays = request.RiskMessageCooldownDays
+	if request.AccessControlMode != "" {
+		box.AccessControlMode = domain.AccessControlMode(request.AccessControlMode)
+	}
 
 	if err := h.updateBox.Execute(c.Request.Context(), *box); err != nil {
 		respondError(c, err)
@@ -71,7 +74,9 @@ func boxResponse(box domain.Box) dto.BoxResponse {
 		ID:                      string(box.ID),
 		Name:                    box.Name,
 		Status:                  string(box.EffectiveStatus()),
+		Timezone:                box.Timezone,
 		RiskInactiveDays:        box.RiskInactiveDays,
 		RiskMessageCooldownDays: box.RiskMessageCooldownDays,
+		AccessControlMode:       string(box.EffectiveAccessControlMode()),
 	}
 }

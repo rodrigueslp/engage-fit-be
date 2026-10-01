@@ -8,21 +8,25 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
 	billingadapter "boxengage/backend/internal/adapters/billing"
+	commerceadapter "boxengage/backend/internal/adapters/commerce"
 	contractsadapter "boxengage/backend/internal/adapters/contracts"
 	"boxengage/backend/internal/adapters/email"
 	apphttp "boxengage/backend/internal/adapters/http"
 	"boxengage/backend/internal/adapters/http/middleware"
 	"boxengage/backend/internal/adapters/llm"
+	memberbillingadapter "boxengage/backend/internal/adapters/memberbilling"
 	"boxengage/backend/internal/adapters/parsers"
 	"boxengage/backend/internal/adapters/persistence/postgres"
 	pgrepo "boxengage/backend/internal/adapters/persistence/postgres/repositories"
 	reportadapters "boxengage/backend/internal/adapters/reports"
 	"boxengage/backend/internal/adapters/security"
 	"boxengage/backend/internal/adapters/whatsapp"
+	"boxengage/backend/internal/app/announcements"
 	athleteapp "boxengage/backend/internal/app/athlete"
 	"boxengage/backend/internal/app/attendance"
 	"boxengage/backend/internal/app/auth"
@@ -32,17 +36,23 @@ import (
 	"boxengage/backend/internal/app/campaigns"
 	"boxengage/backend/internal/app/catalog"
 	"boxengage/backend/internal/app/checkiningestion"
+	commerceapp "boxengage/backend/internal/app/commerce"
 	"boxengage/backend/internal/app/contactactivation"
+	contractlifecycleapp "boxengage/backend/internal/app/contractlifecycle"
 	contractsapp "boxengage/backend/internal/app/contracts"
 	"boxengage/backend/internal/app/dashboard"
 	emailapp "boxengage/backend/internal/app/email"
+	healthformsapp "boxengage/backend/internal/app/healthforms"
 	"boxengage/backend/internal/app/imports"
+	memberbillingapp "boxengage/backend/internal/app/memberbilling"
 	"boxengage/backend/internal/app/memberships"
 	"boxengage/backend/internal/app/messages"
 	messagingapp "boxengage/backend/internal/app/messaging"
+	"boxengage/backend/internal/app/organizations"
 	"boxengage/backend/internal/app/people"
 	"boxengage/backend/internal/app/platformadmin"
 	reportsapp "boxengage/backend/internal/app/reports"
+	reservationsapp "boxengage/backend/internal/app/reservations"
 	"boxengage/backend/internal/app/retention"
 	"boxengage/backend/internal/app/rewards"
 	schedulingapp "boxengage/backend/internal/app/scheduling"
@@ -127,6 +137,7 @@ func main() {
 	cancelStartup()
 
 	boxRepository := pgrepo.NewBoxGormRepository(db)
+	organizationRepository := pgrepo.NewOrganizationGormRepository(db)
 	catalogRepository := pgrepo.NewCatalogGormRepository(db)
 	membershipRepository := pgrepo.NewMembershipGormRepository(db)
 	enrollmentRepository := pgrepo.NewEnrollmentGormRepository(db)
@@ -153,9 +164,14 @@ func main() {
 	athleteRepository := pgrepo.NewAthleteGormRepository(db)
 	messagingGovernanceRepository := pgrepo.NewMessagingGovernanceGormRepository(db)
 	billingRepository := pgrepo.NewBillingGormRepository(db)
+	memberBillingRepository := pgrepo.NewMemberBillingGormRepository(db)
+	todayOperationsRepository := pgrepo.NewTodayOperationsGormRepository(db)
+	announcementRepository := pgrepo.NewAnnouncementGormRepository(db)
+	commerceRepository := pgrepo.NewCommerceGormRepository(db)
 
 	passwordService := security.NewPasswordService()
-	athleteService := athleteapp.NewService(athleteRepository, studentRepository, passwordService)
+	athleteService := athleteapp.NewService(athleteRepository, studentRepository, passwordService).WithPersonIdentityLinker(peopleRepository).WithPortalRepository(athleteRepository)
+	announcementService := announcements.NewService(announcementRepository)
 	ensureAdminUseCase := platformadmin.NewEnsureAdminUseCase(userRepository, passwordService)
 	if err := ensureAdminUseCase.Execute(context.Background(), cfg.PlatformAdminName, cfg.PlatformAdminEmail, cfg.PlatformAdminPassword); err != nil {
 		log.Fatalf("failed to ensure platform admin: %v", err)
@@ -193,7 +209,7 @@ func main() {
 	billingGateway := billingadapter.NewAsaasClient(cfg.AsaasBaseURL, cfg.AsaasAPIKey, time.Duration(cfg.AsaasTimeoutSeconds)*time.Second)
 	billingService := billingapp.NewService(billingRepository, billingGateway, messagingGovernanceRepository, cfg.FeatureBillingEnabled, cfg.AsaasWebhookToken)
 
-	loginUseCase := auth.NewLoginUseCase(userRepository, boxRepository, passwordService, tokenService)
+	loginUseCase := auth.NewLoginUseCase(userRepository, boxRepository, passwordService, tokenService, organizationRepository)
 	currentUserUseCase := auth.NewGetCurrentUserUseCase(userRepository)
 	changePasswordUseCase := auth.NewChangePasswordUseCase(userRepository, passwordService)
 	logoutUseCase := auth.NewLogoutUseCase(userRepository)
@@ -205,6 +221,8 @@ func main() {
 	catalogService := catalog.NewService(catalogRepository, transactionManager)
 	membershipService := memberships.NewService(membershipRepository, catalogRepository, boxRepository, transactionManager)
 	enrollmentService := memberships.NewEnrollmentService(enrollmentRepository, peopleRepository, catalogRepository, boxRepository, transactionManager)
+	memberBillingService := memberbillingapp.NewService(memberBillingRepository, enrollmentService, boxRepository, memberbillingadapter.NewSimulator(), transactionManager)
+	commerceService := commerceapp.NewService(commerceRepository, peopleRepository, commerceadapter.NewManualPaymentRecorder(), transactionManager)
 	contractRepository := pgrepo.NewContractGormRepository(db)
 	var simAdapter portservices.ContractAcceptancePort
 	if cfg.ContractAcceptanceAdapter == "local_simulator" {
@@ -219,10 +237,26 @@ func main() {
 		transactionManager,
 		contractsapp.WithSessionTTL(time.Duration(cfg.ContractAcceptanceSessionTTLMinutes)*time.Minute),
 	)
+	healthFormRepository := pgrepo.NewHealthFormGormRepository(db, secretCipher)
+	healthFormService := healthformsapp.NewService(healthFormRepository, enrollmentService)
+	contractLifecycleRepository := pgrepo.NewContractLifecycleGormRepository(db, secretCipher)
+	contractLifecycleService := contractlifecycleapp.NewService(contractLifecycleRepository, contractRepository, enrollmentService, cfg.AppEnv, strings.Split(cfg.ContractSignatureProviders, ","))
 	schedulingRepository := pgrepo.NewSchedulingGormRepository(db)
 	schedulingAccessAdapter := pgrepo.NewSchedulingAccessGormAdapter(db)
 	schedulingService := schedulingapp.NewService(schedulingRepository, schedulingAccessAdapter, schedulingAccessAdapter, transactionManager)
+	schedulingGridService := schedulingapp.NewGridService(schedulingRepository, schedulingAccessAdapter, catalogRepository, transactionManager, schedulingapp.WithGridMaterializerOperational(cfg.SchedulingMaterializerEnabled), schedulingapp.WithGridProfessionalResolver(schedulingService))
+	reservationRepository := pgrepo.NewReservationGormRepository(db)
+	membershipAccessUsage := pgrepo.NewMembershipAccessUsageGormAdapter(db)
+	membershipAccessService := memberships.NewAccessService(enrollmentRepository, membershipAccessUsage, attendanceRepository)
+	if cfg.FeatureContractsEnabled && cfg.FeatureHealthFormsEnabled && cfg.FeatureMemberBillingEnabled {
+		membershipAccessService.WithPrerequisiteReader(enrollmentRepository)
+	}
+	reservationService := reservationsapp.NewService(reservationRepository, schedulingGridService, enrollmentRepository, peopleRepository, schedulingAccessAdapter, transactionManager, reservationsapp.WithAccessEvaluator(membershipAccessService))
+	athleteService.WithReservationBooker(reservationService)
+	schedulingGridService.SetReservationReconciler(reservationService)
 	teamService := team.NewService(userRepository, teamRepository, passwordService)
+	organizationService := organizations.NewService(organizationRepository)
+	switchUnitContextUseCase := auth.NewSwitchUnitContextUseCase(userRepository, organizationRepository, tokenService)
 	var peopleService *people.Service
 	if cfg.FeaturePeopleFoundationEnabled {
 		peopleService, err = people.NewService(peopleRepository, boxRepository, secretCipher, cfg.PersonLookupHMACKey)
@@ -242,6 +276,10 @@ func main() {
 	updateStudentRiskStatusUseCase := students.NewUpdateStudentRiskStatusUseCase(studentRepository)
 	exportStudentDataUseCase := students.NewExportStudentDataUseCase(privacyRepository, enrollmentService)
 	exportStudentDataUseCase.WithContracts(contractRepository)
+	exportStudentDataUseCase.WithReservations(reservationRepository)
+	exportStudentDataUseCase.WithMemberBilling(memberBillingRepository)
+	exportStudentDataUseCase.WithCommerce(commerceRepository)
+	exportStudentDataUseCase.WithHealthForms(healthFormRepository)
 	updateContactPreferenceUseCase := students.NewUpdateContactPreferenceUseCase(studentRepository, privacyRepository)
 	anonymizeStudentUseCase := students.NewAnonymizeStudentUseCase(privacyRepository)
 
@@ -262,6 +300,7 @@ func main() {
 	listCampaignProgressUseCase := campaigns.NewListCampaignProgressUseCase(campaignRepository)
 	recalculateCampaignProgressUseCase := campaigns.NewRecalculateCampaignProgressUseCase(campaignRepository, studentRepository, checkinRepository, rewardRepository)
 	attendanceService := attendance.NewService(attendanceRepository, campaignRepository, recalculateCampaignProgressUseCase)
+	attendanceAccessService := attendance.NewAccessService(attendanceRepository, schedulingAccessAdapter, schedulingGridService, transactionManager).WithMembershipAccess(membershipAccessService).WithUnitAccessControl(boxRepository)
 
 	listRewardsUseCase := rewards.NewListRewardsUseCase(rewardRepository, campaignRepository)
 	createRewardUseCase := rewards.NewCreateRewardUseCase(rewardRepository, campaignRepository)
@@ -276,6 +315,7 @@ func main() {
 	dashboardActiveCampaignsUseCase := dashboard.NewListActiveCampaignsUseCase(campaignRepository)
 	dashboardNearGoalUseCase := dashboard.NewListNearGoalStudentsUseCase(studentRepository, campaignRepository)
 	dashboardAtRiskUseCase := dashboard.NewListAtRiskStudentsUseCase(boxRepository, studentRepository, checkinRepository)
+	dashboardTodayUseCase := dashboard.NewGetTodayOperationsUseCase(boxRepository, todayOperationsRepository)
 	retentionService := retention.NewService(boxRepository, studentRepository, retentionRepository, teamRepository)
 
 	getWhatsappSettingsUseCase := whatsappapp.NewGetSettingsUseCase(whatsappSettingsRepository, whatsappSettingsResolver)
@@ -337,25 +377,35 @@ func main() {
 	monthlyFrequencyReportUseCase := reportsapp.NewMonthlyFrequencyReportUseCase(checkinRepository)
 
 	router := apphttp.NewRouter(apphttp.RouterDependencies{
-		AppEnv:                    cfg.AppEnv,
-		TokenService:              tokenService,
-		UserRepository:            userRepository,
-		BoxRepository:             boxRepository,
-		LoginUseCase:              loginUseCase,
-		CurrentUserUseCase:        currentUserUseCase,
-		ChangePasswordUseCase:     changePasswordUseCase,
-		LogoutUseCase:             logoutUseCase,
-		ResetOwnerPasswordUseCase: resetOwnerPasswordUseCase,
-		BoxAdminUseCases:          boxAdminUseCases,
-		CreateBoxUseCase:          createBoxUseCase,
-		GetBoxUseCase:             getBoxUseCase,
-		UpdateBoxUseCase:          updateBoxUseCase,
-		CatalogService:            catalogService,
-		PeopleService:             peopleService,
-		MembershipService:         membershipService,
-		EnrollmentService:         enrollmentService,
-		ContractService:           contractService,
-		SchedulingService:         schedulingService,
+		AppEnv:                        cfg.AppEnv,
+		TokenService:                  tokenService,
+		UserRepository:                userRepository,
+		BoxRepository:                 boxRepository,
+		LoginUseCase:                  loginUseCase,
+		CurrentUserUseCase:            currentUserUseCase,
+		ChangePasswordUseCase:         changePasswordUseCase,
+		LogoutUseCase:                 logoutUseCase,
+		ResetOwnerPasswordUseCase:     resetOwnerPasswordUseCase,
+		BoxAdminUseCases:              boxAdminUseCases,
+		CreateBoxUseCase:              createBoxUseCase,
+		GetBoxUseCase:                 getBoxUseCase,
+		UpdateBoxUseCase:              updateBoxUseCase,
+		CatalogService:                catalogService,
+		PeopleService:                 peopleService,
+		MembershipService:             membershipService,
+		EnrollmentService:             enrollmentService,
+		MemberBillingService:          memberBillingService,
+		CommerceService:               commerceService,
+		ContractService:               contractService,
+		ContractLifecycleService:      contractLifecycleService,
+		HealthFormService:             healthFormService,
+		ContractSignatureWebhookToken: cfg.ContractSignatureWebhookToken,
+		SchedulingService:             schedulingService,
+		SchedulingGridService:         schedulingGridService,
+		ReservationService:            reservationService,
+		OrganizationService:           organizationService,
+		UnitAccessAuthorizer:          organizationRepository,
+		SwitchUnitContextUseCase:      switchUnitContextUseCase,
 
 		ListStudentsUseCase:            listStudentsUseCase,
 		GetStudentUseCase:              getStudentUseCase,
@@ -366,6 +416,7 @@ func main() {
 		AnonymizeStudentUseCase:        anonymizeStudentUseCase,
 		ContactActivationService:       contactActivationService,
 		AttendanceService:              attendanceService,
+		AttendanceAccessService:        attendanceAccessService,
 
 		ListImportsUseCase:      listImportsUseCase,
 		GetImportUseCase:        getImportUseCase,
@@ -398,6 +449,7 @@ func main() {
 		DashboardActiveCampaignsUseCase: dashboardActiveCampaignsUseCase,
 		DashboardNearGoalUseCase:        dashboardNearGoalUseCase,
 		DashboardAtRiskUseCase:          dashboardAtRiskUseCase,
+		DashboardTodayUseCase:           dashboardTodayUseCase,
 		RetentionService:                retentionService,
 
 		GetWhatsappSettingsUseCase:    getWhatsappSettingsUseCase,
@@ -485,29 +537,42 @@ func main() {
 		Capabilities: middleware.Capabilities{
 			Whatsapp: cfg.FeatureWhatsappEnabled, Email: cfg.FeatureEmailEnabled,
 			Automation: cfg.FeatureAutomationEnabled, Workouts: cfg.FeatureWorkoutsEnabled, LLM: cfg.FeatureLLMEnabled,
-			Billing: cfg.FeatureBillingEnabled, Catalog: cfg.FeatureCatalogEnabled,
+			Billing: cfg.FeatureBillingEnabled, MemberBilling: cfg.FeatureMemberBillingEnabled, Catalog: cfg.FeatureCatalogEnabled,
 			ServiceCatalog:              cfg.FeatureServiceCatalogEnabled,
 			People:                      cfg.FeaturePeopleFoundationEnabled,
 			Memberships:                 cfg.FeatureMembershipsEnabled,
 			Enrollments:                 cfg.FeatureEnrollmentsEnabled,
 			Contracts:                   cfg.FeatureContractsEnabled,
 			ContractAcceptanceSimulator: cfg.ContractAcceptanceSimulatorEnabled,
+			ContractLifecycle:           cfg.FeatureContractLifecycleEnabled,
+			HealthForms:                 cfg.FeatureHealthFormsEnabled,
 			Scheduling:                  cfg.FeatureSchedulingEnabled,
+			SchedulingGrid:              cfg.FeatureSchedulingGridEnabled,
+			Reservations:                cfg.FeatureReservationsEnabled,
+			Attendance:                  cfg.FeatureAttendanceEnabled,
+			Announcements:               cfg.FeatureAnnouncementsEnabled,
+			Commerce:                    cfg.FeatureCommerceEnabled,
 		},
-		BillingService: billingService,
-		AthleteService: athleteService,
-		BuildVersion:   version,
-		BuildCommit:    commit,
-		BuildTime:      buildTime,
+		BillingService:      billingService,
+		AthleteService:      athleteService,
+		AnnouncementService: announcementService,
+		BuildVersion:        version,
+		BuildCommit:         commit,
+		BuildTime:           buildTime,
 	})
 
 	runContext, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	var workerDone <-chan struct{}
+	var schedulingWorkerDone <-chan struct{}
 	if cfg.AutomationWorkerEnabled {
 		interval := time.Duration(cfg.AutomationWorkerIntervalSeconds) * time.Second
 		workerDone = automation.NewWorker(executeAutomationScheduleUseCase, interval).Start(runContext)
 		log.Printf("automation worker enabled with interval %s", interval)
+	}
+	if cfg.SchedulingMaterializerEnabled && cfg.FeatureSchedulingEnabled && cfg.FeatureSchedulingGridEnabled {
+		schedulingWorkerDone = schedulingapp.NewMaterializerWorker(schedulingGridService, time.Hour).Start(runContext)
+		log.Printf("scheduling materializer enabled")
 	}
 
 	server := &http.Server{
@@ -542,6 +607,13 @@ func main() {
 		case <-workerDone:
 		case <-shutdownContext.Done():
 			slog.Warn("automation_worker_shutdown_timed_out")
+		}
+	}
+	if schedulingWorkerDone != nil {
+		select {
+		case <-schedulingWorkerDone:
+		case <-shutdownContext.Done():
+			slog.Warn("scheduling_materializer_shutdown_timed_out")
 		}
 	}
 	slog.Info("shutdown_completed")

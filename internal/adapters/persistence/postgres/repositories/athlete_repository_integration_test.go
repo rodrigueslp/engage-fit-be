@@ -9,8 +9,77 @@ import (
 	"boxengage/backend/internal/adapters/persistence/postgres"
 	"boxengage/backend/internal/adapters/persistence/postgres/models"
 	"boxengage/backend/internal/domain"
+	"boxengage/backend/migrations"
 	"github.com/google/uuid"
 )
+
+func TestAthletePortalRepositoryScopesLinkedPersonAndRunsAgainstMigratedPostgres(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL is not configured")
+	}
+	db, err := postgres.Open(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sqlDB, _ := db.DB()
+	if _, err = migrations.New(sqlDB).Up(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	tx := db.Begin()
+	t.Cleanup(func() { tx.Rollback() })
+	now := time.Date(2026, 9, 16, 12, 0, 0, 0, time.UTC)
+	organizationID, boxID, personID := uuid.NewString(), uuid.NewString(), uuid.NewString()
+	studentID, athleteID, membershipID := uuid.NewString(), uuid.NewString(), uuid.NewString()
+	if err := tx.Create(&models.OrganizationModel{ID: organizationID, Name: "Portal Organization", Status: "active", CreatedAt: now, UpdatedAt: now}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Create(&models.BoxModel{ID: boxID, OrganizationID: &organizationID, Name: "Portal Unit", Status: "active", Timezone: "America/Sao_Paulo", RiskInactiveDays: 7, RiskMessageCooldownDays: 14, CreatedAt: now, UpdatedAt: now}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Create(&models.PersonModel{ID: personID, OrganizationID: organizationID, Name: "Atleta Portal", ProfileStatus: "active", CreatedAt: now, UpdatedAt: now}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Create(&models.StudentModel{ID: studentID, PersonID: &personID, BoxID: boxID, Name: "Atleta Portal", Source: "box_member", ExternalID: "portal:" + studentID, RiskStatus: "active", ContactStatus: "unknown", CreatedAt: now, UpdatedAt: now}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Exec("INSERT INTO athlete_accounts (id,name,email,password_hash,status,created_at,updated_at) VALUES (?,?,?,?,?,?,?)", athleteID, "Atleta Portal", uuid.NewString()+"@example.com", "hash", "active", now, now).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Exec("INSERT INTO athlete_box_memberships (id,athlete_account_id,box_id,status,joined_at,created_at,updated_at) VALUES (?,?,?,?,?,?,?)", membershipID, athleteID, boxID, "active", now, now, now).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Exec("INSERT INTO athlete_student_links (id,membership_id,student_id,link_method,linked_at,created_at) VALUES (?,?,?,?,?,?)", uuid.NewString(), membershipID, studentID, "individual_invite", now, now).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	items, err := NewAthleteGormRepository(tx).LoadAthletePortal(context.Background(), domain.ID(athleteID), now.Add(-time.Hour), now.Add(30*24*time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(items) != 1 || items[0].MembershipID != domain.ID(membershipID) || items[0].UnitName != "Portal Unit" {
+		t.Fatalf("unexpected portal scope: %+v", items)
+	}
+	if items[0].Plan != nil || items[0].Contract != nil || items[0].Billing.FinancialStatus != "not_configured" || len(items[0].Agenda) != 0 {
+		t.Fatalf("unexpected cross-subject data: %+v", items[0])
+	}
+	scope, err := NewAthleteGormRepository(tx).ResolveAthleteScope(context.Background(), domain.ID(athleteID), domain.ID(membershipID))
+	if err != nil || scope == nil || scope.PersonID != domain.ID(personID) {
+		t.Fatalf("linked scope: value=%+v err=%v", scope, err)
+	}
+	foreign, err := NewAthleteGormRepository(tx).ResolveAthleteScope(context.Background(), domain.ID(uuid.NewString()), domain.ID(membershipID))
+	if err != nil || foreign != nil {
+		t.Fatalf("foreign athlete resolved scope: value=%+v err=%v", foreign, err)
+	}
+	record := &domain.AthletePersonalRecord{AthleteID: domain.ID(athleteID), MovementName: "Agachamento livre", Metric: "load", BestValue: 90, Unit: "kg", AchievedAt: now}
+	if err := NewAthleteGormRepository(tx).SaveManualPersonalRecord(context.Background(), record, domain.ID(membershipID)); err != nil {
+		t.Fatal(err)
+	}
+	records, err := NewAthleteGormRepository(tx).ListPersonalRecords(context.Background(), domain.ID(athleteID))
+	if err != nil || len(records) != 1 || records[0].SourceManualID != record.ID || records[0].BestValue != 90 {
+		t.Fatalf("manual PR: items=%+v err=%v", records, err)
+	}
+}
 
 func TestAthleteRepositoryLoadsInvitationByTokenHash(t *testing.T) {
 	databaseURL := os.Getenv("TEST_DATABASE_URL")

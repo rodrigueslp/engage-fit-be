@@ -4,8 +4,10 @@ type BoxResponse struct {
 	ID                      string `json:"id"`
 	Name                    string `json:"name"`
 	Status                  string `json:"status"`
+	Timezone                string `json:"timezone"`
 	RiskInactiveDays        int    `json:"risk_inactive_days"`
 	RiskMessageCooldownDays int    `json:"risk_message_cooldown_days"`
+	AccessControlMode       string `json:"access_control_mode"`
 }
 
 type AdminBoxResponse struct {
@@ -41,4 +43,5 @@ type UpdateBoxRequest struct {
 	Name                    string `json:"name"`
 	RiskInactiveDays        int    `json:"risk_inactive_days"`
 	RiskMessageCooldownDays int    `json:"risk_message_cooldown_days"`
+	AccessControlMode       string `json:"access_control_mode"`
 }

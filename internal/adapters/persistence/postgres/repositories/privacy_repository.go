@@ -10,6 +10,7 @@ import (
 
 	"boxengage/backend/internal/adapters/persistence/postgres/models"
 	"boxengage/backend/internal/domain"
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -95,7 +96,21 @@ func (r PrivacyGormRepository) ExportStudent(ctx context.Context, boxID, student
 			ConsentVersion: row.ConsentVersion, ConsentText: row.ConsentText, CreatedAt: row.CreatedAt,
 		})
 	}
-	return &domain.StudentPrivacyExport{Student: *student, Person: person, Checkins: checkins, Progress: progress, Communications: communications, ContactConsents: consents, RetentionInterventions: interventions, ExportedAt: time.Now().UTC()}, nil
+	attendance := []domain.AttendanceAdmission{}
+	announcements := []domain.AnnouncementPrivacyView{}
+	if student.PersonID != "" {
+		var attendanceRows []attendanceAdmissionRow
+		if err := databaseForContext(r.db, ctx).Raw(attendanceAdmissionSelect()+` WHERE d.unit_id = ? AND d.person_id = ? ORDER BY d.occurred_at`, stringID(boxID), stringID(student.PersonID)).Scan(&attendanceRows).Error; err != nil {
+			return nil, err
+		}
+		for _, row := range attendanceRows {
+			attendance = append(attendance, admissionFromRow(row))
+		}
+		if err := databaseForContext(r.db, ctx).Raw(`SELECT a.id AS announcement_id, a.title, a.priority, a.published_at, ar.first_viewed_at, ar.last_viewed_at, ar.view_count FROM announcement_recipients ar JOIN announcements a ON a.id = ar.announcement_id WHERE ar.unit_id = ? AND ar.person_id = ? ORDER BY a.publish_at DESC`, stringID(boxID), stringID(student.PersonID)).Scan(&announcements).Error; err != nil {
+			return nil, err
+		}
+	}
+	return &domain.StudentPrivacyExport{Student: *student, Person: person, Checkins: checkins, Progress: progress, Communications: communications, ContactConsents: consents, RetentionInterventions: interventions, Attendance: attendance, Announcements: announcements, ExportedAt: time.Now().UTC()}, nil
 }
 
 func (r PrivacyGormRepository) exportPerson(ctx context.Context, boxID domain.ID, student domain.Student) (*domain.PersonPrivacyExport, error) {
@@ -130,7 +145,34 @@ func (r PrivacyGormRepository) exportPerson(ctx context.Context, boxID domain.ID
 		item := addressToDomain(addressModel)
 		address = &item
 	}
-	return &domain.PersonPrivacyExport{ID: domainID(person.ID), Name: person.Name, PhoneE164: optionalString(person.PhoneE164), Email: optionalString(person.Email), CPF: plainCPF, ProfileStatus: domain.PersonProfileStatus(person.ProfileStatus), Address: address}, nil
+	relationships := []domain.PersonUnitRelationship{}
+	var relationshipRows []struct {
+		ID, UnitID, UnitName, RelationshipStatus, StatusReason string
+		StartedAt                                              time.Time
+		EndedAt                                                *time.Time
+	}
+	if err := db.Table("person_unit_relationships r").Select("r.id, r.unit_id, b.name AS unit_name, r.relationship_status, r.status_reason, r.started_at, r.ended_at").Joins("JOIN boxes b ON b.id = r.unit_id AND b.organization_id = r.organization_id").Where("r.person_id = ? AND r.organization_id = ?", person.ID, person.OrganizationID).Order("r.started_at").Scan(&relationshipRows).Error; err != nil {
+		return nil, err
+	}
+	for _, row := range relationshipRows {
+		relationships = append(relationships, domain.PersonUnitRelationship{ID: domainID(row.ID), UnitID: domainID(row.UnitID), UnitName: row.UnitName, RelationshipStatus: domain.PersonRelationshipStatus(row.RelationshipStatus), StartedAt: row.StartedAt, EndedAt: row.EndedAt, StatusReason: row.StatusReason})
+	}
+	identities := []domain.PersonExternalIdentity{}
+	var identityModels []models.PersonExternalIdentityModel
+	if err := db.Where("person_id = ? AND organization_id = ?", person.ID, person.OrganizationID).Find(&identityModels).Error; err != nil {
+		return nil, err
+	}
+	for _, identity := range identityModels {
+		identities = append(identities, externalIdentityToDomain(identity))
+	}
+	var athleteAccount *domain.PersonAthleteAccount
+	var athlete models.PersonAthleteAccountModel
+	if err := db.Where("person_id = ? AND organization_id = ?", person.ID, person.OrganizationID).Take(&athlete).Error; err == nil {
+		athleteAccount = &domain.PersonAthleteAccount{AthleteAccountID: domainID(athlete.AthleteAccountID), LinkedAt: athlete.LinkedAt, LinkMethod: athlete.LinkMethod}
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, err
+	}
+	return &domain.PersonPrivacyExport{ID: domainID(person.ID), Name: person.Name, PhoneE164: optionalString(person.PhoneE164), Email: optionalString(person.Email), CPF: plainCPF, ProfileStatus: domain.PersonProfileStatus(person.ProfileStatus), Address: address, Relationships: relationships, Identities: identities, AthleteAccount: athleteAccount}, nil
 }
 
 func (r PrivacyGormRepository) AnonymizeStudent(ctx context.Context, boxID, studentID, actorUserID domain.ID, reason string) error {
@@ -194,7 +236,21 @@ func anonymizeLinkedPerson(tx *gorm.DB, boxID, studentID, actorUserID, personID 
 	action := "person.privacy_preserved_shared_profile"
 	metadata := map[string]any{"student_id": studentID, "pii_removed": false, "shared_profile": true}
 	if otherActive == 0 {
-		result := tx.Model(&models.PersonModel{}).Where("id = ? AND organization_id = ?", stringID(personID), organizationID).Updates(map[string]any{"name": "Pessoa anonimizada", "phone_e164": nil, "email": nil, "cpf_encrypted": nil, "cpf_lookup_hash": nil, "cpf_last2": nil, "profile_status": string(domain.PersonProfileAnonymized), "updated_at": now})
+		var identities []models.PersonExternalIdentityModel
+		if err := tx.Where("person_id = ? AND organization_id = ?", stringID(personID), organizationID).Find(&identities).Error; err != nil {
+			return err
+		}
+		for _, identity := range identities {
+			unitID := stringID(boxID)
+			if identity.UnitID != nil {
+				unitID = *identity.UnitID
+			}
+			suppression := map[string]any{"id": uuid.NewString(), "box_id": unitID, "source": identity.Provider, "external_id_hash": privacyIdentityHash(identity.ExternalID), "reason": "person_anonymization", "created_at": now}
+			if err := tx.Table("privacy_suppressions").Clauses(clause.OnConflict{DoNothing: true}).Create(suppression).Error; err != nil {
+				return err
+			}
+		}
+		result := tx.Model(&models.PersonModel{}).Where("id = ? AND organization_id = ?", stringID(personID), organizationID).Updates(map[string]any{"name": "Pessoa anonimizada", "preferred_name": nil, "phone_e164": nil, "email": nil, "cpf_encrypted": nil, "cpf_lookup_hash": nil, "cpf_last2": nil, "profile_status": string(domain.PersonProfileAnonymized), "revision": gorm.Expr("revision + 1"), "updated_at": now})
 		if result.Error != nil {
 			return result.Error
 		}
@@ -202,6 +258,12 @@ func anonymizeLinkedPerson(tx *gorm.DB, boxID, studentID, actorUserID, personID 
 			return gorm.ErrRecordNotFound
 		}
 		if err := tx.Where("person_id = ? AND organization_id = ?", stringID(personID), organizationID).Delete(&models.PersonAddressModel{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("person_id = ? AND organization_id = ?", stringID(personID), organizationID).Delete(&models.PersonExternalIdentityModel{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("person_id = ? AND organization_id = ?", stringID(personID), organizationID).Delete(&models.PersonAthleteAccountModel{}).Error; err != nil {
 			return err
 		}
 		action = "person.anonymized"

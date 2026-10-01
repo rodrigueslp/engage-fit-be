@@ -41,6 +41,32 @@ func (h EnrollmentHandler) ListForStudent(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
+func (h EnrollmentHandler) Roster(c *gin.Context) {
+	unitID, _, ok := enrollmentContext(c)
+	if !ok {
+		return
+	}
+	items, err := h.service.ListRoster(c.Request.Context(), unitID)
+	if err != nil {
+		respondEnrollmentError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, items)
+}
+
+func (h EnrollmentHandler) AccessStatus(c *gin.Context) {
+	unitID, _, ok := enrollmentContext(c)
+	if !ok {
+		return
+	}
+	status, err := h.service.AccessStatus(c.Request.Context(), unitID, domain.ID(c.Param("enrollment_id")))
+	if err != nil {
+		respondEnrollmentError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, status)
+}
+
 func (h EnrollmentHandler) Create(c *gin.Context) {
 	unitID, actorID, ok := enrollmentContext(c)
 	if !ok {
@@ -198,6 +224,8 @@ func respondEnrollmentError(c *gin.Context, err error) {
 		respondPublicError(c, http.StatusUnprocessableEntity, "membership_plan_addon_duplicate", "adicional duplicado na seleção")
 	case errors.Is(err, memberships.ErrEnrollmentSubjectIneligible):
 		respondPublicError(c, http.StatusUnprocessableEntity, "enrollment_subject_ineligible", "a pessoa não está elegível para matrícula")
+	case errors.Is(err, memberships.ErrEnrollmentPhoneRequired):
+		respondPublicError(c, http.StatusUnprocessableEntity, "enrollment_phone_required", "cadastre o WhatsApp do aluno antes de criar a matrícula")
 	case errors.Is(err, memberships.ErrPlanUnavailable):
 		respondPublicError(c, http.StatusUnprocessableEntity, "plan_unavailable", "plano indisponível nesta unidade")
 	case errors.Is(err, memberships.ErrPlanTargetsInactive):
@@ -206,6 +234,8 @@ func respondEnrollmentError(c *gin.Context, err error) {
 		respondPublicError(c, http.StatusUnprocessableEntity, "invalid_start_date", "data de início fora do período permitido")
 	case errors.Is(err, memberships.ErrInvalidEnd):
 		respondPublicError(c, http.StatusUnprocessableEntity, "invalid_end", "data ou motivo de encerramento inválido")
+	case errors.Is(err, memberships.ErrEnrollmentOperationsUnavailable):
+		respondPublicError(c, http.StatusServiceUnavailable, "enrollment_operations_unavailable", "situação operacional da matrícula indisponível")
 	default:
 		respondError(c, err)
 	}

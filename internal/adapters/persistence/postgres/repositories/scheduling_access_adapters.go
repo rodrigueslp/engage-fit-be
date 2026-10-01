@@ -18,18 +18,31 @@ func NewSchedulingAccessGormAdapter(db *gorm.DB) SchedulingAccessGormAdapter {
 
 func (a SchedulingAccessGormAdapter) ResolveSchedulingUnitContext(ctx context.Context, authenticatedUserID, unitID domain.ID) (*domain.SchedulingUnitContext, error) {
 	var row struct {
-		UserID         string
-		UserBoxID      *string
-		Role           string
-		UserActive     bool
-		UnitID         string
-		OrganizationID *string
-		UnitName       string
+		UserID             string
+		UserBoxID          *string
+		Role               string
+		UserActive         bool
+		UnitID             string
+		OrganizationID     *string
+		UnitName           string
+		Timezone           string
+		Authorized         bool
+		UnitStatus         string
+		OrganizationStatus string
 	}
 
 	err := databaseForContext(a.db, ctx).Table("users u").
-		Select("u.id AS user_id, u.box_id AS user_box_id, u.role, u.active AS user_active, b.id AS unit_id, b.organization_id, b.name AS unit_name").
+		Select(`u.id AS user_id, u.box_id AS user_box_id, u.role, u.active AS user_active,
+			b.id AS unit_id, b.organization_id, b.name AS unit_name, b.timezone, b.status AS unit_status,
+			o.status AS organization_status,
+			(u.box_id = b.id OR EXISTS (
+				SELECT 1 FROM organization_user_memberships oum
+				JOIN user_unit_access uua ON uua.organization_id = oum.organization_id AND uua.user_id = oum.user_id
+				WHERE oum.organization_id = b.organization_id AND oum.user_id = u.id AND oum.active = true
+				AND uua.unit_id = b.id AND uua.active = true
+			)) AS authorized`).
 		Joins("JOIN boxes b ON b.id = ?", stringID(unitID)).
+		Joins("JOIN organizations o ON o.id = b.organization_id").
 		Where("u.id = ?", stringID(authenticatedUserID)).
 		Take(&row).Error
 
@@ -40,7 +53,7 @@ func (a SchedulingAccessGormAdapter) ResolveSchedulingUnitContext(ctx context.Co
 		return nil, err
 	}
 
-	if !row.UserActive || row.UserBoxID == nil || *row.UserBoxID != stringID(unitID) || row.OrganizationID == nil || *row.OrganizationID == "" {
+	if !row.UserActive || !row.Authorized || row.OrganizationID == nil || *row.OrganizationID == "" || row.UnitStatus != "active" || row.OrganizationStatus != "active" {
 		return &domain.SchedulingUnitContext{Authorized: false}, nil
 	}
 
@@ -52,6 +65,7 @@ func (a SchedulingAccessGormAdapter) ResolveSchedulingUnitContext(ctx context.Co
 		OrganizationID: domainID(*row.OrganizationID),
 		UnitID:         unitID,
 		UnitName:       row.UnitName,
+		Timezone:       row.Timezone,
 		Role:           row.Role,
 		Authorized:     true,
 	}, nil

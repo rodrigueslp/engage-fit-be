@@ -81,10 +81,13 @@ func (*enrollmentRepositoryStub) ListPrivacy(context.Context, domain.ID, domain.
 	return nil, nil
 }
 
-type enrollmentSubjectStub struct{ personID domain.ID }
+type enrollmentSubjectStub struct {
+	personID  domain.ID
+	phoneE164 string
+}
 
 func (stub enrollmentSubjectStub) ResolveEnrollmentSubject(context.Context, domain.ID, domain.ID, domain.ID) (*domain.EnrollmentSubject, error) {
-	return &domain.EnrollmentSubject{PersonID: stub.personID, DisplayName: "Ana", Eligible: true}, nil
+	return &domain.EnrollmentSubject{PersonID: stub.personID, DisplayName: "Ana", PhoneE164: stub.phoneE164, Eligible: true}, nil
 }
 
 func TestEnrollmentHTTPContractsCapabilityRolesCSRFAndTenant(t *testing.T) {
@@ -97,11 +100,15 @@ func TestEnrollmentHTTPContractsCapabilityRolesCSRFAndTenant(t *testing.T) {
 	versionID := domain.ID("88888888-8888-4888-8888-888888888888")
 	modalityID := domain.ID("99999999-9999-4999-8999-999999999999")
 	createBody := `{"plan_id":"` + string(planID) + `","plan_version_id":"` + string(versionID) + `","starts_on":"2026-08-19"}`
-	newRouter := func(role domain.UserRole, enabled bool) http.Handler {
+	newRouter := func(role domain.UserRole, enabled bool, phones ...string) http.Handler {
+		phoneE164 := "+5511999999999"
+		if len(phones) > 0 {
+			phoneE164 = phones[0]
+		}
 		version := domain.MembershipPlanVersion{ID: versionID, OrganizationID: organizationID, PlanID: planID, VersionNumber: 1, Status: domain.MembershipVersionPublished, Name: "CrossFit Mensal", PriceCents: 25000, Currency: "BRL", BillingCycle: domain.MembershipBillingMonthly, Entitlements: []domain.MembershipPlanEntitlement{{ModalityID: modalityID, AccessType: domain.MembershipAccessOpen}}, Summary: "CrossFit · acesso livre · R$ 250/mês"}
 		repository := &enrollmentRepositoryStub{commands: map[string]domain.EnrollmentCommandRequest{}, version: version, plan: domain.MembershipPlan{ID: planID, OrganizationID: organizationID, HomeUnitID: unitID, Status: domain.MembershipPlanActive}}
 		box := domain.Box{ID: unitID, OrganizationID: organizationID, Name: "Unit", Status: domain.BoxStatusActive}
-		service := memberships.NewEnrollmentService(repository, enrollmentSubjectStub{personID: personID}, membershipCatalogResolverStub{}, catalogBoxStub{box: box}, catalogTransactionStub{}, memberships.WithEnrollmentClock(func() time.Time { return time.Date(2026, 8, 19, 15, 0, 0, 0, time.UTC) }))
+		service := memberships.NewEnrollmentService(repository, enrollmentSubjectStub{personID: personID, phoneE164: phoneE164}, membershipCatalogResolverStub{}, catalogBoxStub{box: box}, catalogTransactionStub{}, memberships.WithEnrollmentClock(func() time.Time { return time.Date(2026, 8, 19, 15, 0, 0, 0, time.UTC) }))
 		user := domain.User{ID: userID, BoxID: unitID, Role: role, AuthVersion: 1, Active: true}
 		return NewRouter(RouterDependencies{TokenService: catalogTokenStub{claims: services.AuthClaims{UserID: userID, BoxID: unitID, Role: role, AuthVersion: 1}}, UserRepository: catalogUserStub{user: user}, BoxRepository: catalogBoxStub{box: box}, EnrollmentService: service, Capabilities: middleware.Capabilities{Enrollments: enabled, Memberships: true, People: true}, SessionConfig: middleware.SessionConfig{CookieName: "session", CSRFCookieName: "csrf"}})
 	}
@@ -142,6 +149,10 @@ func TestEnrollmentHTTPContractsCapabilityRolesCSRFAndTenant(t *testing.T) {
 	malformed := membershipBearerRequest(router, http.MethodPost, path, `{"plan_id":"bad","plan_version_id":"bad","starts_on":"2026-08-19"}`, "enrollment.bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
 	if malformed.Code != http.StatusBadRequest || !strings.Contains(malformed.Body.String(), "invalid_request") {
 		t.Fatalf("malformed UUID: %d %s", malformed.Code, malformed.Body.String())
+	}
+	withoutPhone := membershipBearerRequest(newRouter(domain.UserRoleOwner, true, ""), http.MethodPost, path, createBody, "enrollment.phone-required")
+	if withoutPhone.Code != http.StatusUnprocessableEntity || !strings.Contains(withoutPhone.Body.String(), "enrollment_phone_required") {
+		t.Fatalf("phone required: %d %s", withoutPhone.Code, withoutPhone.Body.String())
 	}
 
 	dupAddonBody := `{"plan_id":"` + string(planID) + `","plan_version_id":"` + string(versionID) + `","starts_on":"2026-08-19","addon_ids":["` + string(modalityID) + `","` + string(modalityID) + `"]}`

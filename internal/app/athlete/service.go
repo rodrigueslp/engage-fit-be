@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math"
 	"regexp"
 	"strings"
@@ -20,9 +21,10 @@ import (
 )
 
 var (
-	ErrInvalidInput       = errors.New("invalid athlete input")
-	ErrInvalidCredentials = errors.New("invalid athlete credentials")
-	ErrInvitationExpired  = errors.New("athlete invitation expired")
+	ErrInvalidInput                = errors.New("invalid athlete input")
+	ErrInvalidCredentials          = errors.New("invalid athlete credentials")
+	ErrInvitationExpired           = errors.New("athlete invitation expired")
+	ErrPortalMembershipUnavailable = errors.New("athlete membership unavailable")
 )
 
 const (
@@ -31,12 +33,15 @@ const (
 )
 
 type Service struct {
-	athletes  repositories.AthleteRepository
-	students  repositories.StudentRepository
-	passwords services.PasswordService
-	mailer    services.AthleteAccountMailer
-	explainer services.AthleteExplanationGenerator
-	now       func() time.Time
+	athletes     repositories.AthleteRepository
+	portal       repositories.AthletePortalRepository
+	reservations athleteReservationBooker
+	students     repositories.StudentRepository
+	people       repositories.PersonIdentityLinker
+	passwords    services.PasswordService
+	mailer       services.AthleteAccountMailer
+	explainer    services.AthleteExplanationGenerator
+	now          func() time.Time
 }
 
 type InvitationOutput struct {
@@ -76,6 +81,19 @@ type ResultOutput struct {
 	PossibleRecords []domain.AthletePersonalRecord
 }
 
+type ManualRecordInput struct {
+	MembershipID domain.ID
+	MovementName string
+	Metric       string
+	BestValue    float64
+	AchievedOn   string
+}
+
+type athleteReservationBooker interface {
+	BookForAthlete(ctx context.Context, scope domain.AthletePortalScope, athleteID domain.ID, sessionID domain.ID, key string) (*domain.Reservation, bool, error)
+	CancelForAthlete(ctx context.Context, scope domain.AthletePortalScope, athleteID, sessionID, reservationID domain.ID, key string) (*domain.Reservation, *domain.Reservation, bool, error)
+}
+
 func NewService(athletes repositories.AthleteRepository, students repositories.StudentRepository, passwords services.PasswordService) *Service {
 	return &Service{athletes: athletes, students: students, passwords: passwords, now: time.Now}
 }
@@ -84,9 +102,135 @@ func (s *Service) WithMailer(mailer services.AthleteAccountMailer) *Service {
 	s.mailer = mailer
 	return s
 }
+func (s *Service) WithPersonIdentityLinker(linker repositories.PersonIdentityLinker) *Service {
+	s.people = linker
+	return s
+}
 func (s *Service) WithExplainer(explainer services.AthleteExplanationGenerator) *Service {
 	s.explainer = explainer
 	return s
+}
+
+func (s *Service) WithPortalRepository(portal repositories.AthletePortalRepository) *Service {
+	s.portal = portal
+	return s
+}
+
+func (s *Service) WithReservationBooker(booker athleteReservationBooker) *Service {
+	s.reservations = booker
+	return s
+}
+
+func (s *Service) BookClass(ctx context.Context, athleteID, membershipID, sessionID domain.ID, key string) (*domain.Reservation, bool, error) {
+	if s.portal == nil || s.reservations == nil || athleteID == "" || membershipID == "" || sessionID == "" {
+		return nil, false, ErrInvalidInput
+	}
+	scope, err := s.portal.ResolveAthleteScope(ctx, athleteID, membershipID)
+	if err != nil {
+		return nil, false, err
+	}
+	if scope == nil || scope.MembershipID != membershipID {
+		return nil, false, ErrPortalMembershipUnavailable
+	}
+	return s.reservations.BookForAthlete(ctx, *scope, athleteID, sessionID, key)
+}
+
+func (s *Service) CancelClassReservation(ctx context.Context, athleteID, membershipID, sessionID, reservationID domain.ID, key string) (*domain.Reservation, bool, error) {
+	if s.portal == nil || s.reservations == nil || athleteID == "" || membershipID == "" || sessionID == "" || reservationID == "" {
+		return nil, false, ErrInvalidInput
+	}
+	scope, err := s.portal.ResolveAthleteScope(ctx, athleteID, membershipID)
+	if err != nil {
+		return nil, false, err
+	}
+	if scope == nil || scope.MembershipID != membershipID {
+		return nil, false, ErrPortalMembershipUnavailable
+	}
+	value, _, fresh, err := s.reservations.CancelForAthlete(ctx, *scope, athleteID, sessionID, reservationID, key)
+	return value, fresh, err
+}
+
+func (s *Service) RecordPersonalBest(ctx context.Context, athleteID domain.ID, input ManualRecordInput) (*domain.AthletePersonalRecord, error) {
+	name := strings.TrimSpace(input.MovementName)
+	day, err := time.Parse("2006-01-02", input.AchievedOn)
+	if s.portal == nil || athleteID == "" || input.MembershipID == "" || name == "" || simpleMovementKey(name) == "" || len([]rune(name)) > 160 || err != nil || day.After(s.now().Add(24*time.Hour)) || input.BestValue <= 0 || input.BestValue > 100000 {
+		return nil, ErrInvalidInput
+	}
+	unit := ""
+	switch input.Metric {
+	case "load":
+		unit = "kg"
+	case "reps":
+		if input.BestValue != math.Trunc(input.BestValue) {
+			return nil, ErrInvalidInput
+		}
+		unit = "reps"
+	case "time":
+		if input.BestValue != math.Trunc(input.BestValue) {
+			return nil, ErrInvalidInput
+		}
+		unit = "seconds"
+	default:
+		return nil, ErrInvalidInput
+	}
+	scope, err := s.portal.ResolveAthleteScope(ctx, athleteID, input.MembershipID)
+	if err != nil {
+		return nil, err
+	}
+	if scope == nil || scope.MembershipID != input.MembershipID {
+		return nil, ErrPortalMembershipUnavailable
+	}
+	record := &domain.AthletePersonalRecord{AthleteID: athleteID, MovementName: name, Metric: input.Metric, BestValue: input.BestValue, Unit: unit, Status: "confirmed", AchievedAt: day}
+	if err := s.athletes.SaveManualPersonalRecord(ctx, record, input.MembershipID); err != nil {
+		return nil, err
+	}
+	return record, nil
+}
+
+func (s *Service) Portal(ctx context.Context, athleteID domain.ID) (*domain.AthletePortal, error) {
+	if s.portal == nil {
+		return &domain.AthletePortal{GeneratedAt: s.now(), Units: []domain.AthletePortalUnit{}, Notices: []domain.AthleteNotice{}}, nil
+	}
+	now := s.now()
+	units, err := s.portal.LoadAthletePortal(ctx, athleteID, now.Add(-24*time.Hour), now.Add(30*24*time.Hour))
+	if err != nil {
+		return nil, err
+	}
+	return &domain.AthletePortal{GeneratedAt: now, Units: units, Notices: portalNotices(units, now)}, nil
+}
+
+func portalNotices(units []domain.AthletePortalUnit, now time.Time) []domain.AthleteNotice {
+	notices := make([]domain.AthleteNotice, 0)
+	for _, unit := range units {
+		if unit.Plan == nil {
+			notices = append(notices, domain.AthleteNotice{ID: "plan-missing:" + string(unit.MembershipID), MembershipID: unit.MembershipID, Kind: "plan", Severity: "attention", Title: "Plano ainda não disponível", Message: "Fale com " + unit.UnitName + " para conferir sua matrícula.", Action: "plan"})
+		} else if unit.Plan.Status != "active" {
+			notices = append(notices, domain.AthleteNotice{ID: "plan-inactive:" + string(unit.Plan.EnrollmentID), MembershipID: unit.MembershipID, Kind: "plan", Severity: "critical", Title: "Seu plano precisa de atenção", Message: "A matrícula em " + unit.UnitName + " não está vigente.", Action: "plan"})
+		} else if unit.Plan.ValidUntil != nil {
+			validUntil, _ := time.Parse("2006-01-02", *unit.Plan.ValidUntil)
+			if !validUntil.IsZero() && validUntil.Before(now.Add(15*24*time.Hour)) {
+				notices = append(notices, domain.AthleteNotice{ID: "plan-ending:" + string(unit.Plan.EnrollmentID), MembershipID: unit.MembershipID, Kind: "plan", Severity: "attention", Title: "Seu plano vence em breve", Message: "Confira a validade e combine a renovação com " + unit.UnitName + ".", Action: "plan"})
+			}
+		}
+		if unit.Contract != nil && unit.Contract.Status == string(domain.ContractInstanceStatusPendingAcceptance) {
+			notices = append(notices, domain.AthleteNotice{ID: "contract:" + string(unit.Contract.ID), MembershipID: unit.MembershipID, Kind: "contract", Severity: "attention", Title: "Contrato aguardando aceite", Message: "Confira o documento e solicite ao box seu link seguro de assinatura.", Action: "contract"})
+		}
+		if unit.Billing.FinancialStatus == "overdue" {
+			notices = append(notices, domain.AthleteNotice{ID: "billing-overdue:" + string(unit.MembershipID), MembershipID: unit.MembershipID, Kind: "billing", Severity: "critical", Title: "Pagamento vencido", Message: "Há uma cobrança em aberto em " + unit.UnitName + ".", Action: "billing"})
+		} else if unit.Billing.FinancialStatus == "pending" {
+			notices = append(notices, domain.AthleteNotice{ID: "billing-pending:" + string(unit.MembershipID), MembershipID: unit.MembershipID, Kind: "billing", Severity: "info", Title: "Próximo pagamento", Message: "Você tem uma cobrança pendente para acompanhar.", Action: "billing"})
+		}
+		for _, session := range unit.Agenda {
+			if session.ReservationStatus == string(domain.ReservationWaitlisted) {
+				position := ""
+				if session.WaitlistPosition != nil {
+					position = fmt.Sprintf(" Você está na posição %d.", *session.WaitlistPosition)
+				}
+				notices = append(notices, domain.AthleteNotice{ID: "waitlist:" + string(session.ID), MembershipID: unit.MembershipID, Kind: "schedule", Severity: "info", Title: "Você está na lista de espera", Message: session.TargetName + "." + position, Action: "schedule"})
+			}
+		}
+	}
+	return notices
 }
 
 func (s *Service) CreateInvitation(ctx context.Context, boxID, studentID, actorUserID domain.ID) (*InvitationOutput, error) {
@@ -159,6 +303,14 @@ func (s *Service) ClaimInvitation(ctx context.Context, input ClaimInput) (*Sessi
 	}
 	if account != nil {
 		athleteID = account.ID
+	}
+	if s.people != nil {
+		// The invitation has already been claimed at this point. Identity
+		// reconciliation is deliberately non-blocking for the athlete session;
+		// any ambiguity is persisted as an owner review instead of merging.
+		if err := s.people.ReconcileAthleteAccount(ctx, invitation.BoxID, invitation.StudentID, athleteID, s.now()); err != nil {
+			slog.Warn("athlete_person_identity_reconciliation_failed", "error_kind", "database")
+		}
 	}
 	return s.newSession(ctx, athleteID)
 }

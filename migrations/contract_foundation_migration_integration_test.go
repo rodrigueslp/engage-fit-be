@@ -142,9 +142,13 @@ func TestContractFoundationUpgradeAndNoBackfill(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Now apply migration 060
-	fullMigrator := New(testDB)
-	appliedFinal, err := fullMigrator.Up(ctx)
+	// Now apply only migration 060. Later migrations are covered by their own
+	// upgrade tests and must not change this test's assertion.
+	through60, err := catalogMigrationFilesThrough(60)
+	if err != nil {
+		t.Fatal(err)
+	}
+	appliedFinal, err := NewWithFS(testDB, through60).Up(ctx)
 	if err != nil {
 		t.Fatalf("apply 060 upgrade: %v", err)
 	}

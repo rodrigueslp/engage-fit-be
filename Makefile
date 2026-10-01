@@ -48,7 +48,7 @@ demo-seed:
 
 demo-reset:
 	$(COMPOSE) exec -T postgres psql "$(DATABASE_URL)" -v ON_ERROR_STOP=1 -c "CREATE UNIQUE INDEX IF NOT EXISTS idx_checkins_unique_visit ON checkins (box_id, source, student_id, checkin_date, checkin_time);"
-	$(COMPOSE) exec -T postgres psql "$(DATABASE_URL)" -v ON_ERROR_STOP=1 -c "BEGIN; TRUNCATE TABLE admin_audit_logs, messaging_usage_buckets RESTART IDENTITY CASCADE; DELETE FROM boxes; DELETE FROM organizations; DELETE FROM messaging_policies WHERE scope = 'platform'; COMMIT;"
+	$(COMPOSE) exec -T postgres psql "$(DATABASE_URL)" -v ON_ERROR_STOP=1 -c "BEGIN; TRUNCATE TABLE admin_audit_logs, messaging_usage_buckets, boxes, organizations RESTART IDENTITY CASCADE; DELETE FROM messaging_policies WHERE scope = 'platform'; COMMIT;"
 
 demo-reset-seed: demo-reset demo-seed
 

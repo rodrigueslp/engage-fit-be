@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"time"
 
 	"boxengage/backend/internal/adapters/persistence/postgres/models"
 	"boxengage/backend/internal/domain"
 	portrepo "boxengage/backend/internal/ports/repositories"
 	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 func (r CatalogGormRepository) GetContext(ctx context.Context, unitID domain.ID) (*domain.CatalogContext, error) {
@@ -38,9 +40,9 @@ func (r CatalogGormRepository) GetContext(ctx context.Context, unitID domain.ID)
 
 func (r CatalogGormRepository) ListModalities(ctx context.Context, organizationID, unitID domain.ID, includeArchived bool) ([]domain.Modality, error) {
 	query := databaseForContext(r.db, ctx).Table("modalities m").
-		Select("m.*, um.active AS active_in_unit").
-		Joins("JOIN unit_modalities um ON um.modality_id = m.id AND um.organization_id = m.organization_id").
-		Where("m.organization_id = ? AND um.unit_id = ? AND um.organization_id = ?", stringID(organizationID), stringID(unitID), stringID(organizationID))
+		Select("m.*, COALESCE(um.active, FALSE) AS active_in_unit").
+		Joins("LEFT JOIN unit_modalities um ON um.modality_id = m.id AND um.organization_id = m.organization_id AND um.unit_id = ?", stringID(unitID)).
+		Where("m.organization_id = ?", stringID(organizationID))
 	if !includeArchived {
 		query = query.Where("m.status = ?", string(domain.CatalogStatusActive))
 	}
@@ -58,9 +60,9 @@ func (r CatalogGormRepository) ListModalities(ctx context.Context, organizationI
 func (r CatalogGormRepository) FindModality(ctx context.Context, organizationID, unitID, modalityID domain.ID) (*domain.Modality, error) {
 	var row modalityRow
 	err := databaseForContext(r.db, ctx).Table("modalities m").
-		Select("m.*, um.active AS active_in_unit").
-		Joins("JOIN unit_modalities um ON um.modality_id = m.id AND um.organization_id = m.organization_id").
-		Where("m.id = ? AND m.organization_id = ? AND um.unit_id = ? AND um.organization_id = ?", stringID(modalityID), stringID(organizationID), stringID(unitID), stringID(organizationID)).
+		Select("m.*, COALESCE(um.active, FALSE) AS active_in_unit").
+		Joins("LEFT JOIN unit_modalities um ON um.modality_id = m.id AND um.organization_id = m.organization_id AND um.unit_id = ?", stringID(unitID)).
+		Where("m.id = ? AND m.organization_id = ?", stringID(modalityID), stringID(organizationID)).
 		Take(&row).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -102,23 +104,16 @@ func (r CatalogGormRepository) CreateUnitModality(ctx context.Context, associati
 }
 
 func (r CatalogGormRepository) SetUnitModalityActive(ctx context.Context, organizationID, unitID, modalityID domain.ID, active bool) error {
-	result := databaseForContext(r.db, ctx).Model(&models.UnitModalityModel{}).
-		Where("organization_id = ? AND unit_id = ? AND modality_id = ?", stringID(organizationID), stringID(unitID), stringID(modalityID)).
-		Update("active", active)
-	if result.Error != nil {
-		return result.Error
-	}
-	if result.RowsAffected == 0 {
-		return portrepo.ErrCatalogModalityNotFound
-	}
-	return nil
+	now := time.Now().UTC()
+	item := models.UnitModalityModel{OrganizationID: stringID(organizationID), UnitID: stringID(unitID), ModalityID: stringID(modalityID), Active: active, CreatedAt: now, UpdatedAt: now}
+	return databaseForContext(r.db, ctx).Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "unit_id"}, {Name: "modality_id"}}, DoUpdates: clause.Assignments(map[string]any{"active": active, "updated_at": now})}).Create(&item).Error
 }
 
 func (r CatalogGormRepository) ListServiceOfferings(ctx context.Context, organizationID, unitID domain.ID, includeArchived bool) ([]domain.ServiceOffering, error) {
 	query := databaseForContext(r.db, ctx).Table("service_offerings so").
-		Select("so.*, uso.active AS active_in_unit").
-		Joins("JOIN unit_service_offerings uso ON uso.service_offering_id = so.id AND uso.organization_id = so.organization_id").
-		Where("so.organization_id = ? AND uso.unit_id = ? AND uso.organization_id = ?", stringID(organizationID), stringID(unitID), stringID(organizationID))
+		Select("so.*, COALESCE(uso.active, FALSE) AS active_in_unit").
+		Joins("LEFT JOIN unit_service_offerings uso ON uso.service_offering_id = so.id AND uso.organization_id = so.organization_id AND uso.unit_id = ?", stringID(unitID)).
+		Where("so.organization_id = ?", stringID(organizationID))
 	if !includeArchived {
 		query = query.Where("so.status = ?", string(domain.CatalogStatusActive))
 	}
@@ -136,9 +131,9 @@ func (r CatalogGormRepository) ListServiceOfferings(ctx context.Context, organiz
 func (r CatalogGormRepository) FindServiceOffering(ctx context.Context, organizationID, unitID, serviceOfferingID domain.ID) (*domain.ServiceOffering, error) {
 	var row serviceOfferingRow
 	err := databaseForContext(r.db, ctx).Table("service_offerings so").
-		Select("so.*, uso.active AS active_in_unit").
-		Joins("JOIN unit_service_offerings uso ON uso.service_offering_id = so.id AND uso.organization_id = so.organization_id").
-		Where("so.id = ? AND so.organization_id = ? AND uso.unit_id = ? AND uso.organization_id = ?", stringID(serviceOfferingID), stringID(organizationID), stringID(unitID), stringID(organizationID)).
+		Select("so.*, COALESCE(uso.active, FALSE) AS active_in_unit").
+		Joins("LEFT JOIN unit_service_offerings uso ON uso.service_offering_id = so.id AND uso.organization_id = so.organization_id AND uso.unit_id = ?", stringID(unitID)).
+		Where("so.id = ? AND so.organization_id = ?", stringID(serviceOfferingID), stringID(organizationID)).
 		Take(&row).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -180,16 +175,9 @@ func (r CatalogGormRepository) CreateUnitServiceOffering(ctx context.Context, as
 }
 
 func (r CatalogGormRepository) SetUnitServiceOfferingActive(ctx context.Context, organizationID, unitID, serviceOfferingID domain.ID, active bool) error {
-	result := databaseForContext(r.db, ctx).Model(&models.UnitServiceOfferingModel{}).
-		Where("organization_id = ? AND unit_id = ? AND service_offering_id = ?", stringID(organizationID), stringID(unitID), stringID(serviceOfferingID)).
-		Update("active", active)
-	if result.Error != nil {
-		return result.Error
-	}
-	if result.RowsAffected == 0 {
-		return portrepo.ErrCatalogServiceOfferingNotFound
-	}
-	return nil
+	now := time.Now().UTC()
+	item := models.UnitServiceOfferingModel{OrganizationID: stringID(organizationID), UnitID: stringID(unitID), ServiceOfferingID: stringID(serviceOfferingID), Active: active, CreatedAt: now, UpdatedAt: now}
+	return databaseForContext(r.db, ctx).Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "unit_id"}, {Name: "service_offering_id"}}, DoUpdates: clause.Assignments(map[string]any{"active": active, "updated_at": now})}).Create(&item).Error
 }
 
 // ResolvePlanReferences is the catalog module's public read contract for plan
@@ -241,6 +229,56 @@ func (r CatalogGormRepository) ResolvePlanReferences(ctx context.Context, organi
 		for _, row := range rows {
 			result = append(result, domain.CatalogPlanReference{ID: domainID(row.ID), Type: "service_offering", Name: row.Name, Status: domain.CatalogStatus(row.Status), ActiveInUnit: row.ActiveInUnit})
 		}
+	}
+	return result, nil
+}
+
+func (r CatalogGormRepository) ResolveSchedulingReferences(ctx context.Context, organizationID, unitID domain.ID, targetKind domain.ScheduleTargetKind, targetID domain.ID, spaceID *domain.ID) (*domain.ScheduleResolvedReferences, error) {
+	db := databaseForContext(r.db, ctx)
+	result := &domain.ScheduleResolvedReferences{}
+	switch targetKind {
+	case domain.ScheduleTargetModality:
+		var row struct {
+			ID, Name, Status string
+			ActiveInUnit     bool
+		}
+		err := db.Table("modalities m").Select("m.id, m.name, m.status, COALESCE(um.active,false) AS active_in_unit").Joins("LEFT JOIN unit_modalities um ON um.modality_id=m.id AND um.unit_id=? AND um.organization_id=m.organization_id", stringID(unitID)).Where("m.id=? AND m.organization_id=?", stringID(targetID), stringID(organizationID)).Take(&row).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, portrepo.ErrScheduleTargetUnavailable
+		}
+		if err != nil {
+			return nil, err
+		}
+		result.Target = domain.ScheduleReference{ID: domainID(row.ID), Kind: targetKind, DisplayName: row.Name, Status: row.Status, EnabledInUnit: row.ActiveInUnit}
+	case domain.ScheduleTargetService:
+		var row struct {
+			ID, Name, Status string
+			ActiveInUnit     bool
+		}
+		err := db.Table("service_offerings so").Select("so.id, so.name, so.status, COALESCE(uso.active,false) AS active_in_unit").Joins("LEFT JOIN unit_service_offerings uso ON uso.service_offering_id=so.id AND uso.unit_id=? AND uso.organization_id=so.organization_id", stringID(unitID)).Where("so.id=? AND so.organization_id=?", stringID(targetID), stringID(organizationID)).Take(&row).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, portrepo.ErrScheduleTargetUnavailable
+		}
+		if err != nil {
+			return nil, err
+		}
+		result.Target = domain.ScheduleReference{ID: domainID(row.ID), Kind: targetKind, DisplayName: row.Name, Status: row.Status, EnabledInUnit: row.ActiveInUnit}
+	default:
+		return nil, portrepo.ErrScheduleTargetUnavailable
+	}
+	if spaceID != nil {
+		var row struct {
+			ID, Name, Status string
+			DefaultCapacity  *int
+		}
+		err := db.Table("spaces s").Select("s.id,s.name,s.status,s.default_capacity").Joins("JOIN boxes b ON b.id=s.unit_id AND b.organization_id=?", stringID(organizationID)).Where("s.id=? AND s.unit_id=?", stringID(*spaceID), stringID(unitID)).Take(&row).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, portrepo.ErrScheduleSpaceUnavailable
+		}
+		if err != nil {
+			return nil, err
+		}
+		result.Space = &domain.ScheduleReference{ID: domainID(row.ID), DisplayName: row.Name, Status: row.Status, EnabledInUnit: row.Status == "active", DefaultCapacity: row.DefaultCapacity}
 	}
 	return result, nil
 }

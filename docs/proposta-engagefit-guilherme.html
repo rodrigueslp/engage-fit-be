@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#07111f" />
+  <title>EngageFit — proposta de produto e sociedade</title>
+  <style>
+    :root {
+      --navy: #07111f;
+      --navy-2: #0d1d31;
+      --ink: #142238;
+      --muted: #64748b;
+      --line: #dce6f0;
+      --paper: #f6f9fc;
+      --white: #fff;
+      --orange: #ff7a35;
+      --orange-2: #ffb36e;
+      --cyan: #39c6cf;
+      --green: #32b37b;
+      --purple: #8a76ec;
+      --shadow: 0 18px 45px rgba(14, 35, 61, .10);
+      --radius: 20px;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--paper);
+      font: 15px/1.65 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    a { color: inherit; }
+    .shell { display: grid; grid-template-columns: 270px minmax(0, 1fr); min-height: 100vh; }
+    aside {
+      position: sticky; top: 0; height: 100vh; overflow: auto; padding: 28px 20px;
+      color: #dbe8f6; background: linear-gradient(165deg, var(--navy), #102a43 70%, #12334b);
+    }
+    .brand { display:flex; align-items:center; margin-bottom: 34px; }
+    .brand-logo { display:block; width: 176px; height:auto; padding:6px 9px; border-radius:10px; background:#fff; box-shadow: 0 8px 24px rgba(0,0,0,.16); }
+    .eyebrow { text-transform:uppercase; letter-spacing:.15em; font-size:10px; font-weight:800; color: var(--orange-2); }
+    aside .eyebrow { margin-bottom: 8px; }
+    nav { display:grid; gap: 5px; }
+    nav a { text-decoration:none; padding: 9px 11px; border-radius: 10px; color:#a9bfd5; font-size: 13px; transition:.2s; }
+    nav a:hover, nav a.active { color:#fff; background: rgba(255,255,255,.10); }
+    .side-note { margin-top: 34px; padding: 15px; border:1px solid rgba(255,255,255,.11); border-radius: 14px; color:#a9bfd5; font-size:12px; }
+    main { min-width:0; }
+    .hero { position:relative; overflow:hidden; padding: 76px clamp(25px, 6vw, 90px) 68px; color:#fff; background: radial-gradient(circle at 85% 5%, rgba(57,198,207,.30), transparent 28%), radial-gradient(circle at 12% 100%, rgba(255,122,53,.21), transparent 30%), linear-gradient(135deg, #081321, #15304a); }
+    .hero::before { content:""; position:absolute; width:480px; height:480px; right:-180px; top:-245px; border:1px solid rgba(255,255,255,.13); border-radius:50%; box-shadow:0 0 0 45px rgba(255,255,255,.025), 0 0 0 90px rgba(255,255,255,.018); }
+    .hero-content { position:relative; max-width: 920px; }
+    .hero-logo { display:block; width:205px; height:auto; padding:8px 12px; margin-bottom:25px; border-radius:13px; background:#fff; box-shadow:0 10px 28px rgba(0,0,0,.15); }
+    h1 { max-width: 850px; margin: 15px 0 18px; font-size: clamp(36px, 6vw, 72px); line-height:1.01; letter-spacing:-.065em; }
+    .hero p { max-width: 750px; margin:0; color:#bdd0e3; font-size: 18px; }
+    .hero-meta { display:flex; flex-wrap:wrap; gap:10px; margin-top:28px; }
+    .chip { display:inline-flex; align-items:center; gap:7px; padding:7px 11px; border-radius:999px; border:1px solid rgba(255,255,255,.16); color:#dceafa; background:rgba(255,255,255,.07); font-size:12px; }
+    .dot { width:7px; height:7px; border-radius:50%; background:var(--orange); }
+    .wrap { max-width: 1180px; margin:0 auto; padding: 0 clamp(22px, 5vw, 76px); }
+    section { padding: 76px 0 10px; scroll-margin-top: 24px; }
+    .section-head { display:flex; justify-content:space-between; align-items:end; gap:24px; margin-bottom:28px; }
+    .section-head h2 { margin:7px 0 0; font-size:clamp(26px, 3vw, 41px); line-height:1.08; letter-spacing:-.045em; }
+    .section-head p { max-width: 510px; margin:0; color:var(--muted); }
+    .lead { max-width: 780px; font-size:18px; color:#43556c; }
+    .grid { display:grid; gap:16px; }
+    .grid-2 { grid-template-columns:repeat(2, minmax(0,1fr)); }
+    .grid-3 { grid-template-columns:repeat(3, minmax(0,1fr)); }
+    .grid-4 { grid-template-columns:repeat(4, minmax(0,1fr)); }
+    .card { background:var(--white); border:1px solid var(--line); border-radius:var(--radius); padding:22px; box-shadow:var(--shadow); }
+    .card h3 { margin:0 0 7px; font-size:17px; letter-spacing:-.02em; }
+    .card p { margin:0; color:var(--muted); }
+    .card ul, .panel ul { margin:11px 0 0; padding-left:19px; color:#50647d; }
+    .card li + li, .panel li + li { margin-top:4px; }
+    .metric { padding:23px; background:linear-gradient(145deg, #fff, #f1f6fa); }
+    .metric strong { display:block; font-size:31px; letter-spacing:-.06em; color:var(--navy); }
+    .metric span { color:var(--muted); font-size:12px; }
+    .callout { display:flex; gap:16px; align-items:flex-start; padding:23px; color:#fff; border-radius:var(--radius); background:linear-gradient(135deg, #102940, #0b1727); box-shadow:var(--shadow); }
+    .callout-mark { flex:0 0 36px; width:36px; height:36px; display:grid; place-items:center; border-radius:12px; color:var(--navy); background:var(--orange); font-weight:900; }
+    .callout p { margin:0; color:#c8d8e8; }
+    .callout strong { color:#fff; }
+    .table-wrap { overflow:auto; border:1px solid var(--line); border-radius:var(--radius); background:#fff; box-shadow:var(--shadow); }
+    table { width:100%; border-collapse:collapse; min-width:720px; }
+    th, td { padding:16px 17px; text-align:left; vertical-align:top; border-bottom:1px solid var(--line); }
+    th { color:#6a7b91; background:#f4f8fb; font-size:11px; text-transform:uppercase; letter-spacing:.1em; }
+    tr:last-child td { border-bottom:0; }
+    td small { color:var(--muted); }
+    .tag { display:inline-flex; padding:4px 8px; border-radius:7px; font-size:11px; font-weight:800; white-space:nowrap; }
+    .tag.p0 { color:#9d3e12; background:#fff0e7; }
+    .tag.p1 { color:#126b55; background:#e6f7f0; }
+    .tag.p2 { color:#5141a5; background:#eeeafe; }
+    .tag.now { color:#087b7f; background:#e0f7f7; }
+    .tag.gap { color:#a04b0d; background:#fff2dc; }
+    .timeline { position:relative; display:grid; gap:14px; }
+    .timeline::before { content:""; position:absolute; left:21px; top:24px; bottom:24px; width:2px; background:linear-gradient(var(--orange), var(--cyan)); opacity:.45; }
+    .step { position:relative; display:grid; grid-template-columns:44px 1fr; gap:15px; align-items:start; }
+    .step-no { width:44px; height:44px; display:grid; place-items:center; border-radius:14px; color:#fff; background:var(--navy); border:4px solid var(--paper); z-index:1; font-weight:800; }
+    .step-body { padding:18px 20px; border:1px solid var(--line); border-radius:16px; background:#fff; }
+    .step-body h3 { margin:0 0 4px; font-size:16px; }
+    .step-body p { margin:0; color:var(--muted); }
+    .step-body .date { color:var(--orange); font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.1em; }
+    .bar { height:8px; overflow:hidden; border-radius:999px; background:#e6edf3; }
+    .bar i { display:block; height:100%; border-radius:inherit; background:linear-gradient(90deg,var(--orange),var(--cyan)); }
+    .score { display:grid; gap:10px; }
+    .score-row { display:grid; grid-template-columns:150px 1fr 42px; gap:12px; align-items:center; color:#52677e; font-size:13px; }
+    blockquote { margin:0; padding:26px 28px; border-left:4px solid var(--orange); border-radius:0 16px 16px 0; color:var(--navy); background:#fff; box-shadow:var(--shadow); font-size:21px; line-height:1.4; letter-spacing:-.02em; }
+    .quote-by { display:block; margin-top:12px; font-size:12px; color:var(--muted); letter-spacing:0; }
+    .mini-nav { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:20px; }
+    .mini-nav button { cursor:pointer; border:1px solid var(--line); background:#fff; color:#5d7188; padding:8px 12px; border-radius:999px; font:inherit; font-size:12px; }
+    .mini-nav button.active, .mini-nav button:hover { color:#fff; border-color:var(--navy); background:var(--navy); }
+    .priority-panel { display:none; }
+    .priority-panel.active { display:block; }
+    footer { margin-top:90px; padding:38px clamp(22px, 5vw, 76px); color:#93a9be; background:var(--navy); }
+    footer strong { color:#fff; }
+    @media (max-width: 900px) { .shell { display:block; } aside { position:relative; height:auto; padding:18px 20px; } nav { display:flex; overflow:auto; padding-bottom:3px; } nav a { white-space:nowrap; } .side-note { display:none; } .hero { padding-top:54px; } .grid-4 { grid-template-columns:repeat(2, minmax(0,1fr)); } }
+    @media (max-width: 620px) { .grid-2, .grid-3, .grid-4 { grid-template-columns:1fr; } .section-head { display:block; } .section-head p { margin-top:13px; } h1 { font-size:43px; } .hero p { font-size:16px; } .score-row { grid-template-columns:115px 1fr 32px; font-size:12px; } blockquote { font-size:18px; } }
+    @media print { aside { display:none; } .shell { display:block; } .hero { color:#000; background:#fff; padding:35px 0; } .hero p, .chip { color:#334; } .wrap { padding:0; } .card, .table-wrap, blockquote { box-shadow:none; } section { padding-top:35px; } }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside>
+      <div class="brand"><img class="brand-logo" src="../../engage-fit-fe/public/engagefit-logo-cropped.png" alt="EngageFit" /></div>
+      <div class="eyebrow">Proposta executiva</div>
+      <nav aria-label="Navegação da proposta">
+        <a href="#visao">Visão</a><a href="#benchmark">Benchmark</a><a href="#produto">Produto</a><a href="#roadmap">Roadmap</a><a href="#negocio">Negócio</a><a href="#sociedade">Sociedade</a><a href="#reuniao">Reunião</a>
+      </nav>
+      <div class="side-note">Visão de evolução do EngageFit para boxes e centros de treinamento.<br><br><strong>10 de agosto de 2026</strong></div>
+    </aside>
+    <main>
+      <header class="hero" id="visao">
+        <div class="hero-content">
+          <img class="hero-logo" src="../../engage-fit-fe/public/engagefit-logo-cropped.png" alt="EngageFit" />
+          <div class="eyebrow">EngageFit × CrossFit Alados</div>
+          <h1>O sistema essencial para o box crescer sem complicar a operação.</h1>
+          <p>Uma plataforma que conecta cadastro, contratos, cobrança, agenda, treino, frequência e retenção em uma experiência simples para o gestor e valiosa para o aluno.</p>
+          <div class="hero-meta"><span class="chip"><i class="dot"></i> Visão de produto</span><span class="chip">Nova unidade em novembro</span><span class="chip">Próximos passos</span></div>
+        </div>
+      </header>
+
+      <div class="wrap">
+        <section>
+          <div class="callout"><div class="callout-mark">↗</div><p><strong>A tese:</strong> não competir apenas por preço. O EngageFit deve vencer por simplicidade operacional, implantação próxima e uma camada de retenção que já faz parte do produto — da cobrança ao retorno do aluno.</p></div>
+        </section>
+
+        <section>
+          <div class="grid grid-4">
+            <div class="card metric"><strong>52</strong><span>migrations e fundação multi-tenant já publicadas</span></div>
+            <div class="card metric"><strong>3</strong><span>frentes atuais: gestão, engajamento e app do aluno</span></div>
+            <div class="card metric"><strong>1</strong><span>unidade flagship para validar o novo produto</span></div>
+            <div class="card metric"><strong>90</strong><span>dias ideais para provar o primeiro ciclo de valor</span></div>
+          </div>
+        </section>
+
+        <section id="benchmark">
+          <div class="section-head"><div><div class="eyebrow">01 — mercado</div><h2>O benchmark orienta a tese.</h2></div><p>Tecnofit e Next Fit já cobrem grande parte da gestão. A oportunidade está no foco, na experiência e na proximidade com o cliente.</p></div>
+          <div class="table-wrap"><table><thead><tr><th>Dimensão</th><th>Tecnofit</th><th>Next Fit</th><th>Implicação para o EngageFit</th></tr></thead><tbody>
+            <tr><td><strong>Gestão</strong></td><td>Agenda, presença, acesso, vendas, financeiro, WOD e multiunidade.</td><td>Planos, contratos, vendas, financeiro, CRM, treinos e relatórios.</td><td>Entregar o essencial em menos telas e com linguagem de box.</td></tr>
+            <tr><td><strong>Pagamentos</strong></td><td>Recorrência, boleto, Pix, cartão e gateways.</td><td>Recorrência, Pix, boleto, cartão, inadimplência e antecipação.</td><td>Esta é a fronteira de confiança: cobrança precisa ser impecável.</td></tr>
+            <tr><td><strong>Aluno</strong></td><td>App para aluno e gestor; app personalizado como adicional.</td><td>App com pagamentos, contratos, treinos, agenda e comunidade.</td><td>Fazer do app uma jornada: reservar → treinar → pagar → voltar.</td></tr>
+            <tr><td><strong>Comercial</strong></td><td>Captação, marketing automatizado e WhatsApp.</td><td>CRM, funil, site de vendas, aulas experimentais e IA.</td><td>Começar com CRM simples e retenção mensurável.</td></tr>
+            <tr><td><strong>Modelo</strong></td><td>Preço público observado: R$ 269/mês para 50 alunos + implantação; adicionais existem.</td><td>Posiciona-se como simples, completo e de melhor preço; propostas variam por perfil.</td><td>Preço transparente e menor custo total, sem guerra de preço.</td></tr>
+          </tbody></table></div>
+          <div class="grid grid-2" style="margin-top:16px"><div class="card"><h3>O que eles fazem melhor</h3><p>Amplitude, integrações, suporte, implantação e maturidade financeira.</p></div><div class="card"><h3>Onde podemos ganhar</h3><p>Fluxos mais curtos, progressiva simplicidade, retenção nativa e proximidade comercial.</p></div></div>
+        </section>
+
+        <section id="produto">
+          <div class="section-head"><div><div class="eyebrow">02 — produto</div><h2>Um produto. Dois públicos. Uma jornada.</h2></div><p>O gestor precisa de clareza e ação. O aluno precisa de autonomia, informação e vínculo com o box.</p></div>
+          <div class="grid grid-2">
+            <div class="card"><h3>App do gestor</h3><ul><li>Tela “Hoje” com aulas, pagamentos e pessoas que precisam de atenção.</li><li>Cadastro mínimo: nome, WhatsApp e CPF.</li><li>Planos, contratos, matrículas e trancamentos.</li><li>Agenda, capacidade, reservas e lista de espera.</li><li>Financeiro, inadimplência e conciliação.</li><li>Papéis para dono, gerente, recepção, financeiro e coach.</li></ul></div>
+            <div class="card"><h3>App do aluno</h3><ul><li>Próxima aula, treino do dia e avisos importantes.</li><li>Reserva, cancelamento e lista de espera.</li><li>Plano atual, contrato e pagamentos.</li><li>Resultados, histórico, PRs e evolução.</li><li>Eventos especiais e notificações.</li><li>Inbox e preferências de comunicação.</li></ul></div>
+          </div>
+          <div class="grid grid-3" style="margin-top:16px">
+            <div class="card"><h3>Princípio 1 — essencial</h3><p>O cadastro começa com três dados. O restante aparece apenas quando tem uma finalidade concreta.</p></div>
+            <div class="card"><h3>Princípio 2 — ação</h3><p>Todo indicador deve levar a uma ação: cobrar, contatar, reservar, confirmar ou resolver.</p></div>
+            <div class="card"><h3>Princípio 3 — confiança</h3><p>Dinheiro, identidade, contratos e comunicações precisam de auditoria, consentimento e reversibilidade.</p></div>
+          </div>
+        </section>
+
+        <section>
+          <div class="section-head"><div><div class="eyebrow">02.1 — escopo</div><h2>O que construir primeiro.</h2></div><p>O foco de novembro é uma operação real e confiável para a nova unidade — não um ERP infinito.</p></div>
+          <div class="mini-nav" role="tablist"><button class="active" data-priority="p0">Fase 1 · novembro</button><button data-priority="p1">Fase 2 · evolução</button><button data-priority="p2">Fase 3 · escala</button></div>
+          <div class="priority-panel active" data-panel="p0"><div class="table-wrap"><table><thead><tr><th>Módulo</th><th>Entrega</th><th>Por quê</th></tr></thead><tbody>
+            <tr><td><span class="tag p0">Fase 1</span> Organização</td><td>Organização, unidades, modalidades e espaços.</td><td>Base para Alados CrossFit, musculação e spinning.</td></tr>
+            <tr><td><span class="tag p0">Fase 1</span> Pessoa</td><td>Cadastro mínimo, vínculo, status e histórico unificado.</td><td>Entrada simples e visão completa do aluno.</td></tr>
+            <tr><td><span class="tag p0">Fase 1</span> Planos</td><td>Modelos de planos, acesso, limites e renovação.</td><td>Regras claras para cada modalidade.</td></tr>
+            <tr><td><span class="tag p0">Fase 1</span> Contratos</td><td>Template, aceite/assinatura, trancamento, cancelamento e auditoria.</td><td>Vínculo jurídico e operacional do aluno.</td></tr>
+            <tr><td><span class="tag p0">Fase 1</span> Financeiro</td><td>Recorrência via provedor, Pix, boleto, cartão, webhooks e conciliação.</td><td>Previsibilidade para o box e praticidade para o aluno.</td></tr>
+            <tr><td><span class="tag p0">Fase 1</span> Agenda</td><td>Grade, capacidade, reserva, cancelamento, no-show e lista de espera.</td><td>Essencial para CrossFit e spinning.</td></tr>
+            <tr><td><span class="tag p0">Fase 1</span> App aluno</td><td>Treino atual, agenda, pagamento, avisos e perfil.</td><td>Uma experiência única para o aluno.</td></tr>
+            <tr><td><span class="tag p0">Fase 1</span> Retenção</td><td>Radar, tarefas, mensagens consentidas e retorno após intervenção.</td><td>Diferencial central do EngageFit.</td></tr>
+            <tr><td><span class="tag p0">Fase 1</span> Integrações</td><td>Processo de parceria e homologação com Wellhub e TotalPass.</td><td>Centraliza presenças e reservas das plataformas corporativas.</td></tr>
+          </tbody></table></div></div>
+          <div class="priority-panel" data-panel="p1"><div class="grid grid-3"><div class="card"><h3>Receita</h3><p>Régua de inadimplência, CRM, aulas experimentais, site de vendas e indicações.</p></div><div class="card"><h3>Relacionamento</h3><p>Eventos, NPS, desafios, comunidade e WhatsApp em duas vias.</p></div><div class="card"><h3>Gestão</h3><p>Indicadores financeiros, trancamento self-service, DRE simples e multiunidade consolidada.</p></div></div></div>
+          <div class="priority-panel" data-panel="p2"><div class="grid grid-3"><div class="card"><h3>Integrações</h3><p>Catracas, biometria, reconhecimento facial, NFS-e, API pública e wearables.</p></div><div class="card"><h3>Operação avançada</h3><p>Estoque, loja/POS, comissões, avaliações físicas e prescrição individual.</p></div><div class="card"><h3>Distribuição</h3><p>Apps nativos, white-label e implantação automatizada em escala.</p></div></div></div>
+        </section>
+
+        <section>
+          <div class="section-head"><div><div class="eyebrow">02.2 — fluxos</div><h2>Os quatro ciclos que o produto precisa fechar.</h2></div></div>
+          <div class="grid grid-2">
+            <div class="card"><h3>1. Matrícula</h3><p>Lead → cadastro mínimo → plano → contrato → pagamento → convite do app → primeira reserva.</p></div>
+            <div class="card"><h3>2. Aula</h3><p>Grade → reserva → lista de espera → lembrete → check-in → presença → histórico.</p></div>
+            <div class="card"><h3>3. Cobrança</h3><p>Vencimento → webhook → recibo → falha → régua → tolerância → regularização.</p></div>
+            <div class="card"><h3>4. Retenção</h3><p>Sinal → fila de ação → contato humano → motivo → retorno em 3/7/14 dias → resultado.</p></div>
+          </div>
+        </section>
+
+        <section>
+          <div class="section-head"><div><div class="eyebrow">02.3 — integrações</div><h2>Wellhub e TotalPass fazem parte do caminho.</h2></div><p>A integração nativa é factível e necessária para que o EngageFit seja o sistema principal também para alunos que usam plataformas corporativas.</p></div>
+          <div class="callout"><div class="callout-mark">↔</div><p>O aluno continua fazendo o check-in no aplicativo Wellhub ou TotalPass. O EngageFit recebe essa informação, registra a presença e exibe o resultado para o box e para o aluno. Para mensalistas, o check-in acontece diretamente no EngageFit.</p></div>
+          <div class="grid grid-3" style="margin-top:16px">
+            <div class="card"><h3>1. Formalização</h3><p>Concluir a empresa, apresentar o EngageFit como sistema parceiro e solicitar o processo de integração junto às plataformas.</p></div>
+            <div class="card"><h3>2. Homologação</h3><p>Receber as orientações, realizar os testes com o Alados e validar check-ins, aulas, reservas e cancelamentos.</p></div>
+            <div class="card"><h3>3. Operação</h3><p>Configurar cada unidade, ativar a integração e acompanhar a conciliação das presenças e reservas.</p></div>
+          </div>
+          <div class="grid grid-2" style="margin-top:16px"><div class="card"><h3>TotalPass</h3><p>A TotalPass possui um processo formal para ERPs, com APIs de validação de check-in e reservas de aulas. A integração precisa ser solicitada, desenvolvida e homologada.</p><p style="margin-top:10px"><a href="https://ajuda.totalpass.com.br/hc/pt-br/articles/48941417163931-Quais-s%C3%A3o-as-etapas-para-se-integrar-%C3%A0-TotalPass" target="_blank" rel="noreferrer">Ver processo oficial →</a></p></div><div class="card"><h3>Wellhub</h3><p>O Wellhub também oferece integração para sistemas parceiros, com check-ins e reservas centralizados. O primeiro passo é solicitar o cadastro e seguir a orientação da equipe.</p><p style="margin-top:10px"><a href="https://wellhub.com/pt-br/partners/integrate-with-wellhub/" target="_blank" rel="noreferrer">Ver processo oficial →</a></p></div></div>
+          <div class="card" style="margin-top:16px"><h3>Durante a transição</h3><p>Enquanto a homologação não estiver concluída, o piloto pode usar importação de arquivos e validações assistidas. Essa é uma etapa temporária; a operação definitiva deve sincronizar as plataformas em tempo real.</p></div>
+        </section>
+
+        <section id="roadmap">
+          <div class="section-head"><div><div class="eyebrow">03 — execução</div><h2>Roadmap macro até novembro.</h2></div><p>O cronograma combina evolução do produto, validação com o Alados e preparação cuidadosa da nova unidade.</p></div>
+          <div class="timeline">
+            <div class="step"><div class="step-no">01</div><div class="step-body"><div class="date">10–21 ago</div><h3>Descoberta e fechamento do escopo</h3><p>Observar a operação do Alados, fechar os critérios de sucesso e iniciar a formalização das integrações com Wellhub e TotalPass.</p></div></div>
+            <div class="step"><div class="step-no">02</div><div class="step-body"><div class="date">24 ago–11 set</div><h3>Fundação</h3><p>Organização, unidades, pessoa, cadastro mínimo, papéis, modalidades, planos e regras de acesso.</p></div></div>
+            <div class="step"><div class="step-no">03</div><div class="step-body"><div class="date">14 set–9 out</div><h3>Contratos e pagamentos</h3><p>Venda, assinatura, subconta/conta do box, checkout, recorrência, webhooks, conciliação, falhas e estornos.</p></div></div>
+            <div class="step"><div class="step-no">04</div><div class="step-body"><div class="date">14 set–16 out</div><h3>Agenda e experiência do aluno</h3><p>Grade, capacidade, reserva, lista de espera, check-in, notificações e integração com a PWA existente.</p></div></div>
+            <div class="step"><div class="step-no">05</div><div class="step-body"><div class="date">19 out–6 nov</div><h3>Estabilização e treinamento</h3><p>Migração ensaiada, testes de integração e pagamentos, permissões, treinamento de recepção/coaches e preparação da operação.</p></div></div>
+            <div class="step"><div class="step-no">06</div><div class="step-body"><div class="date">novembro</div><h3>Início da nova unidade</h3><p>Operação acompanhada, conciliação diária, suporte próximo e expansão gradual para as demais unidades.</p></div></div>
+          </div>
+        </section>
+
+        <section>
+          <div class="section-head"><div><div class="eyebrow">03.1 — sucesso</div><h2>Como saberemos que funcionou.</h2></div></div>
+          <div class="grid grid-3">
+            <div class="card"><h3>Operação</h3><ul><li>Cadastro em menos de 2 minutos.</li><li>95% das reservas sem ajuda da recepção.</li><li>Zero divergências críticas de cobrança.</li></ul></div>
+            <div class="card"><h3>Aluno</h3><ul><li>Primeira reserva no app.</li><li>Uso recorrente do treino e agenda.</li><li>Notificações abertas e úteis.</li></ul></div>
+            <div class="card"><h3>Negócio</h3><ul><li>Pagamentos até o vencimento.</li><li>Retorno após intervenção.</li><li>Retenção em 30, 60 e 90 dias.</li></ul></div>
+          </div>
+        </section>
+
+        <section id="negocio">
+          <div class="section-head"><div><div class="eyebrow">04 — negócio</div><h2>Preço e entrada no mercado.</h2></div><p>Preço menor pode ajudar na entrada, mas não deve ser a única razão para trocar um sistema que controla dinheiro.</p></div>
+          <div class="grid grid-3">
+            <div class="card"><h3>Founders</h3><p><strong>R$ 249–299/unidade</strong></p><p style="margin-top:9px">Para os primeiros clientes, por 12 meses, em troca de feedback, case e autorização de referência.</p></div>
+            <div class="card"><h3>Growth</h3><p><strong>R$ 399–499/unidade</strong></p><p style="margin-top:9px">Mais alunos, automações, WhatsApp e relatórios. Taxas de pagamento transparentes.</p></div>
+            <div class="card"><h3>Multiunidade</h3><p><strong>Proposta personalizada</strong></p><p style="margin-top:9px">Consolidação de unidades, papéis, regras compartilhadas e indicadores comparativos.</p></div>
+          </div>
+          <div class="grid grid-2" style="margin-top:16px"><blockquote>“O EngageFit não precisa ser o sistema com mais telas. Precisa ser o sistema que o dono realmente usa todos os dias.”<span class="quote-by">Princípio de posicionamento</span></blockquote><div class="card"><h3>Validação comercial</h3><ol><li>20 contatos selecionados.</li><li>10 entrevistas.</li><li>8 demonstrações.</li><li>5 interessados.</li><li>3 pilotos pagos.</li></ol></div></div>
+        </section>
+
+        <section>
+          <div class="section-head"><div><div class="eyebrow">04.1 — investimento</div><h2>Estrutura para acelerar com segurança.</h2></div><p>O investimento deve sustentar produto, implantação e operação durante os primeiros meses de validação.</p></div>
+          <div class="grid grid-2"><div class="card"><h3>Frentes de investimento</h3><ul><li>Desenvolvimento e qualidade.</li><li>Design e pesquisa de produto.</li><li>Advogado, contador e formalização.</li><li>Infraestrutura, backup e provedores.</li><li>Vendas, implantação e suporte.</li><li>Reserva para imprevistos.</li></ul></div><div class="card"><h3>Critérios de lançamento</h3><p>A operação financeira deve começar com backup/restore, conciliação, auditoria, estorno, controle de acesso e procedimento de incidente.</p><div class="bar" style="margin-top:18px"><i style="width:72%"></i></div><p style="margin-top:7px;font-size:12px">A fundação atual está avançada; a gestão financeira do aluno é a principal frente de evolução.</p></div></div>
+        </section>
+
+        <section id="sociedade">
+          <div class="section-head"><div><div class="eyebrow">05 — sociedade</div><h2>Como estruturar a parceria.</h2></div><p>A sociedade deve refletir capital, dedicação, responsabilidades, propriedade intelectual e risco compartilhado.</p></div>
+          <div class="grid grid-2">
+            <div class="card"><h3>Critérios para definir a participação</h3><p>Capital investido, produto já construído, dedicação futura, liderança comercial, aquisição de clientes, responsabilidades executivas e risco assumido.</p></div>
+            <div class="card"><h3>Modelo de decisão</h3><p>Definir claramente as áreas de responsabilidade, as decisões conjuntas, os mecanismos de desempate e as regras para entrada ou saída de sócios.</p></div>
+          </div>
+          <div class="grid grid-3" style="margin-top:16px"><div class="card"><h3>Luiz</h3><p>Produto, tecnologia, arquitetura, roadmap, qualidade e propriedade intelectual já construída.</p></div><div class="card"><h3>Guilherme</h3><p>Capital, validação de mercado, vendas, implantação, relacionamento e aquisição de clientes.</p></div><div class="card"><h3>Empresa</h3><p>Marca, código, domínios, contratos, dados operacionais, propriedade intelectual e relacionamento com clientes.</p></div></div>
+        </section>
+
+        <section id="reuniao">
+          <div class="section-head"><div><div class="eyebrow">06 — próximos passos</div><h2>Decisões para iniciar a próxima fase.</h2></div><p>O próximo ciclo deve transformar a visão em um plano conjunto, com responsáveis, datas e critérios claros.</p></div>
+          <div class="grid grid-2"><div class="card"><h3>Produto e mercado</h3><ul><li>Definir o escopo da primeira fase.</li><li>Validar o fluxo da nova unidade.</li><li>Preparar o Alados para iniciar a operação.</li></ul></div><div class="card"><h3>Sociedade e operação</h3><ul><li>Dividir responsabilidades.</li><li>Definir dedicação.</li><li>Preparar a formalização da empresa.</li></ul></div></div>
+        </section>
+
+        <section>
+          <div class="callout"><div class="callout-mark">✓</div><p><strong>Direção sugerida:</strong> usar a nova unidade Alados como unidade fundadora do EngageFit Gestão. Até novembro, evoluir cadastro essencial, planos, contratos, recorrência, agenda, reservas, check-in e o aplicativo integrado ao treino e à retenção. O Alados será o primeiro caso real, enquanto o produto é validado para outros boxes e centros de treinamento.</p></div>
+        </section>
+      </div>
+      <footer><strong>EngageFit</strong> · proposta de produto, mercado e sociedade · preparado em 10 de agosto de 2026<br><span>Fontes de benchmark: <a href="https://www.tecnofit.com.br/precos/">Tecnofit</a> · <a href="https://nextfit.com.br/sistema-para-academia/">Next Fit</a> · <a href="https://docs.asaas.com/docs/creating-subaccounts">Asaas</a> · <a href="https://www.gov.br/saude/pt-br/acesso-a-informacao/lgpd/principios">LGPD</a></span></footer>
+    </main>
+  </div>
+  <script>
+    const buttons = document.querySelectorAll('[data-priority]');
+    const panels = document.querySelectorAll('[data-panel]');
+    buttons.forEach(button => button.addEventListener('click', () => {
+      const key = button.dataset.priority;
+      buttons.forEach(item => item.classList.toggle('active', item === button));
+      panels.forEach(panel => panel.classList.toggle('active', panel.dataset.panel === key));
+    }));
+    const links = [...document.querySelectorAll('nav a')];
+    const sections = links.map(link => document.querySelector(link.getAttribute('href'))).filter(Boolean);
+    const observer = new IntersectionObserver(entries => entries.forEach(entry => {
+      if (entry.isIntersecting) links.forEach(link => link.classList.toggle('active', link.getAttribute('href') === '#' + entry.target.id));
+    }), { rootMargin: '-25% 0px -65% 0px' });
+    sections.forEach(section => observer.observe(section));
+  </script>
+</body>
+</html>

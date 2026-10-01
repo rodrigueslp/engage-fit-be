@@ -33,6 +33,8 @@ func boxToDomain(model models.BoxModel) domain.Box {
 		ID:                      domainID(model.ID),
 		OrganizationID:          organizationID,
 		Name:                    model.Name,
+		NameKey:                 model.NameKey,
+		Timezone:                normalizedUnitTimezone(model.Timezone),
 		Status:                  status,
 		StatusReason:            model.StatusReason,
 		StatusChangedAt:         model.StatusChangedAt,
@@ -42,6 +44,7 @@ func boxToDomain(model models.BoxModel) domain.Box {
 		BillingAccessChangedAt:  model.BillingAccessChangedAt,
 		RiskInactiveDays:        riskInactiveDays,
 		RiskMessageCooldownDays: riskMessageCooldownDays,
+		AccessControlMode:       domain.AccessControlMode(model.AccessControlMode),
 		RetentionBaselineAt:     model.RetentionBaselineAt,
 		CreatedAt:               model.CreatedAt,
 		UpdatedAt:               model.UpdatedAt,
@@ -68,10 +71,18 @@ func boxToModel(box domain.Box) models.BoxModel {
 	if riskMessageCooldownDays <= 0 {
 		riskMessageCooldownDays = 14
 	}
+	if box.NameKey == "" {
+		_, key, ok := domain.NormalizeUnitName(box.Name)
+		if ok {
+			box.NameKey = key
+		}
+	}
 	return models.BoxModel{
 		ID:                      stringID(box.ID),
 		OrganizationID:          organizationID,
 		Name:                    box.Name,
+		NameKey:                 box.NameKey,
+		Timezone:                normalizedUnitTimezone(box.Timezone),
 		Status:                  string(status),
 		StatusReason:            box.StatusReason,
 		StatusChangedAt:         box.StatusChangedAt,
@@ -81,10 +92,18 @@ func boxToModel(box domain.Box) models.BoxModel {
 		BillingAccessChangedAt:  box.BillingAccessChangedAt,
 		RiskInactiveDays:        riskInactiveDays,
 		RiskMessageCooldownDays: riskMessageCooldownDays,
+		AccessControlMode:       string(box.EffectiveAccessControlMode()),
 		RetentionBaselineAt:     box.RetentionBaselineAt,
 		CreatedAt:               box.CreatedAt,
 		UpdatedAt:               box.UpdatedAt,
 	}
+}
+
+func normalizedUnitTimezone(value string) string {
+	if value == "" {
+		return domain.DefaultUnitTimezone
+	}
+	return value
 }
 
 func organizationToModel(organization domain.Organization) models.OrganizationModel {

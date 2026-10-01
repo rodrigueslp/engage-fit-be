@@ -67,24 +67,37 @@ Uma spec em `draft` não autoriza migrations ou contratos públicos definitivos.
 ## Ordem inicial
 
 1. `ARCH-001` — fundação modular e evolução segura.
-2. `SPEC-001` — organização, unidades, modalidades e espaços.
-3. `SPEC-001/D` e `SPEC-002/A` — integradas, automatizadas e homologadas
+2. `SPEC-001` — organização, unidades, modalidades, espaços e contexto
+   multiunidade — validada localmente.
+3. `SPEC-001/D` e `SPEC-002/A-B-C` — integradas, automatizadas e homologadas
    manualmente, sem habilitação em produção.
 4. `SPEC-003/A` — catálogo versionado de planos — integrada e homologada.
 5. `SPEC-003/C` — matrícula operacional da pessoa em um plano publicado —
    integrada e homologada localmente.
 6. `SPEC-003/B` — adicionais versionados e composição comercial (B1/B2) —
    integrada e homologada localmente.
-7. `SPEC-004/A` — fundação de contratos e emissão vinculada à matrícula —
-   revisada e `ready` para implementação local, sem aceite eletrônico
+7. `SPEC-003/D` — decisão central de acesso, contadores e transição legada —
+   implementada e `validated locally` em 2026-09-16.
+8. `SPEC-004/A` — fundação de contratos e emissão vinculada à matrícula —
+   implementada, integrada e `validated` localmente, sem aceite eletrônico
    produtivo, PAR-Q ou dados reais.
-8. Financeiro do aluno e agenda podem ser detalhados em paralelo quando seus
-   contratos internos e as fundações aplicáveis estiverem aceitos.
+9. `SPEC-006/A` — fundação de profissionais da agenda — implementada,
+   integrada e `validated` localmente.
+10. `SPEC-006/B-D` — grade, preview, publicação, materialização e exceções —
+   implementadas e `validated locally` em 2026-09-15.
+11. `SPEC-007` — reservas, ocupação, fila, falta e reposição — implementada e
+    `validated locally` em 2026-09-15.
+12. `SPEC-008` — check-in, presença e decisão de acesso — implementada e
+    `validated locally` em 2026-09-16.
+13. `SPEC-005` — financeiro do aluno — implementada e `validated locally` em
+    2026-09-16, usando somente simulador local.
+14. `SPEC-009` — operação do dia — implementada e `validated locally` em
+    2026-09-16, compondo as capacidades de `004` a `008` sem nova migration.
 
-`SPEC-001/C`, de contexto multiunidade, pode ser executada depois da fundação
-operacional de uma unidade. As letras identificam slices da mesma spec; não
-obrigam que C seja implementada antes de D quando as dependências registradas
-permitirem.
+`SPEC-001/C`, de contexto multiunidade, foi implementada e validada localmente
+em 2026-09-14. As letras identificam slices da mesma spec e registram o
+fatiamento histórico; não obrigavam que C fosse implementada antes de D quando
+as dependências permitiam.
 
 ## Regras para agentes paralelos
 
@@ -126,12 +139,22 @@ permitirem.
 - [SPEC-001/D — Serviços ofertáveis](specs/SPEC-001-D-service-offerings.md)
 - [SPEC-002 — Pessoa, identidades e vínculos](specs/SPEC-002-person-identities-relationships.md)
 - [SPEC-002/A — Fundação e cadastro manual](specs/SPEC-002-A-person-foundation-manual-registration.md)
+- [SPEC-002/B — Perfil unificado e edição](specs/SPEC-002-B-unified-person-profile.md)
+- [SPEC-002/C — Identidades, revisão e consolidação](specs/SPEC-002-C-external-identities-review-merge.md)
 - [SPEC-003 — Planos, matrículas e acesso](specs/SPEC-003-plans-enrollments-entitlements.md)
 - [SPEC-003/A — Catálogo versionado de planos](specs/SPEC-003-A-versioned-membership-plan-catalog.md)
 - [SPEC-003/B — Adicionais e composição comercial](specs/SPEC-003-B-versioned-addons-composition.md)
 - [SPEC-003/C — Matrícula em plano publicado](specs/SPEC-003-C-person-plan-enrollment.md)
+- [SPEC-003/D — Decisão de acesso e contadores](specs/SPEC-003-D-membership-access-decision.md)
 - [SPEC-004/A — Fundação de contratos e emissão](specs/SPEC-004-A-contract-foundation-enrollment-issuance.md)
-- [Prompt de implementação da SPEC-004/A](prompts/SPEC-004-A-implementation.md)
+- [SPEC-004/B — Aceite eletrônico e reconciliação](specs/SPEC-004-B-electronic-acceptance.md)
+- [SPEC-004/C — PAR-Q e formulários sensíveis](specs/SPEC-004-C-health-forms.md)
+- [SPEC-004/D — Ciclo jurídico posterior](specs/SPEC-004-D-legal-lifecycle.md)
+- [Registro de implementação da SPEC-004/A](prompts/SPEC-004-A-implementation.md)
 - [SPEC-006 — Agenda, profissionais e grade recorrente](specs/SPEC-006-scheduling-professionals-recurring-grid.md)
 - [SPEC-006/A — Fundação de profissionais da agenda](specs/SPEC-006-A-scheduling-professionals.md)
-- [Prompt de implementação da SPEC-006/A](prompts/SPEC-006-A-implementation.md)
+- [Registro de implementação da SPEC-006/A](prompts/SPEC-006-A-implementation.md)
+- [SPEC-006/B — Grade recorrente em rascunho e preview](specs/SPEC-006-B-scheduling-recurring-grid-preview.md)
+- [SPEC-007 — Reservas, fila, falta e reposição](specs/SPEC-007-reservations-waitlist.md)
+- [SPEC-008 — Check-in, presença e decisão de acesso](specs/SPEC-008-attendance-access.md)
+- [SPEC-009 — Operação do dia](specs/SPEC-009-today-operations.md)

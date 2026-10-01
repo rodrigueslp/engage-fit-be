@@ -1,6 +1,6 @@
 # SPEC-003 — Planos, matrículas e direitos de acesso
 
-- Status: `reviewed`
+- Status: `validated locally`
 - Versão: `0.4`
 - Data: 2026-08-19
 - Depende de: `ARCH-001`, `SPEC-001/B-D`, `SPEC-002`
@@ -18,13 +18,12 @@ na mesma branch:
   versionados e composição comercial (B1/B2); estado `validated`;
 - [`SPEC-003/C`](SPEC-003-C-person-plan-enrollment.md) — matrícula da pessoa,
   vigência e encerramento operacional; estado `validated`;
-- `SPEC-003/D` — decisão de acesso, contadores e transição do legado; estado
-  `draft`.
+- [`SPEC-003/D`](SPEC-003-D-membership-access-decision.md) — decisão de acesso,
+  contadores e transição do legado; estado `validated locally`.
 
-As slices A, C e B estão integradas e homologadas localmente (migrations `057`,
-`058` e `059`). O catálogo versionado, a matrícula operacional e a composição de
-adicionais estão concluídos. As decisões abertas da slice D e das specs futuras
-não podem ampliar silenciosamente essa entrega.
+As slices A, C, B e D estão integradas e homologadas localmente (migrations
+`057`, `058`, `059` e `067`). Catálogo, matrícula, composição de adicionais e
+decisão central de acesso estão concluídos.
 
 ## 1. Resultado esperado
 
@@ -378,4 +377,6 @@ o sistema antigo nunca coletou.
 - se Pilates individual será serviço separado ou direito com
   `delivery_mode=individual`;
 - tratamento definitivo de trancamento e deslocamento de vigência;
-- qual contador é fonte de verdade para sessões reservadas versus presenças.
+- ~~qual contador é fonte de verdade para sessões reservadas versus presenças~~:
+  resolvido em `SPEC-003/D`; reserva confirmada/falta consome aula agendada e
+  presença geral sem sessão consome entrada, sem dupla contagem.

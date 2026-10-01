@@ -31,6 +31,7 @@ const inactiveTemplateContent =
 
 async function main() {
   await assertApiIsRunning();
+  const capabilities = await getCapabilities();
   await createOwnerIfNeeded();
   const token = await login();
 
@@ -45,35 +46,42 @@ async function main() {
   await authorizeDemoStudents(token);
   await recalculateCampaign(token, campaign.id);
   await recalculateCampaign(token, secondaryCampaign.id);
-  await configureEmailMock(token);
 
-  await createMessageCampaign(token, campaign.id, 'ALMOST_THERE', 'Disparo teste - falta pouco');
-  await createMessageCampaign(token, campaign.id, 'GOAL_REACHED', 'Disparo teste - meta atingida');
-  await createMessageCampaign(token, campaign.id, 'WE_MISS_YOU', 'Disparo teste - aluno em risco');
-  await configureOfficialWhatsappTemplates(token);
+  if (capabilities.whatsapp) {
+    await createMessageCampaign(token, campaign.id, 'ALMOST_THERE', 'Disparo teste - falta pouco');
+    await createMessageCampaign(token, campaign.id, 'GOAL_REACHED', 'Disparo teste - meta atingida');
+    await createMessageCampaign(token, campaign.id, 'WE_MISS_YOU', 'Disparo teste - aluno em risco');
+    await configureOfficialWhatsappTemplates(token);
+  }
 
-  const emailAlmostThereTemplate = await createEmailTemplate(token, 'E-mail falta pouco demo', '{{name}}, falta pouco para sua meta', almostThereTemplateContent);
-  const emailAchievedTemplate = await createEmailTemplate(token, 'E-mail meta atingida demo', '{{name}}, meta atingida no {{box_name}}', achievedTemplateContent);
-  await createEmailCampaign(token, campaign.id, emailAlmostThereTemplate.id, 'E-mail teste - falta pouco', 'almost_there');
-  await createEmailCampaign(token, campaign.id, emailAchievedTemplate.id, 'E-mail teste - meta atingida', 'achieved');
-  await createAutomationSchedule(token);
-  await createWorkout(token);
+  if (capabilities.email) {
+    await configureEmailMock(token);
+    const emailAlmostThereTemplate = await createEmailTemplate(token, 'E-mail falta pouco demo', '{{name}}, falta pouco para sua meta', almostThereTemplateContent);
+    const emailAchievedTemplate = await createEmailTemplate(token, 'E-mail meta atingida demo', '{{name}}, meta atingida no {{box_name}}', achievedTemplateContent);
+    await createEmailCampaign(token, campaign.id, emailAlmostThereTemplate.id, 'E-mail teste - falta pouco', 'almost_there');
+    await createEmailCampaign(token, campaign.id, emailAchievedTemplate.id, 'E-mail teste - meta atingida', 'achieved');
+  }
+  if (capabilities.automation) await createAutomationSchedule(token);
+  if (capabilities.workouts) await createWorkout(token);
 
   console.log('');
-  console.log('Demo pronto para teste de WhatsApp.');
+  console.log('Demo pronta para homologacao local.');
   console.log(`Login: ${ownerEmail}`);
   console.log(`Senha: ${ownerPassword}`);
   console.log(`Campanha principal: ${campaign.name}`);
   console.log(`Campanha extra ativa: ${secondaryCampaign.name}`);
   console.log('Alunos seed TotalPass:');
   for (const student of demoStudents) {
-    console.log(`- ${student.name}: ${student.checkins}/10 (${student.scenario}) -> ${student.phone}`);
+    console.log(`- ${student.name}: ${student.checkins}/10 (${student.scenario})`);
   }
   console.log('Importe test-data/totalpass-checkins-hit-goal.csv para levar Luiz, Deborah e Bruno a 10/10.');
-  console.log('Depois configure Twilio em Configuracoes e envie a campanha na tela WhatsApp.');
-  console.log('A tela E-mail ja fica com provider mock configurado para preview/envio seguro local.');
-  console.log('A tela Automacao tem uma rotina demo pausada para testar execucao manual.');
-  console.log('A tela Treino do dia tem um WOD demo cadastrado; configure OPENAI_API_KEY para gerar rascunhos por IA.');
+  if (capabilities.whatsapp) console.log('Depois configure Twilio em Configuracoes e envie a campanha na tela WhatsApp.');
+  if (capabilities.email) console.log('A tela E-mail ja fica com provider mock configurado para preview/envio seguro local.');
+  if (capabilities.automation) console.log('A tela Automacao tem uma rotina demo pausada para testar execucao manual.');
+  if (capabilities.workouts) console.log('A tela Treino do dia tem um WOD demo cadastrado; configure OPENAI_API_KEY para gerar rascunhos por IA.');
+
+  const skipped = ['whatsapp', 'email', 'automation', 'workouts'].filter((name) => !capabilities[name]);
+  if (skipped.length > 0) console.log(`Capabilities opcionais ignoradas pelo seed: ${skipped.join(', ')}.`);
 }
 
 async function assertApiIsRunning() {
@@ -83,6 +91,12 @@ async function assertApiIsRunning() {
   } catch (error) {
     throw new Error(`API indisponivel em ${apiBaseUrl}. Suba o backend antes de rodar o seed demo.`);
   }
+}
+
+async function getCapabilities() {
+  const response = await fetch(`${apiBaseUrl}/api/v1/capabilities`);
+  await assertResponse(response, 'consultar capabilities da API');
+  return response.json();
 }
 
 async function createOwnerIfNeeded() {

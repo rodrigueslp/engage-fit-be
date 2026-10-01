@@ -41,3 +41,11 @@ type EnrollmentSubjectResolver interface {
 type EnrollmentPrivacyReader interface {
 	ListPrivacy(ctx context.Context, unitID, personID domain.ID) ([]domain.EnrollmentPrivacyExport, error)
 }
+
+type EnrollmentRosterReader interface {
+	ListEnrollmentRoster(ctx context.Context, organizationID, unitID domain.ID, at time.Time) ([]domain.EnrollmentRosterItem, error)
+}
+
+type EnrollmentRosterPeopleReader interface {
+	ListEnrollmentRosterPeople(ctx context.Context, organizationID, unitID domain.ID) ([]domain.EnrollmentRosterPerson, error)
+}

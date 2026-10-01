@@ -106,9 +106,9 @@ func (uc BoxAdminUseCases) Create(ctx context.Context, input CreateAdminBoxInput
 }
 
 func (uc BoxAdminUseCases) Update(ctx context.Context, input UpdateAdminBoxInput) (*AdminBoxOverview, error) {
-	name := strings.TrimSpace(input.Name)
+	name, nameKey, validName := domain.NormalizeUnitName(input.Name)
 	reason := strings.TrimSpace(input.Reason)
-	if name == "" {
+	if !validName {
 		return nil, ErrBoxNameRequired
 	}
 	if reason == "" {
@@ -123,6 +123,7 @@ func (uc BoxAdminUseCases) Update(ctx context.Context, input UpdateAdminBoxInput
 	}
 	before, _ := json.Marshal(box)
 	box.Name = name
+	box.NameKey = nameKey
 	box.UpdatedAt = time.Now()
 	if err := uc.boxes.Update(ctx, *box); err != nil {
 		return nil, err

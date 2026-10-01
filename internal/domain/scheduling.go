@@ -47,6 +47,7 @@ type SchedulingUnitContext struct {
 	OrganizationID ID     `json:"organization_id"`
 	UnitID         ID     `json:"unit_id"`
 	UnitName       string `json:"unit_name"`
+	Timezone       string `json:"timezone"`
 	Role           string `json:"role"`
 	Authorized     bool   `json:"authorized"`
 }
@@ -74,15 +75,18 @@ type SchedulingCommandRequest struct {
 	Command        string         `json:"command"`
 	IdempotencyKey string         `json:"idempotency_key"`
 	Fingerprint    string         `json:"fingerprint"`
-	ProfessionalID ID             `json:"professional_id"`
+	ProfessionalID ID             `json:"professional_id,omitempty"`
+	SeriesID       ID             `json:"series_id,omitempty"`
+	SessionID      ID             `json:"session_id,omitempty"`
 	ResponseData   map[string]any `json:"response_data"`
 	CreatedAt      time.Time      `json:"created_at"`
 }
 
 type ProfessionalPrivacyExport struct {
-	Professional Professional           `json:"professional"`
-	Events       []SchedulingAuditEvent `json:"events"`
-	ExportedAt   time.Time              `json:"exported_at"`
+	Professional           Professional           `json:"professional"`
+	Events                 []SchedulingAuditEvent `json:"events"`
+	DraftSeriesAssignments []ScheduleSeries       `json:"draft_series_assignments"`
+	ExportedAt             time.Time              `json:"exported_at"`
 }
 
 func NormalizeProfessionalName(value string) (name, key string, valid bool) {

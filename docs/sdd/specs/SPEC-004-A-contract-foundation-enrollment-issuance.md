@@ -1,6 +1,6 @@
 # SPEC-004/A — Fundação de contratos e emissão vinculada à matrícula
 
-- Status: `ready`
+- Status: `validated`
 - Versão: `1.0`
 - Data: 2026-08-24
 - Depende de: `ARCH-001`, `SPEC-002/A`, `SPEC-003/A-B-C`
@@ -19,10 +19,10 @@ fundação de documentos contratuais, a emissão vinculada a uma matrícula já
 existente e um aceite exercitável por port com simulador local.
 
 Produto, arquitetura e privacidade revisaram esta spec e aprovaram as quatro
-decisões da seção 20. O documento está em `ready` e é o único contrato
-executável da slice A. Essa autorização continua limitada à fundação local
-descrita aqui: não autoriza integração produtiva, dados reais, deploy,
-habilitação de feature flag ou qualquer escopo da `SPEC-004/B-D`. A
+decisões da seção 20. A implementação integrada foi validada localmente em
+2026-08-27; este documento está em `validated`. A validação permanece limitada
+à fundação local descrita aqui: não autoriza integração produtiva, dados reais,
+deploy, habilitação de feature flag ou qualquer escopo da `SPEC-004/B-D`. A
 spec-guia `SPEC-003` e os documentos de direção não podem ampliar seu escopo
 silenciosamente.
 
@@ -943,6 +943,14 @@ depende das decisões jurídicas de B e dos contratos financeiros de
   agenda e acesso explícitas;
 - modelo, contratos, estados, erros, privacidade, rollout, critérios e testes
   descritos;
-- prompt de implementação separado e aplicável à versão `ready`;
+- prompt de implementação separado, preservado como registro da execução;
 - nenhuma alteração em `docs/system-design.md`, código, migration, endpoint,
   banco, flag ou ambiente externo.
+
+## 23. Validação da implementação
+
+Em 2026-08-27, a slice A foi integrada e validada localmente nos repositórios
+backend e frontend. As evidências registradas incluem testes Go, `go vet`,
+TypeScript, build Vite e testes E2E Playwright. O simulador permaneceu local,
+sem rede, e a produção continua na migration `052`; as migrations `060` desta
+slice e `061` da agenda ainda não foram promovidas.

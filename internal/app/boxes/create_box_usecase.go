@@ -43,7 +43,8 @@ func (uc CreateBoxUseCase) Execute(ctx context.Context, input CreateBoxInput) (*
 	input.Name = strings.TrimSpace(input.Name)
 	input.OwnerName = strings.TrimSpace(input.OwnerName)
 	input.OwnerEmail = strings.ToLower(strings.TrimSpace(input.OwnerEmail))
-	if input.Name == "" || input.OwnerName == "" || input.OwnerEmail == "" || len(input.Password) < 8 {
+	unitName, unitNameKey, validUnitName := domain.NormalizeUnitName(input.Name)
+	if !validUnitName || input.OwnerName == "" || input.OwnerEmail == "" || len(input.Password) < 8 {
 		return nil, ErrInvalidBoxOnboarding
 	}
 	if _, err := uc.users.FindByEmail(ctx, input.OwnerEmail); err == nil {
@@ -59,7 +60,9 @@ func (uc CreateBoxUseCase) Execute(ctx context.Context, input CreateBoxInput) (*
 
 	now := time.Now()
 	box := domain.Box{
-		Name:      input.Name,
+		Name:      unitName,
+		NameKey:   unitNameKey,
+		Timezone:  domain.DefaultUnitTimezone,
 		Status:    domain.BoxStatusActive,
 		CreatedAt: now,
 		UpdatedAt: now,

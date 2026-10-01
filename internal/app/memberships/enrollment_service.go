@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"sort"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -16,25 +17,26 @@ import (
 	"boxengage/backend/internal/observability"
 	"boxengage/backend/internal/ports/repositories"
 	"github.com/google/uuid"
-	"sort"
 )
 
 var (
-	ErrEnrollmentSubjectNotFound   = errors.New("enrollment subject not found")
-	ErrEnrollmentSubjectIneligible = errors.New("enrollment subject ineligible")
-	ErrEnrollmentNotFound          = repositories.ErrEnrollmentNotFound
-	ErrActiveEnrollmentExists      = repositories.ErrActiveEnrollmentExists
-	ErrPlanVersionChanged          = repositories.ErrPlanVersionChanged
-	ErrEnrollmentRevisionConflict  = repositories.ErrEnrollmentRevisionConflict
-	ErrEnrollmentAlreadyEnded      = repositories.ErrEnrollmentAlreadyEnded
-	ErrEnrollmentIdempotencyReused = repositories.ErrEnrollmentIdempotencyReused
-	ErrEnrollmentAddonNotFound     = repositories.ErrEnrollmentAddonNotFound
-	ErrEnrollmentAddonDuplicate    = repositories.ErrEnrollmentAddonDuplicate
-	ErrPlanUnavailable             = errors.New("plan unavailable")
-	ErrPlanTargetsInactive         = errors.New("plan targets inactive")
-	ErrInvalidStartDate            = errors.New("invalid enrollment start date")
-	ErrInvalidEnd                  = errors.New("invalid enrollment end")
-	ErrInvalidEnrollmentRequest    = errors.New("invalid enrollment request")
+	ErrEnrollmentSubjectNotFound       = errors.New("enrollment subject not found")
+	ErrEnrollmentSubjectIneligible     = errors.New("enrollment subject ineligible")
+	ErrEnrollmentPhoneRequired         = errors.New("enrollment subject phone required")
+	ErrEnrollmentNotFound              = repositories.ErrEnrollmentNotFound
+	ErrActiveEnrollmentExists          = repositories.ErrActiveEnrollmentExists
+	ErrPlanVersionChanged              = repositories.ErrPlanVersionChanged
+	ErrEnrollmentRevisionConflict      = repositories.ErrEnrollmentRevisionConflict
+	ErrEnrollmentAlreadyEnded          = repositories.ErrEnrollmentAlreadyEnded
+	ErrEnrollmentIdempotencyReused     = repositories.ErrEnrollmentIdempotencyReused
+	ErrEnrollmentAddonNotFound         = repositories.ErrEnrollmentAddonNotFound
+	ErrEnrollmentAddonDuplicate        = repositories.ErrEnrollmentAddonDuplicate
+	ErrPlanUnavailable                 = errors.New("plan unavailable")
+	ErrPlanTargetsInactive             = errors.New("plan targets inactive")
+	ErrInvalidStartDate                = errors.New("invalid enrollment start date")
+	ErrInvalidEnd                      = errors.New("invalid enrollment end")
+	ErrInvalidEnrollmentRequest        = errors.New("invalid enrollment request")
+	ErrEnrollmentOperationsUnavailable = errors.New("enrollment operations unavailable")
 )
 
 type CreateEnrollmentInput struct {
@@ -61,13 +63,16 @@ func WithEnrollmentLocation(location *time.Location) EnrollmentOption {
 }
 
 type EnrollmentService struct {
-	repository   repositories.EnrollmentRepository
-	people       repositories.EnrollmentSubjectResolver
-	catalog      repositories.CatalogPlanReferenceResolver
-	boxes        repositories.BoxRepository
-	transactions repositories.TransactionManager
-	now          func() time.Time
-	location     *time.Location
+	repository    repositories.EnrollmentRepository
+	people        repositories.EnrollmentSubjectResolver
+	catalog       repositories.CatalogPlanReferenceResolver
+	boxes         repositories.BoxRepository
+	transactions  repositories.TransactionManager
+	prerequisites repositories.MembershipAccessPrerequisiteReader
+	roster        repositories.EnrollmentRosterReader
+	rosterPeople  repositories.EnrollmentRosterPeopleReader
+	now           func() time.Time
+	location      *time.Location
 }
 
 func NewEnrollmentService(repository repositories.EnrollmentRepository, people repositories.EnrollmentSubjectResolver, catalog repositories.CatalogPlanReferenceResolver, boxes repositories.BoxRepository, transactions repositories.TransactionManager, options ...EnrollmentOption) *EnrollmentService {
@@ -76,10 +81,96 @@ func NewEnrollmentService(repository repositories.EnrollmentRepository, people r
 		location = time.FixedZone("America/Sao_Paulo", -3*60*60)
 	}
 	service := &EnrollmentService{repository: repository, people: people, catalog: catalog, boxes: boxes, transactions: transactions, now: func() time.Time { return time.Now().UTC() }, location: location}
+	if value, ok := repository.(repositories.MembershipAccessPrerequisiteReader); ok {
+		service.prerequisites = value
+	}
+	if value, ok := repository.(repositories.EnrollmentRosterReader); ok {
+		service.roster = value
+	}
+	if value, ok := people.(repositories.EnrollmentRosterPeopleReader); ok {
+		service.rosterPeople = value
+	}
 	for _, option := range options {
 		option(service)
 	}
 	return service
+}
+
+func (s *EnrollmentService) AccessStatus(ctx context.Context, unitID, enrollmentID domain.ID) (*domain.EnrollmentAccessStatus, error) {
+	if s.prerequisites == nil {
+		return nil, ErrEnrollmentOperationsUnavailable
+	}
+	item, err := s.Get(ctx, unitID, enrollmentID)
+	if err != nil {
+		return nil, err
+	}
+	value, err := s.prerequisites.ResolveMembershipAccessPrerequisites(ctx, item.OrganizationID, unitID, item.PersonID, item.ID, s.now())
+	if err != nil {
+		return nil, err
+	}
+	status := enrollmentAccessStatus(item.EffectiveStatus, value)
+	return &status, nil
+}
+
+func (s *EnrollmentService) ListRoster(ctx context.Context, unitID domain.ID) ([]domain.EnrollmentRosterItem, error) {
+	if s.roster == nil || s.rosterPeople == nil {
+		return nil, ErrEnrollmentOperationsUnavailable
+	}
+	organizationID, err := s.organizationForUnit(ctx, unitID)
+	if err != nil {
+		return nil, ErrEnrollmentNotFound
+	}
+	items, err := s.roster.ListEnrollmentRoster(ctx, organizationID, unitID, s.now())
+	if err != nil {
+		return nil, err
+	}
+	people, err := s.rosterPeople.ListEnrollmentRosterPeople(ctx, organizationID, unitID)
+	if err != nil {
+		return nil, err
+	}
+	peopleByID := make(map[domain.ID]domain.EnrollmentRosterPerson, len(people))
+	for _, person := range people {
+		peopleByID[person.PersonID] = person
+	}
+	for index := range items {
+		if person, exists := peopleByID[items[index].PersonID]; exists {
+			items[index].StudentID = person.StudentID
+			items[index].PersonName = person.PersonName
+			items[index].Source = person.Source
+		}
+		items[index].EffectiveStatus = domain.EnrollmentStatus(domain.Enrollment{
+			LifecycleStatus: items[index].LifecycleStatus,
+			StartsOn:        items[index].StartsOn,
+			ValidUntil:      items[index].ValidUntil,
+			EndedOn:         items[index].EndedOn,
+		}, s.today())
+		items[index].AccessStatus = enrollmentAccessStatus(items[index].EffectiveStatus, items[index].Prerequisites)
+	}
+	return items, nil
+}
+
+func enrollmentAccessStatus(effective domain.EnrollmentEffectiveStatus, value domain.MembershipAccessPrerequisites) domain.EnrollmentAccessStatus {
+	status := domain.EnrollmentAccessStatus{
+		EffectiveStatus:     effective,
+		ContractAccepted:    value.ContractAccepted,
+		HealthFormSubmitted: value.HealthFormSubmitted,
+		InitialPaymentPaid:  value.InitialPaymentPaid,
+		NoOverduePayment:    !value.PaymentOverdue,
+		PendingReasonCodes:  []domain.MembershipAccessReason{},
+	}
+	if !value.ContractAccepted {
+		status.PendingReasonCodes = append(status.PendingReasonCodes, domain.MembershipAccessReasonContractPending)
+	}
+	if !value.HealthFormSubmitted {
+		status.PendingReasonCodes = append(status.PendingReasonCodes, domain.MembershipAccessReasonHealthFormPending)
+	}
+	if value.PaymentOverdue {
+		status.PendingReasonCodes = append(status.PendingReasonCodes, domain.MembershipAccessReasonPaymentOverdue)
+	} else if !value.InitialPaymentPaid {
+		status.PendingReasonCodes = append(status.PendingReasonCodes, domain.MembershipAccessReasonPaymentRequired)
+	}
+	status.Eligible = effective == domain.EnrollmentEffectiveActive && len(status.PendingReasonCodes) == 0
+	return status
 }
 
 func (s *EnrollmentService) ListForStudent(ctx context.Context, unitID, studentID domain.ID) (*domain.EnrollmentHistory, error) {
@@ -183,6 +274,9 @@ func (s *EnrollmentService) Create(ctx context.Context, unitID, studentID, actor
 		subject, err := s.resolveSubject(txctx, organizationID, unitID, studentID)
 		if err != nil {
 			return err
+		}
+		if strings.TrimSpace(subject.PhoneE164) == "" {
+			return ErrEnrollmentPhoneRequired
 		}
 		if err := s.repository.LockSubject(txctx, organizationID, subject.PersonID, unitID); err != nil {
 			return err

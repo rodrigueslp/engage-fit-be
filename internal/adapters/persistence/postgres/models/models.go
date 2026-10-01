@@ -17,6 +17,8 @@ type BoxModel struct {
 	ID                      string  `gorm:"primaryKey"`
 	OrganizationID          *string `gorm:"index"`
 	Name                    string
+	NameKey                 string
+	Timezone                string
 	Status                  string `gorm:"default:active"`
 	StatusReason            string
 	StatusChangedAt         *time.Time
@@ -26,9 +28,46 @@ type BoxModel struct {
 	BillingAccessChangedAt  *time.Time
 	RiskInactiveDays        int
 	RiskMessageCooldownDays int
+	AccessControlMode       string `gorm:"default:disabled"`
 	RetentionBaselineAt     *time.Time
 	CreatedAt               time.Time
 	UpdatedAt               time.Time
+}
+
+type OrganizationUserMembershipModel struct {
+	OrganizationID string `gorm:"primaryKey"`
+	UserID         string `gorm:"primaryKey"`
+	Role           string
+	Active         bool
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+}
+
+func (OrganizationUserMembershipModel) TableName() string { return "organization_user_memberships" }
+
+type UserUnitAccessModel struct {
+	OrganizationID  string
+	UserID          string `gorm:"primaryKey"`
+	UnitID          string `gorm:"primaryKey"`
+	Active          bool
+	GrantedByUserID *string
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+}
+
+func (UserUnitAccessModel) TableName() string { return "user_unit_access" }
+
+type OrganizationAuditEventModel struct {
+	ID             string `gorm:"primaryKey"`
+	OrganizationID string
+	UnitID         *string
+	ActorUserID    string
+	Action         string
+	EntityType     string
+	EntityID       string
+	BeforeData     []byte `gorm:"type:jsonb"`
+	AfterData      []byte `gorm:"type:jsonb"`
+	CreatedAt      time.Time
 }
 
 type ModalityModel struct {
@@ -389,17 +428,58 @@ type StudentModel struct {
 }
 
 type PersonModel struct {
-	ID             string `gorm:"primaryKey"`
-	OrganizationID string `gorm:"index"`
-	Name           string
-	PhoneE164      *string
-	Email          *string
-	CPFEncrypted   *string
-	CPFLookupHash  *string
-	CPFLast2       *string
-	ProfileStatus  string
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
+	ID                 string `gorm:"primaryKey"`
+	OrganizationID     string `gorm:"index"`
+	Name               string
+	PreferredName      *string
+	PhoneE164          *string
+	Email              *string
+	CPFEncrypted       *string
+	CPFLookupHash      *string
+	CPFLast2           *string
+	ProfileStatus      string
+	MergedIntoPersonID *string
+	Revision           int `gorm:"default:1"`
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
+}
+
+type PersonExternalIdentityModel struct {
+	ID              string `gorm:"primaryKey"`
+	OrganizationID  string
+	PersonID        string `gorm:"index"`
+	UnitID          *string
+	Provider        string
+	ExternalID      string
+	VerifiedAt      *time.Time
+	CreatedByUserID *string
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+}
+
+type PersonAthleteAccountModel struct {
+	ID               string `gorm:"primaryKey"`
+	OrganizationID   string
+	PersonID         string `gorm:"index"`
+	AthleteAccountID string
+	LinkMethod       string
+	LinkedAt         time.Time
+	CreatedAt        time.Time
+}
+
+type PersonIdentityReviewModel struct {
+	ID               string `gorm:"primaryKey"`
+	OrganizationID   string
+	UnitID           string
+	TargetPersonID   string
+	SourcePersonID   string
+	Reason           string
+	Provider         *string
+	Status           string
+	Resolution       *string
+	CreatedAt        time.Time
+	ResolvedAt       *time.Time
+	ResolvedByUserID *string
 }
 
 type PersonAddressModel struct {
@@ -821,7 +901,9 @@ type SchedulingCommandRequestModel struct {
 	Command            string
 	IdempotencyKey     string
 	RequestFingerprint string
-	ProfessionalID     string
+	ProfessionalID     *string
+	SeriesID           *string
+	SessionID          *string
 	ResponseData       []byte `gorm:"type:jsonb"`
 	CreatedAt          time.Time
 }
@@ -834,10 +916,102 @@ type SchedulingAuditEventModel struct {
 	Action         string
 	EntityType     string
 	EntityID       string
+	ProfessionalID *string
+	SeriesID       *string
+	SessionID      *string
 	Revision       int
 	ChangedFields  []byte `gorm:"type:jsonb"`
 	BeforeData     []byte `gorm:"type:jsonb"`
 	AfterData      []byte `gorm:"type:jsonb"`
 	Reason         *string
 	CreatedAt      time.Time
+}
+
+type SchedulingSeriesModel struct {
+	ID                       string `gorm:"primaryKey"`
+	OrganizationID           string
+	UnitID                   string
+	Status                   string
+	TargetKind               string
+	TargetID                 string
+	TargetNameSnapshot       *string
+	ProfessionalID           string
+	ProfessionalNameSnapshot *string
+	SpaceID                  *string
+	SpaceNameSnapshot        *string
+	DeliveryMode             string
+	Capacity                 int
+	DurationMinutes          int
+	LocalStartTime           string `gorm:"type:time"`
+	Timezone                 string
+	EffectiveFrom            time.Time  `gorm:"type:date"`
+	EffectiveUntil           *time.Time `gorm:"type:date"`
+	Revision                 int
+	PublishedAt              *time.Time
+	PublishedByUserID        *string
+	CancelledAt              *time.Time
+	CancelledByUserID        *string
+	CancelledReason          *string
+	ArchivedAt               *time.Time
+	ArchivedByUserID         *string
+	CreatedByUserID          string
+	UpdatedByUserID          string
+	CreatedAt                time.Time
+	UpdatedAt                time.Time
+}
+
+type SchedulingSeriesWeekdayModel struct {
+	OrganizationID string
+	UnitID         string
+	SeriesID       string `gorm:"primaryKey"`
+	Weekday        int    `gorm:"primaryKey"`
+}
+
+type SchedulingSessionModel struct {
+	ID                       string `gorm:"primaryKey"`
+	OrganizationID           string
+	UnitID                   string
+	SeriesID                 *string
+	Origin                   string
+	OccurrenceOn             *time.Time `gorm:"type:date"`
+	Status                   string
+	TargetKind               string
+	TargetID                 string
+	TargetNameSnapshot       string
+	ProfessionalID           string
+	ProfessionalNameSnapshot string
+	SpaceID                  *string
+	SpaceNameSnapshot        *string
+	DeliveryMode             string
+	Capacity                 int
+	StartsAt                 time.Time
+	EndsAt                   time.Time
+	LocalDate                time.Time `gorm:"type:date"`
+	LocalStartTime           string    `gorm:"type:time"`
+	Timezone                 string
+	SourceSeriesRevision     *int
+	ManualOverride           bool
+	Revision                 int
+	PublishedAt              time.Time
+	CancelledAt              *time.Time
+	CancelledByUserID        *string
+	CancelledReason          *string
+	CreatedByUserID          string
+	UpdatedByUserID          string
+	CreatedAt                time.Time
+	UpdatedAt                time.Time
+}
+
+type SchedulingSessionEventModel struct {
+	Sequence        int64 `gorm:"primaryKey;autoIncrement"`
+	ID              string
+	OrganizationID  string
+	UnitID          string
+	SessionID       string
+	SessionRevision int
+	EventType       string
+	BeforeState     []byte `gorm:"type:jsonb"`
+	AfterState      []byte `gorm:"type:jsonb"`
+	OccurredAt      time.Time
+	SchemaVersion   int
 }

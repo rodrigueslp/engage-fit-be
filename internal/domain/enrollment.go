@@ -18,6 +18,7 @@ const (
 type EnrollmentSubject struct {
 	PersonID         ID
 	DisplayName      string
+	PhoneE164        string
 	Eligible         bool
 	IneligibleReason string
 }
@@ -77,6 +78,47 @@ type Enrollment struct {
 type EnrollmentHistory struct {
 	Current *Enrollment
 	History []Enrollment
+}
+
+type EnrollmentAccessStatus struct {
+	Eligible            bool                      `json:"eligible"`
+	EffectiveStatus     EnrollmentEffectiveStatus `json:"effective_status"`
+	ContractAccepted    bool                      `json:"contract_accepted"`
+	HealthFormSubmitted bool                      `json:"health_form_submitted"`
+	InitialPaymentPaid  bool                      `json:"initial_payment_paid"`
+	NoOverduePayment    bool                      `json:"no_overdue_payment"`
+	PendingReasonCodes  []MembershipAccessReason  `json:"pending_reason_codes"`
+}
+
+type EnrollmentRosterTarget struct {
+	ID   ID                 `json:"id"`
+	Kind ScheduleTargetKind `json:"kind"`
+	Name string             `json:"name"`
+}
+
+type EnrollmentRosterPerson struct {
+	PersonID   ID
+	StudentID  ID
+	PersonName string
+	Source     Source
+}
+
+type EnrollmentRosterItem struct {
+	EnrollmentID    ID                            `json:"enrollment_id"`
+	StudentID       ID                            `json:"student_id"`
+	PersonID        ID                            `json:"person_id"`
+	PersonName      string                        `json:"person_name"`
+	Source          Source                        `json:"source"`
+	PlanID          ID                            `json:"plan_id"`
+	PlanName        string                        `json:"plan_name"`
+	LifecycleStatus EnrollmentLifecycleStatus     `json:"lifecycle_status"`
+	EffectiveStatus EnrollmentEffectiveStatus     `json:"effective_status"`
+	StartsOn        time.Time                     `json:"starts_on"`
+	ValidUntil      *time.Time                    `json:"valid_until,omitempty"`
+	EndedOn         *time.Time                    `json:"ended_on,omitempty"`
+	Targets         []EnrollmentRosterTarget      `json:"targets"`
+	AccessStatus    EnrollmentAccessStatus        `json:"access_status"`
+	Prerequisites   MembershipAccessPrerequisites `json:"-"`
 }
 
 type EnrollmentCommandRequest struct {

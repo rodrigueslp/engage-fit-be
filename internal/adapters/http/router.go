@@ -10,6 +10,7 @@ import (
 
 	"boxengage/backend/internal/adapters/http/handlers"
 	"boxengage/backend/internal/adapters/http/middleware"
+	"boxengage/backend/internal/app/announcements"
 	athleteapp "boxengage/backend/internal/app/athlete"
 	"boxengage/backend/internal/app/attendance"
 	"boxengage/backend/internal/app/auth"
@@ -19,16 +20,22 @@ import (
 	"boxengage/backend/internal/app/campaigns"
 	"boxengage/backend/internal/app/catalog"
 	"boxengage/backend/internal/app/checkiningestion"
+	commerceapp "boxengage/backend/internal/app/commerce"
 	"boxengage/backend/internal/app/contactactivation"
+	"boxengage/backend/internal/app/contractlifecycle"
 	"boxengage/backend/internal/app/contracts"
 	"boxengage/backend/internal/app/dashboard"
 	"boxengage/backend/internal/app/email"
+	"boxengage/backend/internal/app/healthforms"
 	"boxengage/backend/internal/app/imports"
+	memberbillingapp "boxengage/backend/internal/app/memberbilling"
 	"boxengage/backend/internal/app/memberships"
 	"boxengage/backend/internal/app/messages"
+	"boxengage/backend/internal/app/organizations"
 	"boxengage/backend/internal/app/people"
 	"boxengage/backend/internal/app/platformadmin"
 	"boxengage/backend/internal/app/reports"
+	reservationsapp "boxengage/backend/internal/app/reservations"
 	"boxengage/backend/internal/app/retention"
 	"boxengage/backend/internal/app/rewards"
 	schedulingapp "boxengage/backend/internal/app/scheduling"
@@ -41,25 +48,33 @@ import (
 )
 
 type RouterDependencies struct {
-	AppEnv                    string
-	TokenService              services.TokenService
-	UserRepository            repositories.UserRepository
-	BoxRepository             repositories.BoxRepository
-	LoginUseCase              auth.LoginUseCase
-	CurrentUserUseCase        auth.GetCurrentUserUseCase
-	ChangePasswordUseCase     auth.ChangePasswordUseCase
-	LogoutUseCase             auth.LogoutUseCase
-	ResetOwnerPasswordUseCase platformadmin.ResetOwnerPasswordUseCase
-	BoxAdminUseCases          platformadmin.BoxAdminUseCases
-	CreateBoxUseCase          boxes.CreateBoxUseCase
-	GetBoxUseCase             boxes.GetBoxUseCase
-	UpdateBoxUseCase          boxes.UpdateBoxUseCase
-	CatalogService            *catalog.Service
-	PeopleService             *people.Service
-	MembershipService         *memberships.Service
-	EnrollmentService         *memberships.EnrollmentService
-	ContractService           *contracts.Service
-	SchedulingService         *schedulingapp.Service
+	AppEnv                        string
+	TokenService                  services.TokenService
+	UserRepository                repositories.UserRepository
+	BoxRepository                 repositories.BoxRepository
+	LoginUseCase                  auth.LoginUseCase
+	CurrentUserUseCase            auth.GetCurrentUserUseCase
+	ChangePasswordUseCase         auth.ChangePasswordUseCase
+	LogoutUseCase                 auth.LogoutUseCase
+	ResetOwnerPasswordUseCase     platformadmin.ResetOwnerPasswordUseCase
+	BoxAdminUseCases              platformadmin.BoxAdminUseCases
+	CreateBoxUseCase              boxes.CreateBoxUseCase
+	GetBoxUseCase                 boxes.GetBoxUseCase
+	UpdateBoxUseCase              boxes.UpdateBoxUseCase
+	CatalogService                *catalog.Service
+	PeopleService                 *people.Service
+	MembershipService             *memberships.Service
+	EnrollmentService             *memberships.EnrollmentService
+	ContractService               *contracts.Service
+	ContractLifecycleService      *contractlifecycle.Service
+	HealthFormService             *healthforms.Service
+	ContractSignatureWebhookToken string
+	SchedulingService             *schedulingapp.Service
+	SchedulingGridService         *schedulingapp.GridService
+	ReservationService            *reservationsapp.Service
+	OrganizationService           *organizations.Service
+	UnitAccessAuthorizer          repositories.UnitAccessAuthorizer
+	SwitchUnitContextUseCase      auth.SwitchUnitContextUseCase
 
 	ListStudentsUseCase            students.ListStudentsUseCase
 	GetStudentUseCase              students.GetStudentUseCase
@@ -70,6 +85,7 @@ type RouterDependencies struct {
 	AnonymizeStudentUseCase        students.AnonymizeStudentUseCase
 	ContactActivationService       *contactactivation.Service
 	AttendanceService              *attendance.Service
+	AttendanceAccessService        *attendance.AccessService
 
 	ListImportsUseCase      imports.ListImportsUseCase
 	GetImportUseCase        imports.GetImportUseCase
@@ -102,6 +118,7 @@ type RouterDependencies struct {
 	DashboardActiveCampaignsUseCase dashboard.ListActiveCampaignsUseCase
 	DashboardNearGoalUseCase        dashboard.ListNearGoalStudentsUseCase
 	DashboardAtRiskUseCase          dashboard.ListAtRiskStudentsUseCase
+	DashboardTodayUseCase           dashboard.GetTodayOperationsUseCase
 	RetentionService                retention.Service
 
 	GetWhatsappSettingsUseCase    whatsapp.GetSettingsUseCase
@@ -183,7 +200,10 @@ type RouterDependencies struct {
 	BuildCommit                   string
 	BuildTime                     string
 	BillingService                *billingapp.Service
+	MemberBillingService          *memberbillingapp.Service
 	AthleteService                *athleteapp.Service
+	AnnouncementService           *announcements.Service
+	CommerceService               *commerceapp.Service
 }
 
 func NewRouter(deps RouterDependencies) *gin.Engine {
@@ -231,6 +251,9 @@ func NewRouter(deps RouterDependencies) *gin.Engine {
 	api.Use(middleware.FeatureGates(deps.Capabilities))
 
 	authHandler := handlers.NewAuthHandler(deps.LoginUseCase, deps.CurrentUserUseCase, deps.ChangePasswordUseCase, deps.LogoutUseCase, deps.SessionConfig)
+	if deps.OrganizationService != nil {
+		authHandler = authHandler.WithUnitContext(deps.SwitchUnitContextUseCase)
+	}
 	loginLimiter := middleware.NewWindowRateLimiter(deps.LoginRateLimitRequests, time.Duration(deps.LoginRateLimitWindowSeconds)*time.Second)
 	api.POST("/auth/login", middleware.JSONRateLimit(loginLimiter, "email"), authHandler.Login)
 	if deps.AthleteService != nil {
@@ -246,14 +269,23 @@ func NewRouter(deps RouterDependencies) *gin.Engine {
 		athleteAuthenticated := api.Group("/athlete")
 		athleteAuthenticated.Use(middleware.AthleteAuth(deps.AthleteService, athleteSession), middleware.CSRF(athleteSession))
 		athleteAuthenticated.GET("/me", athleteHandler.Me)
+		athleteAuthenticated.GET("/portal", athleteHandler.Portal)
+		athleteAuthenticated.POST("/memberships/:membership_id/sessions/:session_id/book", athleteHandler.BookClass)
+		athleteAuthenticated.POST("/memberships/:membership_id/sessions/:session_id/reservations/:reservation_id/cancel", athleteHandler.CancelClassReservation)
 		athleteAuthenticated.GET("/workouts", athleteHandler.Workouts)
 		athleteAuthenticated.PUT("/workouts/:id/result", athleteHandler.SaveResult)
 		athleteAuthenticated.POST("/workouts/:id/explanation", athleteHandler.ExplainWorkout)
 		athleteAuthenticated.GET("/results", athleteHandler.Results)
 		athleteAuthenticated.GET("/personal-records", athleteHandler.PersonalRecords)
+		athleteAuthenticated.POST("/personal-records", athleteHandler.RecordPersonalBest)
 		athleteAuthenticated.POST("/personal-records/:id/confirm", athleteHandler.ConfirmPersonalRecord)
 		athleteAuthenticated.POST("/auth/verify-email", athleteHandler.RequestEmailVerification)
 		athleteAuthenticated.POST("/auth/logout", athleteHandler.Logout)
+		if deps.AnnouncementService != nil {
+			announcementHandler := handlers.NewAnnouncementHandler(deps.AnnouncementService)
+			athleteAuthenticated.GET("/announcements", announcementHandler.AthleteList)
+			athleteAuthenticated.POST("/announcements/:id/view", announcementHandler.MarkViewed)
+		}
 	}
 
 	setupHandler := handlers.NewSetupHandler(deps.CreateBoxUseCase)
@@ -281,15 +313,37 @@ func NewRouter(deps RouterDependencies) *gin.Engine {
 		api.GET("/public/self-checkin/:token", attendanceHandler.PublicSession)
 		api.POST("/public/self-checkin/:token", middleware.JSONRateLimit(selfCheckinLimiter, "phone"), attendanceHandler.SelfCheckin)
 	}
-
 	authenticated := api.Group("")
-	authenticated.Use(middleware.Auth(deps.TokenService, deps.UserRepository, deps.BoxRepository, deps.SessionConfig), middleware.CSRF(deps.SessionConfig))
+	if deps.UnitAccessAuthorizer != nil {
+		authenticated.Use(middleware.AuthWithUnitAccess(deps.TokenService, deps.UserRepository, deps.BoxRepository, deps.UnitAccessAuthorizer, deps.SessionConfig), middleware.CSRF(deps.SessionConfig))
+	} else {
+		authenticated.Use(middleware.Auth(deps.TokenService, deps.UserRepository, deps.BoxRepository, deps.SessionConfig), middleware.CSRF(deps.SessionConfig))
+	}
 	authenticated.POST("/auth/logout", authHandler.Logout)
 	authenticated.GET("/auth/me", authHandler.Me)
 	authenticated.PUT("/auth/password", authHandler.ChangePassword)
+	if deps.OrganizationService != nil {
+		authenticated.POST("/auth/unit-context", authHandler.SwitchUnitContext)
+	}
 
 	protected := authenticated.Group("")
+	if deps.AttendanceAccessService != nil {
+		attendanceAccessHandler := handlers.NewAttendanceAccessHandler(deps.AttendanceAccessService)
+		attendanceAccess := protected.Group("/units/:unit_id/attendance")
+		attendanceAccess.GET("/today", attendanceAccessHandler.Today)
+		attendanceAccess.POST("/admissions", attendanceAccessHandler.Admit)
+	}
 	protected.Use(middleware.Tenant(), middleware.TenantRoleAccess())
+	if deps.OrganizationService != nil {
+		organizationHandler := handlers.NewOrganizationHandler(deps.OrganizationService)
+		protected.GET("/units", organizationHandler.ListUnits)
+		ownerUnits := protected.Group("")
+		ownerUnits.Use(middleware.Owner())
+		ownerUnits.POST("/units", organizationHandler.CreateUnit)
+		ownerUnits.PATCH("/units/:unit_id", organizationHandler.UpdateUnit)
+		ownerUnits.GET("/team/coaches/:id/units", organizationHandler.MemberUnitAccess)
+		ownerUnits.PUT("/team/coaches/:id/units", organizationHandler.ReplaceMemberUnitAccess)
+	}
 
 	governanceHandler := handlers.NewMessagingGovernanceHandler(deps.MessagingAdminUseCases, deps.TenantMessagingUsageUseCase)
 	protected.GET("/messaging/usage", governanceHandler.TenantUsage)
@@ -319,6 +373,9 @@ func NewRouter(deps RouterDependencies) *gin.Engine {
 	admin.POST("/boxes/:id/suspend", adminBoxesHandler.Suspend)
 	admin.POST("/boxes/:id/reactivate", adminBoxesHandler.Reactivate)
 	admin.POST("/boxes/:id/archive", adminBoxesHandler.Archive)
+	if deps.OrganizationService != nil {
+		admin.POST("/organizations/:organization_id/units", handlers.NewOrganizationHandler(deps.OrganizationService).CreateUnitAsPlatformAdmin)
+	}
 
 	if deps.BillingService != nil {
 		billingHandler := handlers.NewBillingHandler(deps.BillingService)
@@ -339,6 +396,26 @@ func NewRouter(deps RouterDependencies) *gin.Engine {
 	boxesHandler := handlers.NewBoxesHandler(deps.GetBoxUseCase, deps.UpdateBoxUseCase)
 	protected.GET("/box", boxesHandler.Get)
 	protected.PUT("/box", boxesHandler.Update)
+	if deps.AnnouncementService != nil {
+		announcementHandler := handlers.NewAnnouncementHandler(deps.AnnouncementService)
+		ownerAnnouncements := protected.Group("/units/:unit_id/announcements")
+		ownerAnnouncements.Use(middleware.Owner())
+		ownerAnnouncements.GET("", announcementHandler.List)
+		ownerAnnouncements.POST("", announcementHandler.Create)
+		ownerAnnouncements.PATCH("/:id", announcementHandler.Update)
+		ownerAnnouncements.POST("/:id/publish", announcementHandler.Publish)
+		ownerAnnouncements.POST("/:id/archive", announcementHandler.Archive)
+	}
+	if deps.CommerceService != nil {
+		commerceHandler := handlers.NewCommerceHandler(deps.CommerceService)
+		ownerCommerce := protected.Group("/units/:unit_id/commerce")
+		ownerCommerce.Use(middleware.Owner())
+		ownerCommerce.GET("/products", commerceHandler.ListProducts)
+		ownerCommerce.POST("/products", commerceHandler.CreateProduct)
+		ownerCommerce.PATCH("/products/:id", commerceHandler.UpdateProduct)
+		ownerCommerce.GET("/sales", commerceHandler.ListSales)
+		ownerCommerce.POST("/sales", commerceHandler.CreateSale)
+	}
 	if deps.CatalogService != nil {
 		catalogHandler := handlers.NewCatalogHandler(deps.CatalogService)
 		protected.GET("/organization", catalogHandler.Organization)
@@ -358,10 +435,19 @@ func NewRouter(deps RouterDependencies) *gin.Engine {
 	}
 	if deps.PeopleService != nil {
 		peopleHandler := handlers.NewPeopleHandler(deps.PeopleService)
+		protected.GET("/units/:unit_id/people", peopleHandler.List)
+		protected.POST("/units/:unit_id/people/search", peopleHandler.Search)
+		protected.GET("/units/:unit_id/people/:id", peopleHandler.Get)
 		ownerPeople := protected.Group("")
 		ownerPeople.Use(middleware.Owner())
 		ownerPeople.POST("/units/:unit_id/people/duplicate-check", peopleHandler.DuplicateCheck)
 		ownerPeople.POST("/units/:unit_id/people", peopleHandler.Create)
+		ownerPeople.PATCH("/units/:unit_id/people/:id", peopleHandler.Update)
+		ownerPeople.POST("/units/:unit_id/people/:id/link", peopleHandler.LinkUnit)
+		ownerPeople.POST("/units/:unit_id/people/:id/external-identities", peopleHandler.LinkExternalIdentity)
+		ownerPeople.POST("/units/:unit_id/people/:id/merge", peopleHandler.Merge)
+		ownerPeople.GET("/units/:unit_id/people/identity-reviews", peopleHandler.ListIdentityReviews)
+		ownerPeople.POST("/units/:unit_id/people/identity-reviews/:review_id/resolve", peopleHandler.ResolveIdentityReview)
 	}
 	if deps.MembershipService != nil {
 		membershipHandler := handlers.NewMembershipHandler(deps.MembershipService)
@@ -382,8 +468,21 @@ func NewRouter(deps RouterDependencies) *gin.Engine {
 		ownerEnrollments.Use(middleware.Owner())
 		ownerEnrollments.GET("/units/:unit_id/students/:student_id/enrollments", enrollmentHandler.ListForStudent)
 		ownerEnrollments.POST("/units/:unit_id/students/:student_id/enrollments", enrollmentHandler.Create)
+		ownerEnrollments.GET("/units/:unit_id/enrollments/roster", enrollmentHandler.Roster)
+		ownerEnrollments.GET("/units/:unit_id/enrollments/:enrollment_id/access-status", enrollmentHandler.AccessStatus)
 		ownerEnrollments.GET("/units/:unit_id/enrollments/:enrollment_id", enrollmentHandler.Get)
 		ownerEnrollments.POST("/units/:unit_id/enrollments/:enrollment_id/end", enrollmentHandler.End)
+	}
+	if deps.MemberBillingService != nil {
+		memberBillingHandler := handlers.NewMemberBillingHandler(deps.MemberBillingService)
+		ownerMemberBilling := protected.Group("")
+		ownerMemberBilling.Use(middleware.Owner())
+		ownerMemberBilling.GET("/units/:unit_id/enrollments/:enrollment_id/member-billing", memberBillingHandler.Snapshot)
+		ownerMemberBilling.POST("/units/:unit_id/enrollments/:enrollment_id/member-billing", memberBillingHandler.Start)
+		ownerMemberBilling.POST("/units/:unit_id/member-billing/contracts/:contract_id/materialize", memberBillingHandler.Materialize)
+		ownerMemberBilling.POST("/units/:unit_id/member-billing/charges/:charge_id/manual-payments", memberBillingHandler.Manual)
+		ownerMemberBilling.POST("/units/:unit_id/member-billing/charges/:charge_id/reconcile", memberBillingHandler.Reconcile)
+		ownerMemberBilling.POST("/units/:unit_id/member-billing/charges/:charge_id/refunds", memberBillingHandler.Refund)
 	}
 	if deps.ContractService != nil {
 		contractHandler := handlers.NewContractHandler(deps.ContractService)
@@ -410,6 +509,29 @@ func NewRouter(deps RouterDependencies) *gin.Engine {
 		ownerContracts.POST("/units/:unit_id/contracts/:contract_id/discard", contractHandler.DiscardInstance)
 		ownerContracts.POST("/units/:unit_id/contracts/:contract_id/acceptance-sessions", contractHandler.CreateAcceptanceSession)
 	}
+	if deps.ContractLifecycleService != nil {
+		handler := handlers.NewContractLifecycleHandler(deps.ContractLifecycleService, deps.ContractSignatureWebhookToken)
+		api.POST("/webhooks/contracts/:provider", handler.ReconcileSignature)
+		owner := protected.Group("")
+		owner.Use(middleware.Owner())
+		owner.GET("/units/:unit_id/contracts/:contract_id/signature-envelopes", handler.ListSignatureEnvelopes)
+		owner.POST("/units/:unit_id/contracts/:contract_id/signature-envelopes", handler.CreateSignatureEnvelope)
+		owner.GET("/units/:unit_id/enrollments/:enrollment_id/legal-actions", handler.ListLegalActions)
+		owner.POST("/units/:unit_id/enrollments/:enrollment_id/legal-actions", handler.CreateLegalAction)
+	}
+	if deps.HealthFormService != nil {
+		handler := handlers.NewHealthFormHandler(deps.HealthFormService)
+		healthFormLimiter := middleware.NewWindowRateLimiter(20, time.Minute)
+		api.GET("/public/health-forms/:token", handler.GetPublicSession)
+		api.POST("/public/health-forms/:token", middleware.JSONRateLimit(healthFormLimiter, "token"), handler.SubmitPublic)
+		owner := protected.Group("")
+		owner.Use(middleware.Owner())
+		owner.GET("/units/:unit_id/enrollments/:enrollment_id/health-forms", handler.List)
+		owner.POST("/units/:unit_id/enrollments/:enrollment_id/health-forms", handler.Submit)
+		owner.POST("/units/:unit_id/enrollments/:enrollment_id/health-form-sessions", handler.CreateSession)
+		owner.GET("/units/:unit_id/health-forms/:form_id", handler.Get)
+		owner.POST("/units/:unit_id/health-forms/:form_id/revoke-consent", handler.Revoke)
+	}
 
 	if deps.SchedulingService != nil {
 		schedulingHandler := handlers.NewSchedulingHandler(deps.SchedulingService)
@@ -424,8 +546,41 @@ func NewRouter(deps RouterDependencies) *gin.Engine {
 		ownerScheduling.GET("/units/:unit_id/scheduling/professionals/:professional_id/privacy-export", schedulingHandler.PrivacyExport)
 		ownerScheduling.POST("/units/:unit_id/scheduling/professionals/:professional_id/anonymize", schedulingHandler.Anonymize)
 	}
+	if deps.SchedulingGridService != nil {
+		gridHandler := handlers.NewSchedulingGridHandler(deps.SchedulingGridService)
+		protected.GET("/units/:unit_id/scheduling/sessions", gridHandler.ListSessions)
+		protected.GET("/units/:unit_id/scheduling/sessions/:session_id", gridHandler.GetSession)
+		ownerGrid := protected.Group("")
+		ownerGrid.Use(middleware.Owner())
+		ownerGrid.GET("/units/:unit_id/scheduling/series", gridHandler.ListSeries)
+		ownerGrid.GET("/units/:unit_id/scheduling/series/:series_id", gridHandler.GetSeries)
+		ownerGrid.GET("/units/:unit_id/scheduling/preview", gridHandler.PreviewGrid)
+		ownerGrid.POST("/units/:unit_id/scheduling/series/preview", gridHandler.PreviewCandidate)
+		ownerGrid.POST("/units/:unit_id/scheduling/series", gridHandler.CreateSeries)
+		ownerGrid.PATCH("/units/:unit_id/scheduling/series/:series_id", gridHandler.UpdateSeries)
+		ownerGrid.PATCH("/units/:unit_id/scheduling/series/:series_id/draft", gridHandler.UpdateSeries)
+		ownerGrid.POST("/units/:unit_id/scheduling/series/:series_id/archive", gridHandler.ArchiveSeries)
+		ownerGrid.POST("/units/:unit_id/scheduling/series/:series_id/reactivate", gridHandler.ReactivateSeries)
+		ownerGrid.POST("/units/:unit_id/scheduling/series/:series_id/publish", gridHandler.PublishSeries)
+		ownerGrid.POST("/units/:unit_id/scheduling/series/:series_id/changes/preview", gridHandler.PreviewSeriesChange)
+		ownerGrid.POST("/units/:unit_id/scheduling/series/:series_id/changes", gridHandler.ChangeSeries)
+		ownerGrid.POST("/units/:unit_id/scheduling/series/:series_id/cancel", gridHandler.CancelSeries)
+		ownerGrid.POST("/units/:unit_id/scheduling/sessions", gridHandler.CreateSession)
+		ownerGrid.POST("/units/:unit_id/scheduling/sessions/:session_id/change", gridHandler.ChangeSession)
+		ownerGrid.POST("/units/:unit_id/scheduling/sessions/:session_id/cancel", gridHandler.CancelSession)
+	}
+	if deps.ReservationService != nil {
+		reservationHandler := handlers.NewReservationHandler(deps.ReservationService)
+		protected.GET("/units/:unit_id/reservations/summaries", reservationHandler.SessionSummaries)
+		protected.POST("/units/:unit_id/reservations", reservationHandler.Book)
+		protected.POST("/units/:unit_id/reservations/:reservation_id/cancel", reservationHandler.Cancel)
+		protected.POST("/units/:unit_id/reservations/:reservation_id/no-show", reservationHandler.NoShow)
+		protected.GET("/units/:unit_id/scheduling/sessions/:session_id/reservations", reservationHandler.ListSession)
+		protected.GET("/units/:unit_id/people/:id/reservations", reservationHandler.ListPerson)
+	}
 
-	dashboardHandler := handlers.NewDashboardHandler(deps.DashboardSummaryUseCase, deps.DashboardActiveCampaignsUseCase, deps.DashboardNearGoalUseCase, deps.DashboardAtRiskUseCase, deps.ListPendingRewardDeliveriesUseCase)
+	dashboardHandler := handlers.NewDashboardHandler(deps.DashboardSummaryUseCase, deps.DashboardActiveCampaignsUseCase, deps.DashboardNearGoalUseCase, deps.DashboardAtRiskUseCase, deps.ListPendingRewardDeliveriesUseCase, deps.DashboardTodayUseCase)
+	protected.GET("/dashboard/today", dashboardHandler.Today)
 	protected.GET("/dashboard/summary", dashboardHandler.Summary)
 	protected.GET("/dashboard/active-campaigns", dashboardHandler.ActiveCampaigns)
 	protected.GET("/dashboard/near-goal-students", dashboardHandler.NearGoalStudents)

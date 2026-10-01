@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"boxengage/backend/internal/adapters/persistence/postgres/models"
+	"boxengage/backend/internal/app/memberships"
 	"boxengage/backend/internal/domain"
 	portrepo "boxengage/backend/internal/ports/repositories"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -222,6 +223,244 @@ func (r EnrollmentGormRepository) ListPrivacy(ctx context.Context, unitID, perso
 	return result, nil
 }
 
+func (r EnrollmentGormRepository) ResolveReservationEntitlements(ctx context.Context, organizationID, unitID, personID domain.ID, targetKind domain.ScheduleTargetKind, targetID domain.ID, occursAt time.Time) ([]domain.ReservationEntitlement, error) {
+	targetColumn := "modality_id"
+	if targetKind == domain.ScheduleTargetService {
+		targetColumn = "service_offering_id"
+	}
+	if targetKind != domain.ScheduleTargetModality && targetKind != domain.ScheduleTargetService {
+		return nil, nil
+	}
+	query := fmt.Sprintf(`
+		SELECT e.id AS enrollment_id, mpe.id AS entitlement_id, mpe.access_type, mpe.quantity, mpe.period_unit, mpe.daily_limit
+		FROM enrollments e JOIN boxes b ON b.id = e.home_unit_id AND b.organization_id = e.organization_id JOIN membership_plan_entitlements mpe ON mpe.plan_version_id = e.plan_version_id AND mpe.organization_id = e.organization_id
+		WHERE e.organization_id = ? AND e.home_unit_id = ? AND e.person_id = ? AND e.lifecycle_status = 'active'
+		  AND e.starts_on <= (?::timestamptz AT TIME ZONE b.timezone)::date AND (e.valid_until IS NULL OR e.valid_until >= (?::timestamptz AT TIME ZONE b.timezone)::date) AND mpe.%s = ?
+		UNION ALL
+		SELECT e.id, mae.id, mae.access_type, mae.quantity, mae.period_unit, mae.daily_limit
+		FROM enrollments e JOIN boxes b ON b.id = e.home_unit_id AND b.organization_id = e.organization_id JOIN enrollment_addons ea ON ea.enrollment_id = e.id AND ea.organization_id = e.organization_id
+		JOIN membership_plan_version_addon_entitlements mae ON mae.addon_id = ea.plan_version_addon_id AND mae.organization_id = e.organization_id
+		WHERE e.organization_id = ? AND e.home_unit_id = ? AND e.person_id = ? AND e.lifecycle_status = 'active'
+		  AND e.starts_on <= (?::timestamptz AT TIME ZONE b.timezone)::date AND (e.valid_until IS NULL OR e.valid_until >= (?::timestamptz AT TIME ZONE b.timezone)::date) AND mae.%s = ?`, targetColumn, targetColumn)
+	values := []domain.ReservationEntitlement{}
+	err := databaseForContext(r.db, ctx).Raw(query, stringID(organizationID), stringID(unitID), stringID(personID), occursAt, occursAt, stringID(targetID), stringID(organizationID), stringID(unitID), stringID(personID), occursAt, occursAt, stringID(targetID)).Scan(&values).Error
+	return values, err
+}
+
+func (r EnrollmentGormRepository) ResolveMembershipAccessCandidates(ctx context.Context, request domain.MembershipAccessRequest) ([]domain.MembershipAccessCandidate, error) {
+	if request.TargetID != "" && request.TargetKind != domain.ScheduleTargetModality && request.TargetKind != domain.ScheduleTargetService {
+		return []domain.MembershipAccessCandidate{}, nil
+	}
+	query := `
+		SELECT e.id AS enrollment_id, rights.entitlement_id, e.home_unit_id,
+			rights.target_kind, rights.target_id, rights.access_type, rights.quantity,
+			rights.period_unit, rights.daily_limit, rights.booking_required,
+			e.starts_on, e.valid_until, b.timezone
+		FROM enrollments e
+		JOIN boxes b ON b.id = e.home_unit_id AND b.organization_id = e.organization_id
+		JOIN (
+			SELECT mpe.organization_id, mpe.plan_version_id, NULL::uuid AS enrollment_id,
+				mpe.id AS entitlement_id, mpe.access_type, mpe.quantity, mpe.period_unit,
+				mpe.daily_limit, mpe.booking_required,
+				CASE WHEN mpe.modality_id IS NOT NULL THEN 'modality' ELSE 'service_offering' END AS target_kind,
+				COALESCE(mpe.modality_id, mpe.service_offering_id) AS target_id
+			FROM membership_plan_entitlements mpe
+			UNION ALL
+			SELECT mae.organization_id, NULL::uuid, ea.enrollment_id, mae.id,
+				mae.access_type, mae.quantity, mae.period_unit, mae.daily_limit,
+				mae.booking_required,
+				CASE WHEN mae.modality_id IS NOT NULL THEN 'modality' ELSE 'service_offering' END,
+				COALESCE(mae.modality_id, mae.service_offering_id)
+			FROM enrollment_addons ea
+			JOIN membership_plan_version_addon_entitlements mae
+			  ON mae.addon_id = ea.plan_version_addon_id AND mae.organization_id = ea.organization_id
+		) rights ON rights.organization_id = e.organization_id
+		  AND ((rights.plan_version_id = e.plan_version_id AND rights.enrollment_id IS NULL) OR rights.enrollment_id = e.id)
+		WHERE e.organization_id = ? AND e.home_unit_id = ? AND e.person_id = ?
+		  AND e.lifecycle_status = 'active'
+		  AND e.starts_on <= (?::timestamptz AT TIME ZONE b.timezone)::date
+		  AND (e.valid_until IS NULL OR e.valid_until >= (?::timestamptz AT TIME ZONE b.timezone)::date)
+		  AND (NULLIF(?, '') IS NULL OR (rights.target_kind = ? AND rights.target_id = NULLIF(?, '')::uuid))
+		ORDER BY e.starts_on DESC, rights.entitlement_id`
+	values := []domain.MembershipAccessCandidate{}
+	err := databaseForContext(r.db, ctx).Raw(query, stringID(request.OrganizationID), stringID(request.UnitID), stringID(request.PersonID), request.OccurredAt, request.OccurredAt, string(request.TargetID), string(request.TargetKind), string(request.TargetID)).Scan(&values).Error
+	return values, err
+}
+
+func (r EnrollmentGormRepository) ListEnrollmentRoster(ctx context.Context, organizationID, unitID domain.ID, at time.Time) ([]domain.EnrollmentRosterItem, error) {
+	type rosterRow struct {
+		EnrollmentID        string
+		StudentID           string
+		PersonID            string
+		PersonName          string
+		Source              string
+		PlanID              string
+		PlanName            string
+		LifecycleStatus     string
+		StartsOn            time.Time
+		ValidUntil          *time.Time
+		EndedOn             *time.Time
+		TargetID            string
+		TargetKind          string
+		TargetName          string
+		ContractAccepted    bool
+		HealthFormSubmitted bool
+		InitialPaymentPaid  bool
+		PaymentOverdue      bool
+	}
+	query := `
+		WITH rights AS (
+			SELECT mpe.organization_id, mpe.plan_version_id, NULL::uuid AS enrollment_id,
+				CASE WHEN mpe.modality_id IS NOT NULL THEN 'modality' ELSE 'service_offering' END AS target_kind,
+				COALESCE(mpe.modality_id, mpe.service_offering_id) AS target_id
+			FROM membership_plan_entitlements mpe
+			UNION ALL
+			SELECT mae.organization_id, NULL::uuid, ea.enrollment_id,
+				CASE WHEN mae.modality_id IS NOT NULL THEN 'modality' ELSE 'service_offering' END,
+				COALESCE(mae.modality_id, mae.service_offering_id)
+			FROM enrollment_addons ea
+			JOIN membership_plan_version_addon_entitlements mae
+			  ON mae.addon_id = ea.plan_version_addon_id AND mae.organization_id = ea.organization_id
+		)
+		SELECT e.id::text AS enrollment_id, '' AS student_id,
+			e.person_id::text AS person_id, '' AS person_name,
+			'' AS source, mp.id::text AS plan_id, mpv.name AS plan_name,
+			e.lifecycle_status, e.starts_on, e.valid_until, e.ended_on,
+			COALESCE(rights.target_id::text, '') AS target_id, COALESCE(rights.target_kind, '') AS target_kind,
+			COALESCE(m.name, so.name, '') AS target_name,
+			EXISTS (
+				SELECT 1 FROM contract_instances ci
+				WHERE ci.organization_id=e.organization_id AND ci.unit_id=e.home_unit_id
+				  AND ci.person_id=e.person_id AND ci.enrollment_id=e.id AND ci.status='accepted'
+			) AS contract_accepted,
+			EXISTS (
+				SELECT 1 FROM health_form_submissions hf
+				WHERE hf.organization_id=e.organization_id AND hf.unit_id=e.home_unit_id
+				  AND hf.person_id=e.person_id AND hf.enrollment_id=e.id AND hf.status='submitted'
+			) AS health_form_submitted,
+			COALESCE((
+				SELECT c.status='paid' AND (c.paid_cents-c.refunded_cents)>=c.amount_cents
+				FROM member_billing_contracts bc
+				JOIN member_charges c ON c.organization_id=bc.organization_id AND c.contract_id=bc.id
+				WHERE bc.organization_id=e.organization_id AND bc.unit_id=e.home_unit_id
+				  AND bc.person_id=e.person_id AND bc.enrollment_id=e.id AND bc.status='active'
+				ORDER BY c.sequence LIMIT 1
+			), FALSE) AS initial_payment_paid,
+			EXISTS (
+				SELECT 1 FROM member_billing_contracts bc
+				JOIN member_charges c ON c.organization_id=bc.organization_id AND c.contract_id=bc.id
+				WHERE bc.organization_id=e.organization_id AND bc.unit_id=e.home_unit_id
+				  AND bc.person_id=e.person_id AND bc.enrollment_id=e.id AND bc.status='active'
+				  AND c.status IN ('pending','partially_paid')
+				  AND (c.amount_cents-c.paid_cents+c.refunded_cents)>0
+				  AND c.due_on < (?::timestamptz AT TIME ZONE b.timezone)::date
+			) AS payment_overdue
+		FROM enrollments e
+		JOIN boxes b ON b.id=e.home_unit_id AND b.organization_id=e.organization_id
+		JOIN membership_plan_versions mpv ON mpv.id=e.plan_version_id AND mpv.organization_id=e.organization_id
+		JOIN membership_plans mp ON mp.id=mpv.plan_id AND mp.organization_id=e.organization_id
+		LEFT JOIN rights ON rights.organization_id=e.organization_id
+		  AND ((rights.plan_version_id=e.plan_version_id AND rights.enrollment_id IS NULL) OR rights.enrollment_id=e.id)
+		LEFT JOIN modalities m ON rights.target_kind='modality' AND m.id=rights.target_id AND m.organization_id=e.organization_id
+		LEFT JOIN service_offerings so ON rights.target_kind='service_offering' AND so.id=rights.target_id AND so.organization_id=e.organization_id
+		WHERE e.organization_id=? AND e.home_unit_id=?
+		ORDER BY e.created_at DESC, target_name`
+	rows := []rosterRow{}
+	if err := databaseForContext(r.db, ctx).Raw(query, at, stringID(organizationID), stringID(unitID)).Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+	items := make([]domain.EnrollmentRosterItem, 0, len(rows))
+	positions := make(map[string]int, len(rows))
+	for _, row := range rows {
+		index, exists := positions[row.EnrollmentID]
+		if !exists {
+			index = len(items)
+			positions[row.EnrollmentID] = index
+			items = append(items, domain.EnrollmentRosterItem{
+				EnrollmentID: domain.ID(row.EnrollmentID), StudentID: domain.ID(row.StudentID),
+				PersonID: domain.ID(row.PersonID), PersonName: row.PersonName, Source: domain.Source(row.Source),
+				PlanID: domain.ID(row.PlanID), PlanName: row.PlanName,
+				LifecycleStatus: domain.EnrollmentLifecycleStatus(row.LifecycleStatus), StartsOn: row.StartsOn,
+				ValidUntil: row.ValidUntil, EndedOn: row.EndedOn, Targets: []domain.EnrollmentRosterTarget{},
+				Prerequisites: domain.MembershipAccessPrerequisites{
+					ContractAccepted: row.ContractAccepted, HealthFormSubmitted: row.HealthFormSubmitted,
+					InitialPaymentPaid: row.InitialPaymentPaid, PaymentOverdue: row.PaymentOverdue,
+				},
+			})
+		}
+		if row.TargetID != "" {
+			target := domain.EnrollmentRosterTarget{ID: domain.ID(row.TargetID), Kind: domain.ScheduleTargetKind(row.TargetKind), Name: row.TargetName}
+			duplicate := false
+			for _, existing := range items[index].Targets {
+				if existing.ID == target.ID && existing.Kind == target.Kind {
+					duplicate = true
+					break
+				}
+			}
+			if !duplicate {
+				items[index].Targets = append(items[index].Targets, target)
+			}
+		}
+	}
+	return items, nil
+}
+
+func (r EnrollmentGormRepository) ResolveMembershipAccessPrerequisites(ctx context.Context, organizationID, unitID, personID, enrollmentID domain.ID, occursAt time.Time) (domain.MembershipAccessPrerequisites, error) {
+	query := `
+		SELECT
+			EXISTS (
+				SELECT 1 FROM contract_instances ci
+				WHERE ci.organization_id = ? AND ci.unit_id = ? AND ci.person_id = ? AND ci.enrollment_id = ? AND ci.status = 'accepted'
+			) AS contract_accepted,
+			EXISTS (
+				SELECT 1 FROM health_form_submissions hf
+				WHERE hf.organization_id = ? AND hf.unit_id = ? AND hf.person_id = ? AND hf.enrollment_id = ? AND hf.status = 'submitted'
+			) AS health_form_submitted,
+			COALESCE((
+				SELECT c.status = 'paid' AND (c.paid_cents - c.refunded_cents) >= c.amount_cents
+				FROM member_billing_contracts bc
+				JOIN member_charges c ON c.organization_id = bc.organization_id AND c.contract_id = bc.id
+				WHERE bc.organization_id = ? AND bc.unit_id = ? AND bc.person_id = ? AND bc.enrollment_id = ? AND bc.status = 'active'
+				ORDER BY c.sequence
+				LIMIT 1
+			), FALSE) AS initial_payment_paid,
+			EXISTS (
+				SELECT 1 FROM member_billing_contracts bc
+				JOIN member_charges c ON c.organization_id = bc.organization_id AND c.contract_id = bc.id
+				JOIN boxes b ON b.id = bc.unit_id AND b.organization_id = bc.organization_id
+				WHERE bc.organization_id = ? AND bc.unit_id = ? AND bc.person_id = ? AND bc.enrollment_id = ? AND bc.status = 'active'
+				  AND c.status IN ('pending', 'partially_paid')
+				  AND (c.amount_cents - c.paid_cents + c.refunded_cents) > 0
+				  AND c.due_on < (?::timestamptz AT TIME ZONE b.timezone)::date
+			) AS payment_overdue`
+	value := domain.MembershipAccessPrerequisites{}
+	err := databaseForContext(r.db, ctx).Raw(query,
+		stringID(organizationID), stringID(unitID), stringID(personID), stringID(enrollmentID),
+		stringID(organizationID), stringID(unitID), stringID(personID), stringID(enrollmentID),
+		stringID(organizationID), stringID(unitID), stringID(personID), stringID(enrollmentID),
+		stringID(organizationID), stringID(unitID), stringID(personID), stringID(enrollmentID), occursAt,
+	).Scan(&value).Error
+	return value, err
+}
+
+func (r EnrollmentGormRepository) HasActiveEnrollmentInUnit(ctx context.Context, organizationID, unitID, personID domain.ID, at time.Time) (bool, error) {
+	var count int64
+	err := databaseForContext(r.db, ctx).Table("enrollments e").Joins("JOIN boxes b ON b.id = e.home_unit_id AND b.organization_id = e.organization_id").Where(`e.organization_id = ? AND e.home_unit_id = ? AND e.person_id = ? AND e.lifecycle_status = 'active' AND e.starts_on <= (?::timestamptz AT TIME ZONE b.timezone)::date AND (e.valid_until IS NULL OR e.valid_until >= (?::timestamptz AT TIME ZONE b.timezone)::date)`, stringID(organizationID), stringID(unitID), stringID(personID), at, at).Count(&count).Error
+	return count > 0, err
+}
+
+func (r EnrollmentGormRepository) HasEnrollmentInUnit(ctx context.Context, organizationID, unitID, personID domain.ID) (bool, error) {
+	var count int64
+	err := databaseForContext(r.db, ctx).Table("enrollments").Where("organization_id = ? AND home_unit_id = ? AND person_id = ?", stringID(organizationID), stringID(unitID), stringID(personID)).Count(&count).Error
+	return count > 0, err
+}
+
+func (r EnrollmentGormRepository) HasEnrollmentOutsideRequestedUnit(ctx context.Context, organizationID, unitID, personID domain.ID, at time.Time) (bool, error) {
+	var count int64
+	err := databaseForContext(r.db, ctx).Table("enrollments e").Joins("JOIN boxes b ON b.id = e.home_unit_id AND b.organization_id = e.organization_id").Where(`e.organization_id = ? AND e.home_unit_id <> ? AND e.person_id = ? AND e.lifecycle_status = 'active' AND e.starts_on <= (?::timestamptz AT TIME ZONE b.timezone)::date AND (e.valid_until IS NULL OR e.valid_until >= (?::timestamptz AT TIME ZONE b.timezone)::date)`, stringID(organizationID), stringID(unitID), stringID(personID), at, at).Count(&count).Error
+	return count > 0, err
+}
+
 func loadEnrollment(db *gorm.DB, row models.EnrollmentModel) (domain.Enrollment, error) {
 	item := enrollmentToDomain(row)
 	var version models.MembershipPlanVersionModel
@@ -327,6 +566,9 @@ func enrollmentWriteError(err error) error {
 		case "enrollment_addons_enrollment_addon_key":
 			return portrepo.ErrEnrollmentAddonDuplicate
 		}
+	}
+	if pgErr.Code == "23514" && pgErr.ConstraintName == "enrollments_person_phone_required" {
+		return memberships.ErrEnrollmentPhoneRequired
 	}
 	return err
 }
