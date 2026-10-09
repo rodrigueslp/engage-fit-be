@@ -88,3 +88,4 @@ CREATE TABLE attendance_command_requests (
     CONSTRAINT attendance_commands_key_check CHECK (idempotency_key ~ '^[A-Za-z0-9._:-]{8,128}$'),
     CONSTRAINT attendance_commands_fingerprint_check CHECK (request_fingerprint ~ '^[0-9a-f]{64}$')
 );
+

@@ -2,6 +2,7 @@ package http
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"time"
 
@@ -26,6 +27,7 @@ import (
 	"boxengage/backend/internal/app/contracts"
 	"boxengage/backend/internal/app/dashboard"
 	"boxengage/backend/internal/app/email"
+	"boxengage/backend/internal/app/featureflags"
 	"boxengage/backend/internal/app/healthforms"
 	"boxengage/backend/internal/app/imports"
 	memberbillingapp "boxengage/backend/internal/app/memberbilling"
@@ -48,6 +50,10 @@ import (
 )
 
 type RouterDependencies struct {
+	FeatureFlags                  *featureflags.Service
+	FeatureFlagStore              featureflags.Store
+	FeatureFlagAvailability       map[string]bool
+	OperationalFlags              map[string]bool
 	AppEnv                        string
 	TokenService                  services.TokenService
 	UserRepository                repositories.UserRepository
@@ -207,6 +213,15 @@ type RouterDependencies struct {
 }
 
 func NewRouter(deps RouterDependencies) *gin.Engine {
+	if deps.FeatureFlags == nil && deps.FeatureFlagStore != nil {
+		encoded, _ := json.Marshal(deps.Capabilities)
+		base := map[string]bool{}
+		_ = json.Unmarshal(encoded, &base)
+		for key, enabled := range deps.OperationalFlags {
+			base[key] = enabled
+		}
+		deps.FeatureFlags = featureflags.NewService(base, deps.FeatureFlagStore).WithAvailability(deps.FeatureFlagAvailability)
+	}
 	if deps.AppEnv == "production" {
 		gin.SetMode(gin.ReleaseMode)
 	}
@@ -247,8 +262,31 @@ func NewRouter(deps RouterDependencies) *gin.Engine {
 	}
 
 	api := router.Group("/api/v1")
-	api.GET("/capabilities", func(c *gin.Context) { c.JSON(http.StatusOK, deps.Capabilities) })
-	api.Use(middleware.FeatureGates(deps.Capabilities))
+	capabilitiesProvider := func(ctx context.Context) (middleware.Capabilities, error) {
+		if deps.FeatureFlags == nil {
+			return deps.Capabilities, nil
+		}
+		values, err := deps.FeatureFlags.Effective(ctx)
+		if err != nil {
+			return middleware.Capabilities{}, err
+		}
+		payload, err := json.Marshal(values)
+		if err != nil {
+			return middleware.Capabilities{}, err
+		}
+		var effective middleware.Capabilities
+		err = json.Unmarshal(payload, &effective)
+		return effective, err
+	}
+	api.GET("/capabilities", func(c *gin.Context) {
+		values, err := capabilitiesProvider(c.Request.Context())
+		if err != nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "capabilities unavailable"})
+			return
+		}
+		c.JSON(http.StatusOK, values)
+	})
+	api.Use(middleware.FeatureGatesProvider(capabilitiesProvider))
 
 	authHandler := handlers.NewAuthHandler(deps.LoginUseCase, deps.CurrentUserUseCase, deps.ChangePasswordUseCase, deps.LogoutUseCase, deps.SessionConfig)
 	if deps.OrganizationService != nil {
@@ -359,6 +397,11 @@ func NewRouter(deps RouterDependencies) *gin.Engine {
 
 	admin := authenticated.Group("/admin")
 	admin.Use(middleware.PlatformAdmin())
+	if deps.FeatureFlags != nil {
+		flagsHandler := handlers.NewFeatureFlagsHandler(deps.FeatureFlags)
+		admin.GET("/feature-flags", flagsHandler.List)
+		admin.PUT("/feature-flags/:key", flagsHandler.Set)
+	}
 	admin.GET("/messaging/boxes", governanceHandler.ListBoxes)
 	admin.GET("/messaging/boxes/:id/policy", governanceHandler.GetBoxPolicy)
 	admin.PUT("/messaging/boxes/:id/policy", governanceHandler.UpdateBoxPolicy)

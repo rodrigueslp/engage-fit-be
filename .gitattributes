@@ -1,0 +1,2 @@
+# Keep the published migration byte-for-byte identical to the applied checksum.
+migrations/066_create_attendance_access.sql whitespace=-blank-at-eof

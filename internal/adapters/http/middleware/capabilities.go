@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"net/http"
 	"strings"
 
@@ -34,7 +35,16 @@ type Capabilities struct {
 }
 
 func FeatureGates(capabilities Capabilities) gin.HandlerFunc {
+	return FeatureGatesProvider(func(context.Context) (Capabilities, error) { return capabilities, nil })
+}
+
+func FeatureGatesProvider(provider func(context.Context) (Capabilities, error)) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		capabilities, err := provider(c.Request.Context())
+		if err != nil {
+			apiresponse.AbortError(c, http.StatusServiceUnavailable, "capabilities_unavailable", "capabilities unavailable")
+			return
+		}
 		path := c.Request.URL.Path
 		disabled := false
 		switch {
@@ -46,9 +56,9 @@ func FeatureGates(capabilities Capabilities) gin.HandlerFunc {
 			disabled = !capabilities.Email
 		case strings.HasPrefix(path, "/api/v1/automation"):
 			disabled = !capabilities.Automation
-		case strings.HasPrefix(path, "/api/v1/workouts") || strings.HasPrefix(path, "/api/v1/workout-message"):
+		case strings.HasPrefix(path, "/api/v1/workouts") || strings.HasPrefix(path, "/api/v1/workout-message") || strings.HasPrefix(path, "/api/v1/athlete/workouts"):
 			disabled = !capabilities.Workouts
-			if !disabled && c.Request.Method == http.MethodPost && strings.HasSuffix(path, "/message-drafts") {
+			if !disabled && c.Request.Method == http.MethodPost && (strings.HasSuffix(path, "/message-drafts") || strings.HasSuffix(path, "/explanation")) {
 				disabled = !capabilities.LLM
 			}
 		case strings.HasPrefix(path, "/api/v1/whatsapp") || strings.HasPrefix(path, "/api/v1/message-") || strings.Contains(path, "/whatsapp-templates") || strings.Contains(path, "/whatsapp-settings") || strings.Contains(path, "/contact-activation") || path == "/api/v1/webhooks/twilio/whatsapp" || path == "/api/v1/messaging/usage":

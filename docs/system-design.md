@@ -349,6 +349,10 @@ Defaults:
 
 O backend retorna somente booleans seguros em `GET /api/v1/capabilities`. O frontend esconde menus e redireciona hashes desabilitados, mas o bloqueio de segurança real é o middleware do backend.
 
+O administrador da plataforma consulta `GET /api/v1/admin/feature-flags` para ver as capabilities, dependências, origem `FEATURE_*`, estado efetivo e controles operacionais. `PUT /api/v1/admin/feature-flags/:key` aceita `{ "enabled": boolean, "reason": string }` para as flags editáveis. A alteração fica em `platform_feature_overrides`, com auditoria transacional em `admin_audit_logs`. O middleware e `/capabilities` consultam o banco a cada requisição, então uma alteração confirmada passa a valer também nas demais instâncias sem reinício. Ativar uma capacidade exige que suas dependências estejam ativas.
+
+Os controles imediatos incluem comunicação (WhatsApp, e-mail, automação sem worker, treinos e IA com chave configurada), pessoas com chaves configuradas, catálogo, serviços, planos, matrículas, reservas, presença, comunicados e quiosque. O aplicativo do aluno aplica as flags de treinos e IA nas próprias rotas. A execução periódica da automação e os envios reais dependem de controles separados, visíveis como somente leitura no painel. Recursos cujo serviço ou worker exige configuração de inicialização continuam somente leitura e exigem reinício do servidor.
+
 Após a correção de 2026-07-21, gateways SMTP e WhatsApp reais exigem explicitamente `*_ALLOW_REAL_SEND=true` também em production. Habilitar apenas a página/feature não autoriza envio.
 
 Dependências validadas no startup:

@@ -202,7 +202,8 @@ func main() {
 	emailGateway := email.NewSMTPGateway(cfg.AppEnv, cfg.EmailAllowRealSend, cfg.EmailDevRecipientEmail)
 	athleteService.WithMailer(athleteapp.NewAccountMailer(athleteRepository, emailSettingsRepository, emailGateway, cfg.PublicWebURL))
 	llmGenerator := llm.NewOpenAIGenerator(cfg.OpenAIAPIKey, cfg.OpenAIModel, cfg.OpenAITimeoutSeconds)
-	if cfg.FeatureLLMEnabled {
+	llmReady := strings.TrimSpace(cfg.OpenAIAPIKey) != ""
+	if llmReady {
 		athleteService.WithExplainer(llmGenerator)
 	}
 	checkinParser := parsers.NewCheckinParser()
@@ -258,10 +259,16 @@ func main() {
 	organizationService := organizations.NewService(organizationRepository)
 	switchUnitContextUseCase := auth.NewSwitchUnitContextUseCase(userRepository, organizationRepository, tokenService)
 	var peopleService *people.Service
-	if cfg.FeaturePeopleFoundationEnabled {
+	peopleReady := strings.TrimSpace(cfg.DataEncryptionActiveKeyID) != "" && strings.TrimSpace(cfg.DataEncryptionKeys) != "" && strings.TrimSpace(cfg.PersonLookupHMACKey) != ""
+	if peopleReady {
 		peopleService, err = people.NewService(peopleRepository, boxRepository, secretCipher, cfg.PersonLookupHMACKey)
 		if err != nil {
-			log.Fatalf("invalid people foundation configuration: %v", err)
+			if cfg.FeaturePeopleFoundationEnabled {
+				log.Fatalf("invalid people foundation configuration: %v", err)
+			}
+			slog.Warn("people_foundation_unavailable", "error_kind", "invalid_configuration")
+			peopleReady = false
+			peopleService = nil
 		}
 	}
 	if missingPeople, countErr := peopleRepository.CountStudentsWithoutPerson(context.Background()); countErr != nil {
@@ -377,6 +384,20 @@ func main() {
 	monthlyFrequencyReportUseCase := reportsapp.NewMonthlyFrequencyReportUseCase(checkinRepository)
 
 	router := apphttp.NewRouter(apphttp.RouterDependencies{
+		FeatureFlagStore: pgrepo.NewFeatureFlagsRepository(db),
+		FeatureFlagAvailability: map[string]bool{
+			"whatsapp":   !cfg.AutomationWorkerEnabled,
+			"email":      !cfg.AutomationWorkerEnabled,
+			"automation": !cfg.AutomationWorkerEnabled,
+			"llm":        llmReady,
+			"people":     peopleReady,
+		},
+		OperationalFlags: map[string]bool{
+			"whatsapp_real_send":      cfg.WhatsappAllowRealSend,
+			"email_real_send":         cfg.EmailAllowRealSend,
+			"automation_worker":       cfg.AutomationWorkerEnabled,
+			"scheduling_materializer": cfg.SchedulingMaterializerEnabled,
+		},
 		AppEnv:                        cfg.AppEnv,
 		TokenService:                  tokenService,
 		UserRepository:                userRepository,

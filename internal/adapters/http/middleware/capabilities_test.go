@@ -34,6 +34,30 @@ func TestFeatureGates(t *testing.T) {
 	assert(http.MethodPost, "/api/v1/workouts/123/message-drafts", http.StatusNotFound)
 }
 
+func TestAthleteWorkoutsFollowWorkoutsAndLLMFlags(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	for _, test := range []struct {
+		caps   Capabilities
+		path   string
+		method string
+		want   int
+	}{
+		{Capabilities{}, "/api/v1/athlete/workouts", http.MethodGet, http.StatusNotFound},
+		{Capabilities{Workouts: true}, "/api/v1/athlete/workouts", http.MethodGet, http.StatusNoContent},
+		{Capabilities{Workouts: true}, "/api/v1/athlete/workouts/id/explanation", http.MethodPost, http.StatusNotFound},
+		{Capabilities{Workouts: true, LLM: true}, "/api/v1/athlete/workouts/id/explanation", http.MethodPost, http.StatusNoContent},
+	} {
+		router := gin.New()
+		router.Use(FeatureGates(test.caps))
+		router.Any("/*path", func(c *gin.Context) { c.Status(http.StatusNoContent) })
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, httptest.NewRequest(test.method, test.path, nil))
+		if response.Code != test.want {
+			t.Fatalf("%s %s: got %d, want %d", test.method, test.path, response.Code, test.want)
+		}
+	}
+}
+
 func TestAthleteBookingRequiresReservationsCapability(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	paths := []string{"/api/v1/athlete/memberships/membership/sessions/session/book", "/api/v1/athlete/memberships/membership/sessions/session/reservations/reservation/cancel"}
