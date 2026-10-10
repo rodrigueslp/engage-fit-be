@@ -57,7 +57,7 @@ fora dos repositórios, em diretório local com permissão 0700 e arquivos 0600:
 `production-backups/release-20261009/`. Não versionar esse diretório nem seus
 logs: eles contêm dados pessoais e configurações de produção.
 
-Guardar `rehearsal.dump`, `predeploy.dump` e seus metadados de checksum/data.
+Guardar `rehearsal.dump`, `predeploy.dump`, `postdeploy.dump` e seus metadados de checksum/data.
 A restauração foi validada por `pg_restore --exit-on-error --no-owner --no-acl`
 em banco vazio isolado. Este backup é pontual; não existe uma política nova de
 backup automático ou PITR. Um restore de produção precisa interromper as
@@ -93,4 +93,58 @@ Validar readiness e as consultas autenticadas antes de concluir a recuperação.
 
 ## Resultado da publicação
 
-Em preparação. Atualizar esta seção após a validação dos deployments finais.
+Publicado e validado em 2026-10-09, concluindo as verificações por volta de
+23:22 America/Sao_Paulo (2026-10-10 02:22 UTC).
+
+| Serviço | Commit publicado | Deployment Railway |
+| --- | --- | --- |
+| API | `9fc92ca06bdcd9b269e5fff12b27580eb0e13dd0` | `314d5c23-12ab-4da7-935b-68e87390b022` |
+| Reconciliação SaaS | `9fc92ca06bdcd9b269e5fff12b27580eb0e13dd0` | `2a69e863-c52c-4550-b942-817ffec9e99c` |
+| Frontend | `f44b205a5e69ad2072e2bdb760d3f5949d61fc37` | `75b5a773-2015-483e-9a28-0cf1bc636ce2` |
+
+Todos os deployments terminaram em `SUCCESS`. O job agendado registrou
+conclusão normal. As 77 migrations possuem checksum correto e os registros
+revisados da API e do job não mostraram erro de aplicação. As 18 consultas
+autenticadas passaram antes do release, depois do backend com frontend antigo
+e depois do frontend novo; sessões por cookie continuam aceitas.
+
+Durante o rollout, duas importações normais acrescentaram nove alunos e 771
+check-ins desde o backup final anterior ao deploy. A comparação por ID com o
+backup confirmou todos os registros anteriores, com conteúdo de alunos,
+check-ins e importações preservado. As demais diferenças foram apenas
+timestamps de billing e recálculo de campanhas. Por isso, o hash integral das
+tabelas sob escrita mudou; a comparação não foi tratada como perda de dados.
+
+A conferência final encontrou 433 alunos, 12.895 check-ins, 433 pessoas e
+vínculos, quatro organizações/unidades e quatro usuários operacionais com
+acesso migrado. Nenhuma pessoa/organização ausente, matrícula nova, cobrança de
+aluno, override ou controle físico ativado. Flags e permissões de envio já
+homologadas foram preservadas; módulos novos e workers continuam desligados.
+
+O JavaScript publicado corresponde byte a byte ao build validado
+(`index-bcjDHT65.js`); manifest, service worker e favicon também correspondem.
+HTTPS, saúde pública e login em 360×800 foram verificados, sem erro 5xx ou
+overflow horizontal nesse teste. Não foram executadas importações sintéticas,
+redefinições de senha ou disparos de provedores em produção.
+
+Backups anteriores e posteriores ao upgrade tiveram restauração completa e
+checksum verificados. O backup posterior, com esquema 77 e os novos registros,
+foi criado em 2026-10-10 02:22:04 UTC. Seus metadados protegidos são a referência
+para recuperação, junto com as chaves de criptografia salvas separadamente.
+
+O autodeploy da API e do job observa `cmd/**`, `internal/**`, `migrations/**`,
+`go.mod`, `go.sum`, `Dockerfile` e `.dockerignore`. Alterações apenas nesta
+documentação não reiniciam produção. Mudanças de variáveis continuam exigindo
+controle explícito do deploy. O frontend mantém seu autodeploy existente.
+
+Limitações: backup nativo/agendado e PITR não foram habilitados no Hobby;
+o rollback de aplicação foi ensaiado na cópia isolada, sem reverter o release
+saudável em produção. Recursos novos precisam de ativação e configuração
+próprias antes do uso, especialmente pessoas, contratos e cobranças de alunos.
+
+## Referências operacionais
+
+- [Railway: healthchecks](https://docs.railway.com/deployments/healthchecks)
+- [Railway: predeploy](https://docs.railway.com/deployments/pre-deploy-command)
+- [Railway: watch paths](https://docs.railway.com/builds/build-configuration)
+- [pgx: cache de consultas e alterações de esquema](https://github.com/jackc/pgx/wiki/Automatic-Prepared-Statement-Caching)
