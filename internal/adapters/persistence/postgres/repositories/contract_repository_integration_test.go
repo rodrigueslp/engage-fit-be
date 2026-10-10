@@ -163,7 +163,7 @@ func TestContractRepositoryPostgresTriggersAndTenancy(t *testing.T) {
 
 	// 6. Test Contract Instance Creation & Immutability Trigger
 	personID := domain.ID(uuid.NewString())
-	if err := db.Exec("INSERT INTO persons (id, organization_id, name, profile_status) VALUES (?, ?, ?, 'active')", string(personID), string(box1.OrganizationID), "Aluno Teste").Error; err != nil {
+	if err := db.Exec("INSERT INTO persons (id, organization_id, name, profile_status, phone_e164) VALUES (?, ?, ?, 'active', '+5511999999999')", string(personID), string(box1.OrganizationID), "Aluno Teste").Error; err != nil {
 		t.Fatal(err)
 	}
 	planID := domain.ID(uuid.NewString())

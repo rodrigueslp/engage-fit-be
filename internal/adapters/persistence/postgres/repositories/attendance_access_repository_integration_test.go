@@ -55,7 +55,8 @@ func TestAttendanceAccessRepositoryPersistsAuditedPresenceAndDeduplicates(t *tes
 		t.Fatal(err)
 	}
 
-	now := time.Now().UTC().Truncate(time.Second)
+	// 23:30 in the unit is already the next UTC day.
+	now := time.Date(2026, 10, 10, 2, 30, 0, 0, time.UTC)
 	box := &domain.Box{Name: "SPEC-008 Unit", Timezone: "America/Sao_Paulo", Status: domain.BoxStatusActive, CreatedAt: now, UpdatedAt: now}
 	owner := &domain.User{Name: "Owner", Email: uuid.NewString() + "@example.test", PasswordHash: "hash", AuthVersion: 1, Role: domain.UserRoleOwner, Active: true, CreatedAt: now, UpdatedAt: now}
 	if err := NewBoxGormRepository(db).SaveWithOwner(ctx, box, owner); err != nil {
@@ -123,6 +124,12 @@ func TestAttendanceAccessRepositoryPersistsAuditedPresenceAndDeduplicates(t *tes
 	items, err := repo.ListAttendanceForDate(ctx, box.OrganizationID, box.ID, record.LocalDate)
 	if err != nil || len(items) != 1 || items[0].Attendance == nil || items[0].Decision.EntitlementID == nil || *items[0].Decision.EntitlementID != entitlementID || items[0].Decision.RemainingUsage == nil || *items[0].Decision.RemainingUsage != remaining {
 		t.Fatalf("items=%+v err=%v", items, err)
+	}
+	for _, adjacentDate := range []string{"2026-10-08", "2026-10-10"} {
+		items, err := repo.ListAttendanceForDate(ctx, box.OrganizationID, box.ID, adjacentDate)
+		if err != nil || len(items) != 0 {
+			t.Fatalf("adjacent date %s: items=%+v err=%v", adjacentDate, items, err)
+		}
 	}
 }
 

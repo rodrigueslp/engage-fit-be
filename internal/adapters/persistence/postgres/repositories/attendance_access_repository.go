@@ -201,7 +201,7 @@ func (r AttendanceGormRepository) GetAttendanceAdmission(ctx context.Context, or
 
 func (r AttendanceGormRepository) ListAttendanceForDate(ctx context.Context, organizationID, unitID domain.ID, date string) ([]domain.AttendanceAdmission, error) {
 	var rows []attendanceAdmissionRow
-	if err := databaseForContext(r.db, ctx).Raw(attendanceAdmissionSelect()+` WHERE d.organization_id=? AND d.unit_id=? AND d.occurred_at >= (?::date AT TIME ZONE (SELECT timezone FROM boxes WHERE id=?)) AND d.occurred_at < ((?::date + 1) AT TIME ZONE (SELECT timezone FROM boxes WHERE id=?)) ORDER BY d.occurred_at DESC`, stringID(organizationID), stringID(unitID), date, stringID(unitID), date, stringID(unitID)).Scan(&rows).Error; err != nil {
+	if err := databaseForContext(r.db, ctx).Raw(attendanceAdmissionSelect()+` WHERE d.organization_id=? AND d.unit_id=? AND d.occurred_at >= (?::date::timestamp AT TIME ZONE (SELECT timezone FROM boxes WHERE id=?)) AND d.occurred_at < ((?::date + 1)::timestamp AT TIME ZONE (SELECT timezone FROM boxes WHERE id=?)) ORDER BY d.occurred_at DESC`, stringID(organizationID), stringID(unitID), date, stringID(unitID), date, stringID(unitID)).Scan(&rows).Error; err != nil {
 		return nil, err
 	}
 	result := make([]domain.AttendanceAdmission, 0, len(rows))

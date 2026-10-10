@@ -171,7 +171,7 @@ func TestMembershipAddonsAndCompositionLifecycle(t *testing.T) {
 
 	// Test enrollment composition
 	personID, studentID, relationshipID := uuid.NewString(), uuid.NewString(), uuid.NewString()
-	if err := db.Exec(`INSERT INTO persons (id, organization_id, name) VALUES (?, ?, 'Aluno Composição')`, personID, string(box.OrganizationID)).Error; err != nil {
+	if err := db.Exec(`INSERT INTO persons (id, organization_id, name, phone_e164) VALUES (?, ?, 'Aluno Composição', '+5511999999999')`, personID, string(box.OrganizationID)).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Exec(`INSERT INTO students (id, box_id, person_id, name, source, contact_status) VALUES (?, ?, ?, 'Aluno Composição', 'box_member', 'unknown')`, studentID, string(box.ID), personID).Error; err != nil {

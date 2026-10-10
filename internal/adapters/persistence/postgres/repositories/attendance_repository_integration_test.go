@@ -3,6 +3,7 @@ package repositories
 import (
 	"context"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -21,6 +22,11 @@ func TestAttendanceRepositoryCreatesOneBoxMemberCheckinPerDay(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	db = db.Begin()
+	if db.Error != nil {
+		t.Fatal(db.Error)
+	}
+	t.Cleanup(func() { db.Rollback() })
 	now := time.Now().UTC().Truncate(time.Second)
 	boxID, userID, studentID := uuid.NewString(), uuid.NewString(), uuid.NewString()
 	fixtures := []any{
@@ -33,11 +39,9 @@ func TestAttendanceRepositoryCreatesOneBoxMemberCheckinPerDay(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	t.Cleanup(func() { _ = db.Exec("DELETE FROM boxes WHERE id = ?", boxID).Error })
-
 	repository := NewAttendanceGormRepository(db)
 	session := &domain.SelfCheckinSession{
-		BoxID: domain.ID(boxID), CreatedByUserID: domain.ID(userID), TokenHash: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		BoxID: domain.ID(boxID), CreatedByUserID: domain.ID(userID), TokenHash: strings.ReplaceAll(uuid.NewString()+uuid.NewString(), "-", ""),
 		ExpiresAt: now.Add(10 * time.Minute), CreatedAt: now,
 	}
 	if err := repository.SaveSelfCheckinSession(context.Background(), session); err != nil {

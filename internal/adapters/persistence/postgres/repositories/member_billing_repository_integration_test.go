@@ -51,7 +51,7 @@ func TestMemberBillingRepositoryPostgresLedgerAndTenancy(t *testing.T) {
 		db.Exec("DELETE FROM boxes WHERE id=?", unit)
 		db.Exec("DELETE FROM organizations WHERE id=?", org)
 	})
-	if err = db.Exec("INSERT INTO persons(id,organization_id,name) VALUES (?,?,?)", personID, org, "Pessoa Teste").Error; err != nil {
+	if err = db.Exec("INSERT INTO persons(id,organization_id,name,phone_e164) VALUES (?,?,?,'+5511999999999')", personID, org, "Pessoa Teste").Error; err != nil {
 		t.Fatal(err)
 	}
 	if err = db.Exec("INSERT INTO membership_plans(id,organization_id,home_unit_id,name,name_key,status) VALUES (?,?,?,?,?,'active')", planID, org, unit, "Plano Teste", uuid.NewString()).Error; err != nil {

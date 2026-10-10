@@ -702,6 +702,8 @@ exige as fundações de pessoas, matrículas, grade e reservas.
 O painel mobile de Check-ins reúne a decisão, o motivo e as tentativas do dia.
 As tabelas não duplicam nome, telefone ou identificador externo; a interface
 resolve o nome da pessoa em leitura e o export LGPD inclui decisões e presenças.
+O filtro diário usa o dia civil no fuso da unidade, com o início inclusivo e
+o início do dia seguinte exclusivo, inclusive quando a data UTC já mudou.
 
 O controle físico é opt-in por unidade. `disabled` é o default e preserva os
 relatórios de frequência, o check-in manual e o QR sem apresentar portaria.

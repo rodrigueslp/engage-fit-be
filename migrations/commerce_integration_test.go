@@ -44,8 +44,8 @@ func TestCommerceMigrationIsolationAndReconciliation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(applied) == 0 || applied[len(applied)-1].Version != 71 {
-		t.Fatalf("last migration = %+v", applied)
+	if len(applied) < 71 || applied[70].Name != "create_commerce" {
+		t.Fatalf("commerce migration was not applied: migration count = %d", len(applied))
 	}
 	const unitOne = "10000000-0000-4000-8000-000000000001"
 	const unitTwo = "10000000-0000-4000-8000-000000000002"

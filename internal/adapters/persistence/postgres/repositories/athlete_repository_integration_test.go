@@ -3,6 +3,7 @@ package repositories
 import (
 	"context"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -90,6 +91,11 @@ func TestAthleteRepositoryLoadsInvitationByTokenHash(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	db = db.Begin()
+	if db.Error != nil {
+		t.Fatal(db.Error)
+	}
+	t.Cleanup(func() { db.Rollback() })
 
 	now := time.Now().UTC().Truncate(time.Second)
 	boxID, userID, studentID := uuid.NewString(), uuid.NewString(), uuid.NewString()
@@ -103,12 +109,10 @@ func TestAthleteRepositoryLoadsInvitationByTokenHash(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	t.Cleanup(func() { _ = db.Exec("DELETE FROM boxes WHERE id = ?", boxID).Error })
-
 	repository := NewAthleteGormRepository(db)
 	invitation := &domain.AthleteInvitation{
 		BoxID: domain.ID(boxID), StudentID: domain.ID(studentID), CreatedByUserID: domain.ID(userID),
-		TokenHash: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		TokenHash: strings.ReplaceAll(uuid.NewString()+uuid.NewString(), "-", ""),
 		ExpiresAt: now.Add(7 * 24 * time.Hour), CreatedAt: now,
 	}
 	if err := repository.SaveInvitation(context.Background(), invitation); err != nil {

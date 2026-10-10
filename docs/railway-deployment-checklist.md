@@ -12,7 +12,7 @@ Este checklist comeca somente depois da prontidao da aplicacao. Ele separa decis
 
 ## Build e release
 
-- [ ] Configurar o backend com seu `Dockerfile` e healthcheck `/health/live`.
+- [ ] Configurar o backend com seu `Dockerfile` e healthcheck `/health/ready` para validar conexao com o banco antes da troca de deploy.
 - [ ] Configurar o frontend com seu `Dockerfile` e healthcheck `/health`.
 - [ ] Injetar `BUILD_VERSION`, `BUILD_COMMIT` e `BUILD_TIME` no build da API.
 - [ ] Executar `engagefit-migrate` como etapa de release separada antes da nova API.
@@ -24,8 +24,8 @@ Este checklist comeca somente depois da prontidao da aplicacao. Ele separa decis
 - [ ] Preencher as variaveis production do guia `docs/application-readiness-guide.md`.
 - [ ] Gerar JWT, administrador, setup token, token Prometheus e chaves de criptografia fora do repositorio.
 - [ ] Manter `OWNER_SETUP_ENABLED=false` depois do onboarding.
-- [ ] Manter todas as `FEATURE_*` desligadas ate homologacao individual.
-- [ ] Manter `WHATSAPP_ALLOW_REAL_SEND=false` e `EMAIL_ALLOW_REAL_SEND=false` ate homologacao dos provedores.
+- [ ] Manter funcionalidades novas desligadas ate homologacao individual; em atualizacoes, preservar as flags das funcionalidades ja utilizadas pelo cliente.
+- [ ] No primeiro go-live, manter `WHATSAPP_ALLOW_REAL_SEND=false` e `EMAIL_ALLOW_REAL_SEND=false` ate homologacao dos provedores; em atualizacoes, preservar as configuracoes ja homologadas.
 - [ ] Configurar `AUTH_COOKIE_SECURE=true`, origens CORS e proxies confiaveis de acordo com os dominios finais.
 - [ ] Validar rotacao de segredos com o binario dedicado antes de remover uma chave antiga.
 
@@ -33,6 +33,8 @@ Este checklist comeca somente depois da prontidao da aplicacao. Ele separa decis
 
 - [ ] Habilitar PostgreSQL gerenciado, volume e politica de backup/PITR adequada ao plano.
 - [ ] Fazer um restore completo em ambiente isolado e registrar RPO/RTO medidos.
+- [ ] Confirmar disponibilidade do backup no plano contratado; quando indisponivel, gerar backup logico protegido, verificar checksum e ensaiar sua restauracao antes do release.
+- [ ] Antes de migrations que adicionam colunas, validar a API atual com `default_query_exec_mode=exec` na conexao pgx para evitar invalidacao de consultas preparadas durante o deploy.
 - [ ] Confirmar pool de conexoes da API em relacao ao limite do plano.
 - [ ] Agendar retencao primeiro em dry-run; habilitar `--apply` somente depois de revisar contagens.
 - [ ] Documentar procedimento de incidente, exportacao e exclusao de dados.
@@ -53,3 +55,4 @@ Este checklist comeca somente depois da prontidao da aplicacao. Ele separa decis
 - [ ] Validar importacao, campanha, dashboard, brinde, privacidade, troca de senha e logout.
 - [ ] Definir criterios objetivos de rollback e canal de comunicacao do incidente.
 - [ ] Testar rollback de aplicacao em homologacao e confirmar que nao depende de desfazer migration destrutiva.
+- [ ] Preservar um migrador que conheca todas as migrations aplicadas no pacote de rollback; o migrador antigo recusa versoes novas no banco.
