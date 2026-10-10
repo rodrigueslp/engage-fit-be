@@ -4,7 +4,33 @@ Manual canônico de arquitetura e negócio: `docs/system-design.md`.
 
 Guia operacional consolidado: `docs/application-readiness-guide.md`.
 
-Atualizado em: 2026-09-26 (ajustes locais da SPEC-010)
+Atualizado em: 2026-10-09 (publicação em produção)
+
+## Checkpoint — release de produção
+
+O usuário autorizou e foi concluída a publicação de todo o código acumulado:
+API e job SaaS no commit `9fc92ca`, frontend em `f44b205`, banco atualizado de
+52 para 77 migrations com checksums corretos. Os deployments Railway estão
+em `SUCCESS`; flags existentes foram preservadas, módulos novos continuam
+desligados. As verificações passaram antes e depois do rollout, inclusive com
+o frontend antigo usando a API nova. Dados anteriores foram preservados e o
+cliente realizou importações durante a publicação.
+
+Evidências, IDs de deployment, limitações e procedimento de recuperação:
+`docs/releases/2026-10-09-production.md`. Backend: 399 testes com race detector
+e PostgreSQL 18; frontend: 64 testes mockados e dois fluxos com API real,
+incluindo owner em 360×800. Corrigido o filtro diário de presença em fuso local.
+
+Há backups lógicos protegidos anteriores/posteriores ao deploy, com restore
+verificado, fora dos repositórios. Backup nativo/agendado exige Pro e não foi
+habilitado no Hobby. O pacote de rollback usa a API antiga com as 77 migrations;
+não executar o migrador antigo original sobre o banco atualizado. A conexão
+pgx usa `default_query_exec_mode=exec` e readiness valida o banco antes da troca.
+
+API e job observam mudanças nos diretórios de código/migrations e arquivos de
+build; commits apenas de documentação não provocam deploy. Ativar módulos
+novos, mudar provedores ou realizar futuras publicações continua exigindo
+autorização específica; esta autorização se limitou ao release concluído.
 
 ## Checkpoint — ajustes da PWA do aluno (SPEC-010)
 
