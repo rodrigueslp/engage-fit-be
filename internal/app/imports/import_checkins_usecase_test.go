@@ -71,6 +71,7 @@ func TestImportFailureMarksHistoryFailedWithoutReturningOutput(t *testing.T) {
 		students:     studentRepository,
 		privacy:      privacyRepositoryStub{},
 		transactions: transactionManagerStub{},
+		people:       importedStudentPersonLinkerStub{},
 	}
 
 	output, err := useCase.Execute(context.Background(), ImportCheckinsInput{
@@ -85,6 +86,12 @@ func TestImportFailureMarksHistoryFailedWithoutReturningOutput(t *testing.T) {
 	if importRepository.failedCode != "student_processing_failed" {
 		t.Fatalf("expected normalized failure code, got %q", importRepository.failedCode)
 	}
+}
+
+type importedStudentPersonLinkerStub struct{}
+
+func (importedStudentPersonLinkerStub) EnsureImportedStudent(context.Context, domain.ID, domain.ID) (domain.ID, error) {
+	return "person-1", nil
 }
 
 type studentRepositoryStub struct {

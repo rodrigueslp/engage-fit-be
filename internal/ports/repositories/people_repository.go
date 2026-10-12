@@ -11,6 +11,12 @@ type PersonIdentityLinker interface {
 	ReconcileAthleteAccount(ctx context.Context, unitID, studentID, athleteAccountID domain.ID, linkedAt time.Time) error
 }
 
+// ImportedStudentPersonLinker completes the legacy Student projection without
+// merging identities or changing existing person profiles and unit access.
+type ImportedStudentPersonLinker interface {
+	EnsureImportedStudent(ctx context.Context, unitID, studentID domain.ID) (domain.ID, error)
+}
+
 type PeopleRepository interface {
 	DuplicateCheck(ctx context.Context, organizationID, unitID domain.ID, cpfLookupHash, phoneE164 string) (*domain.PersonDuplicateCheck, error)
 	Create(ctx context.Context, command domain.CreatePersonCommand) (*domain.PersonCreationResult, bool, error)

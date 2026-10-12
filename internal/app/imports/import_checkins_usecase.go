@@ -41,14 +41,15 @@ type ImportCheckinsUseCase struct {
 	privacy      repositories.PrivacyRepository
 	transactions repositories.TransactionManager
 	activations  ContactActivationReprocessor
+	people       repositories.ImportedStudentPersonLinker
 }
 
 type ContactActivationReprocessor interface {
 	ReprocessPending(ctx context.Context, boxID domain.ID, source domain.Source) error
 }
 
-func NewImportCheckinsUseCase(parser services.CheckinFileParser, imports repositories.ImportHistoryRepository, students repositories.StudentRepository, checkins repositories.CheckinRepository, campaigns repositories.CampaignRepository, rewards repositories.RewardRepository, privacy repositories.PrivacyRepository, transactions repositories.TransactionManager, activations ContactActivationReprocessor) ImportCheckinsUseCase {
-	return ImportCheckinsUseCase{parser: parser, imports: imports, students: students, checkins: checkins, campaigns: campaigns, rewards: rewards, privacy: privacy, transactions: transactions, activations: activations}
+func NewImportCheckinsUseCase(parser services.CheckinFileParser, imports repositories.ImportHistoryRepository, students repositories.StudentRepository, checkins repositories.CheckinRepository, campaigns repositories.CampaignRepository, rewards repositories.RewardRepository, privacy repositories.PrivacyRepository, transactions repositories.TransactionManager, activations ContactActivationReprocessor, people repositories.ImportedStudentPersonLinker) ImportCheckinsUseCase {
+	return ImportCheckinsUseCase{parser: parser, imports: imports, students: students, checkins: checkins, campaigns: campaigns, rewards: rewards, privacy: privacy, transactions: transactions, activations: activations, people: people}
 }
 
 func (uc ImportCheckinsUseCase) Execute(ctx context.Context, input ImportCheckinsInput) (output *ImportCheckinsOutput, resultErr error) {
@@ -71,6 +72,11 @@ func (uc ImportCheckinsUseCase) Execute(ctx context.Context, input ImportCheckin
 	}
 	if uc.transactions == nil {
 		err := errors.New("import transaction manager is not configured")
+		logImportFailure(ctx, input, "", "transaction_setup", len(parsed), err, startedAt)
+		return nil, err
+	}
+	if uc.people == nil {
+		err := errors.New("import person linker is not configured")
 		logImportFailure(ctx, input, "", "transaction_setup", len(parsed), err, startedAt)
 		return nil, err
 	}
@@ -157,6 +163,12 @@ func (uc ImportCheckinsUseCase) Execute(ctx context.Context, input ImportCheckin
 						studentsCreated++
 					}
 				}
+				personID, err := uc.people.EnsureImportedStudent(transactionContext, input.BoxID, student.ID)
+				if err != nil {
+					return err
+				}
+				// Subsequent legacy saves must retain the newly persisted person ID.
+				student.PersonID = personID
 				studentsByIdentity[identity] = student
 			}
 

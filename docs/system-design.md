@@ -521,9 +521,19 @@ A migration `056_create_people_foundation.sql` faz backfill
 determinístico um-para-um usando `person.id = student.id` e
 `relationship.id = student.id`. Ela não consolida homônimos, telefones iguais,
 e-mails, origens ou contas de atleta, não altera IDs/external IDs/consentimentos
-e reconcilia as contagens antes de concluir. Criações legadas posteriores
-podem manter `person_id` nulo; o startup registra apenas a contagem agregada
-desse débito, sem PII e sem bloquear os fluxos existentes.
+e reconcilia as contagens antes de concluir. Importações posteriores também
+completam pessoa e vínculo com a unidade na mesma transação dos alunos,
+check-ins e derivados, pelo port `ImportedStudentPersonLinker` do módulo
+`people`. Um aluno sem pessoa recebe `person.id = student.id`; nome e contatos
+são normalizados quando válidos, sem exigir CPF ou contato ausente no arquivo.
+Reimportar um aluno legado sem pessoa completa esse cadastro. Perfis humanos
+e vínculos existentes, inclusive bloqueados ou inativos, são preservados;
+registros anonimizados não são recriados. Esse caminho não realiza merge,
+não cria matrícula nem verifica identidade externa a partir da chave do
+import, que pode ser apenas um nome. Outras criações legadas ainda podem manter
+`person_id` nulo; o startup registra a contagem agregada desse débito, sem PII
+e sem bloquear os fluxos existentes. A sincronização estrutural do import
+independe da flag de exposição das telas de pessoas.
 
 No cadastro manual, nome, telefone brasileiro e CPF são obrigatórios. O CPF é
 cifrado com AES-256-GCM e associated data
@@ -818,6 +828,15 @@ A chave lógica é escolhida nesta ordem:
 Ela é normalizada com trim e lowercase, sempre dentro de `(box, source)`. A mesma pessoa em Wellhub e TotalPass é atualmente tratada como dois registros diferentes.
 
 Antes de criar um aluno, o import consulta `privacy_suppressions`. Identidades anonimizadas são ignoradas e não reaparecem.
+
+Cada aluno processado é associado à pessoa e à unidade da sessão pelo port
+de compatibilidade de `people`, inclusive quando o arquivo apenas reencontra
+um aluno legado sem pessoa. A operação usa lock no aluno, respeita a
+organização da unidade e mantém o `person_id` nas gravações posteriores do
+import. Falha no vínculo reverte também alunos, pessoas, relações, check-ins
+e derivados; o histórico de importação é marcado como falho fora da transação.
+Não são atribuídos plano, modalidade, matrícula, consentimento ou permissão
+de acesso adicionais durante essa normalização.
 
 ### 10.3 Deduplicação de check-in
 

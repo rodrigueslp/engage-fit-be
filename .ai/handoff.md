@@ -4,7 +4,33 @@ Manual canônico de arquitetura e negócio: `docs/system-design.md`.
 
 Guia operacional consolidado: `docs/application-readiness-guide.md`.
 
-Atualizado em: 2026-10-09 (publicação em produção)
+Atualizado em: 2026-10-12 (normalização local de importações)
+
+## Checkpoint — pessoa e unidade nas importações
+
+Pedido direto: completar automaticamente o cadastro de pessoa e o vínculo
+com a unidade dos alunos importados. `ImportCheckinsUseCase` recebe agora o
+port obrigatório `ImportedStudentPersonLinker`, implementado pelo repositório
+de `people` e usado na transação da importação, independentemente das flags
+de exposição das telas. Novos alunos e legados reimportados sem pessoa recebem
+`person.id = student.id`, contatos válidos normalizados e vínculo na unidade
+da sessão. O ID retornado é mantido nos saves posteriores da importação.
+Perfis e vínculos existentes, inclusive bloqueados/inativos, são preservados;
+não há merge automático, matrícula ou mudança de consentimento. A chave de
+identidade do import não cria identidade externa verificada.
+
+Validação local: 408 testes do backend com `-race -count=1` e PostgreSQL 18,
+`go vet ./...`, banco vazio com as 77 migrations e segundo run com zero
+aplicadas. Cobertura inclui Wellhub/TotalPass, reimportação idempotente,
+reparo de aluno legado, rollback após falha de check-ins, isolamento entre
+unidades/origens, exportação/anonimização e supressão em nova importação.
+Sem mudança de schema ou frontend. O usuário autorizou a publicação em
+produção em 2026-10-12. A conferência anterior ao release encontrou 433 alunos,
+433 pessoas e 433 vínculos, sem pendências. O deploy da ativação da Grade
+falhou porque `FEATURE_CATALOG_ENABLED` estava falso no servidor, apesar do
+override de Catálogo ativo no painel; a publicação inclui corrigir essa
+dependência, preservando as demais flags e provedores. O release está em
+andamento; registrar a confirmação e os deployments após a validação.
 
 ## Checkpoint — release de produção
 
