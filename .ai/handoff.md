@@ -4,7 +4,7 @@ Manual canônico de arquitetura e negócio: `docs/system-design.md`.
 
 Guia operacional consolidado: `docs/application-readiness-guide.md`.
 
-Atualizado em: 2026-10-12 (normalização local de importações)
+Atualizado em: 2026-10-12 (normalização de importações em produção)
 
 ## Checkpoint — pessoa e unidade nas importações
 
@@ -24,13 +24,20 @@ Validação local: 408 testes do backend com `-race -count=1` e PostgreSQL 18,
 aplicadas. Cobertura inclui Wellhub/TotalPass, reimportação idempotente,
 reparo de aluno legado, rollback após falha de check-ins, isolamento entre
 unidades/origens, exportação/anonimização e supressão em nova importação.
-Sem mudança de schema ou frontend. O usuário autorizou a publicação em
-produção em 2026-10-12. A conferência anterior ao release encontrou 433 alunos,
-433 pessoas e 433 vínculos, sem pendências. O deploy da ativação da Grade
-falhou porque `FEATURE_CATALOG_ENABLED` estava falso no servidor, apesar do
-override de Catálogo ativo no painel; a publicação inclui corrigir essa
-dependência, preservando as demais flags e provedores. O release está em
-andamento; registrar a confirmação e os deployments após a validação.
+Publicado com autorização explícita em 2026-10-12: API e job de reconciliação
+no commit `5603d10`, deployments em `SUCCESS`, sem mudança de schema ou
+frontend. A conferência antes/depois encontrou 433 alunos, 433 pessoas,
+433 vínculos e 12.895 check-ins, sem pendências de pessoa/unidade. Backup
+lógico anterior restaurado e verificado em PostgreSQL 18 isolado. Passaram
+18 verificações HTTP existentes, autenticação por cookie e seis rotas de
+gestão em produção; logs da API sem erros na janela conferida.
+
+O deploy anterior da ativação da Grade havia falhado porque
+`FEATURE_CATALOG_ENABLED` estava falso no servidor, apesar do override ativo
+no painel. Foi ajustado para verdadeiro, preservando as demais flags e
+provedores. Catálogo, Profissionais, Grade e materializador estão habilitados;
+a sincronização estrutural dos imports não depende da flag de Pessoas.
+Evidências e rollback: `docs/releases/2026-10-12-import-person.md`.
 
 ## Checkpoint — release de produção
 
